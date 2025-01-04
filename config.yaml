@@ -1,0 +1,41 @@
+# Project name for reference
+name: "my_project"
+
+# Data source configuration
+data_source:
+  - kind: eth_rpc
+    url: "https://ethereum.example.com"
+
+# Block processing configuration
+blocks:
+  index_blocks: true
+  include_transactions: true
+
+# Transaction filtering configuration
+transactions:
+  address: []  # Empty list for addresses
+  from:
+    - address1  # Replace with the actual Ethereum address
+    - address2  # Replace with the actual Ethereum address
+  to:
+    - address3  # Replace with the actual Ethereum address
+
+# Traces processing
+traces: false
+
+# Contract and events processing configuration
+events:
+  - name: "MyContract"
+    address: ["0x1234567890123456789012345678901234567890"]
+    topics: [["0xabcdef..."]]
+    signature: "Transfer(address indexed token0, address indexed token1, bool indexed stable, address pool, uint256 length)"
+
+# Transformation configuration
+transform:
+  - kind: Polars
+
+# Output configuration
+output:
+  - kind: "Postgres"
+    url: "postgresql://user:pass@<postgres_host>:postgres_port/postgres_db"
+  
