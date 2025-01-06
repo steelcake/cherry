@@ -4,7 +4,7 @@ name: "my_project"
 # Data source configuration
 data_source:
   - kind: eth_rpc
-    url: "https://ethereum.example.com"
+    url: "https://api.etherscan.io/api?module=account&action=txlist&address=0xdac17f958d2ee523a2206206994597c13d831ec7&startblock=4634748&endblock=99999999&page=1&offset=10000&sort=asc&apikey=9HI2GQT86AUSRSRZI9GBVH7DV23D3PW81P"
 
 # Block processing configuration
 blocks:
@@ -37,5 +37,5 @@ transform:
 # Output configuration
 output:
   - kind: "Postgres"
-    url: "postgresql://user:pass@<postgres_host>:postgres_port/postgres_db"
+    url: "postgresql://postgres:postgres@localhost:5432/postgres"
   
