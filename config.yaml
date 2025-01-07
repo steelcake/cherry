@@ -5,7 +5,7 @@ name: "my_project"
 data_source:
   - kind: eth_rpc
     url: "https://api.etherscan.io/api?module=account&action=txlist&address=0xdac17f958d2ee523a2206206994597c13d831ec7&startblock=4634748&endblock=99999999&page=1&offset=10000&sort=asc&apikey=9HI2GQT86AUSRSRZI9GBVH7DV23D3PW81P"
-
+    #https://eth.rpc.hypersync.xyz/
 # Block processing configuration
 blocks:
   index_blocks: true

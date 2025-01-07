@@ -3,6 +3,13 @@ from pathlib import Path
 from pydantic import BaseModel
 import yaml
 from enum import Enum
+import logging
+import json
+from logging_setup import setup_logging
+
+# Set up logging
+setup_logging()
+logger = logging.getLogger(__name__)
 
 class DataSourceKind(str, Enum):
     ETH_RPC = "eth_rpc"
@@ -51,10 +58,43 @@ class Config(BaseModel):
     output: List[Output]
 
 def parse_config(config_path: Path) -> Config:
-    with open(config_path, 'r') as f:
-        yaml_data = yaml.safe_load(f)
-    return Config.model_validate(yaml_data)
+    """Parse configuration from YAML file"""
+    logger.info(f"Parsing configuration from {config_path}")
+    try:
+        with open(config_path, 'r') as f:
+            yaml_data = yaml.safe_load(f)
+            logger.debug(f"Raw YAML data:\n{json.dumps(yaml_data, indent=2)}")
+        
+        config = Config.model_validate(yaml_data)
+        
+        # Log detailed configuration
+        logger.debug("Parsed configuration details:")
+        logger.debug(f"Project name: {config.name}")
+        logger.debug(f"Data sources: {json.dumps([ds.model_dump() for ds in config.data_source], indent=2)}")
+        if config.blocks:
+            logger.debug(f"Block config: {json.dumps(config.blocks.model_dump(), indent=2)}")
+        if config.transactions:
+            logger.debug(f"Transaction filters: {json.dumps(config.transactions.model_dump(), indent=2)}")
+        logger.debug(f"Events config: {json.dumps([event.model_dump() for event in config.events], indent=2)}")
+        logger.debug(f"Transform config: {json.dumps([t.model_dump() for t in config.transform], indent=2)}")
+        logger.debug(f"Output config: {json.dumps([o.model_dump() for o in config.output], indent=2)}")
+        
+        return config
+    except Exception as e:
+        logger.error(f"Error parsing configuration: {e}")
+        raise
 
 if __name__ == "__main__":
-    config = parse_config(Path("config.yaml"))
-    print(config.model_dump_json(indent=2))
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    
+    try:
+        config = parse_config(Path("config.yaml"))
+        logger.info("Configuration parsed successfully")
+        print(config.model_dump_json(indent=2))
+    except Exception as e:
+        logger.error(f"Failed to parse configuration: {e}")
