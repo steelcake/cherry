@@ -86,3 +86,4 @@ if __name__ == "__main__":
         logger.info("Successfully generated and printed query")
     except Exception as e:
         logger.error(f"Error generating Hypersync query: {e}")
+        logger.error(f"Error occurred at line {e.__traceback__.tb_lineno}")

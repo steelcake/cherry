@@ -62,10 +62,10 @@ def parse_config(config_path: Path) -> Config:
     logger.info(f"Parsing configuration from {config_path}")
     try:
         with open(config_path, 'r') as f:
-            yaml_data = yaml.safe_load(f)
-            logger.debug(f"Raw YAML data:\n{json.dumps(yaml_data, indent=2)}")
+            config_dict = yaml.safe_load(f)
+            logger.debug(f"Raw YAML data:\n{json.dumps(config_dict, indent=2)}")
         
-        config = Config.model_validate(yaml_data)
+        config = Config.model_validate(config_dict)
         
         # Log detailed configuration
         logger.debug("Parsed configuration details:")
@@ -82,6 +82,7 @@ def parse_config(config_path: Path) -> Config:
         return config
     except Exception as e:
         logger.error(f"Error parsing configuration: {e}")
+        logger.error(f"Error occurred at line {e.__traceback__.tb_lineno}")
         raise
 
 if __name__ == "__main__":

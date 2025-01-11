@@ -2,3 +2,6 @@ __pycache__/
 .venv/
 *swp
 logs/
+
+# Ignore hypersync test py file
+test_hypersync.py

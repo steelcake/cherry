@@ -69,6 +69,7 @@ def create_tables(engine):
             logger.info("Successfully created all database tables")
     except Exception as e:
         logger.error(f"Error creating tables: {e}")
+        logger.error(f"Error occurred at line {e.__traceback__.tb_lineno}")
         raise
 
 def ingest_data(data: Data, engine):
@@ -85,7 +86,7 @@ def ingest_data(data: Data, engine):
             logger.debug("Blocks DataFrame Schema:")
             logger.debug(f"{data.blocks.schema}")
             logger.debug("Sample Blocks Data:")
-            logger.debug(f"{data.blocks.head(2)}")
+            logger.debug(f"{data.blocks}")
         
         if data.transactions is not None and len(data.transactions) > 0:
             logger.debug("Transactions DataFrame Schema:")
@@ -178,7 +179,7 @@ def ingest_data(data: Data, engine):
         
         logger.info("=== Data Ingestion Completed ===")
     except Exception as e:
-        logger.error(f"Error during data ingestion: {e}")
+        logger.error(f"Error ingesting data to PostgreSQL: {e}")
         logger.error(f"Error occurred at line {e.__traceback__.tb_lineno}")
         raise
 
@@ -248,6 +249,7 @@ async def main():
                 break
     except Exception as e:
         logger.error(f"Fatal error: {e}")
+        logger.error(f"Error occurred at line {e.__traceback__.tb_lineno}")
         raise
     finally:
         logger.info("Blockchain data ingestion completed")

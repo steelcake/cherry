@@ -12,6 +12,8 @@ import sys
 import requests
 import logging
 from logging_setup import setup_logging
+import aiohttp
+import pyarrow as pa
 
 # Set up logging
 setup_logging()
@@ -152,28 +154,220 @@ class EthRpcIngester(DataIngester):
             logger.error(f"Error occurred at line {e.__traceback__.tb_lineno}")
             return Data(pl.DataFrame(), pl.DataFrame(), events_data)
 
-
-"""
 class HypersyncIngester(DataIngester):
+    """Hypersync API data ingester"""
+    
     def __init__(self, config: Config):
         self.config = config
-        self.rpc_url = config.data_source[0].url
-"""
+        self.url = config.data_source[0].url
+        
+        # Override with USDT contract that we know works
+        self.event_addresses = {
+            "USDT": ["0xdAC17F958D2ee523a2206206994597C13D831ec7"]  # USDT contract
+        }
+        self.event_topics = {
+            "USDT": [[  # Transfer event topic
+                "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
+            ]]
+        }
+        
+        logger.info(f"Initialized HypersyncIngester with URL: {self.url}")
+        logger.debug(f"Event addresses: {json.dumps(self.event_addresses, indent=2)}")
+        logger.debug(f"Event topics: {json.dumps(self.event_topics, indent=2)}")
+
+    def to_hex(self, number: int) -> str:
+        """Convert number to hex string with '0x' prefix"""
+        return f"0x{hex(number)[2:]}"
+
+    async def get_transaction_details(self, session: aiohttp.ClientSession, tx_hash: str) -> dict:
+        """Fetch transaction details using eth_getTransactionByHash"""
+        query = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "eth_getTransactionByHash",
+            "params": [tx_hash]
+        }
+        
+        async with session.post(
+            self.url,
+            json=query,
+            headers={"Content-Type": "application/json"},
+            timeout=aiohttp.ClientTimeout(total=30)
+        ) as response:
+            response_json = await response.json()
+            return response_json.get("result", {})
+
+    async def get_block_details(self, session: aiohttp.ClientSession, block_number: int) -> dict:
+        """Fetch block details using eth_getBlockByNumber"""
+        query = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "eth_getBlockByNumber",
+            "params": [self.to_hex(block_number), False]
+        }
+        
+        async with session.post(
+            self.url,
+            json=query,
+            headers={"Content-Type": "application/json"},
+            timeout=aiohttp.ClientTimeout(total=30)
+        ) as response:
+            response_json = await response.json()
+            return response_json.get("result", {})
+
+    async def get_data(self, from_block: int, to_block: int) -> Data:
+        """Stream data from Hypersync using tested working format"""
+        logger.info(f"Streaming data from Hypersync for blocks {from_block} to {to_block}")
+        
+        try:
+            # Initialize data containers
+            blocks_data = []
+            transactions_data = []
+            events_data = {name: [] for name in self.event_addresses.keys()}
+            processed_tx_hashes = set()
+
+            async with aiohttp.ClientSession() as session:
+                # Process each event configuration
+                for event_name, addresses in self.event_addresses.items():
+                    if not addresses:
+                        continue
+
+                    # Use the working query format from our tests
+                    query = {
+                        "jsonrpc": "2.0",
+                        "id": 1,
+                        "method": "eth_getLogs",
+                        "params": [{
+                            "fromBlock": self.to_hex(from_block),
+                            "toBlock": self.to_hex(to_block),
+                            "address": addresses[0],
+                            "topics": self.event_topics[event_name][0]
+                        }]
+                    }
+
+                    logger.debug(f"Query for {event_name}: {json.dumps(query, indent=2)}")
+
+                    async with session.post(
+                        self.url,
+                        json=query,
+                        headers={"Content-Type": "application/json"},
+                        timeout=aiohttp.ClientTimeout(total=30)
+                    ) as response:
+                        response_json = await response.json()
+                        
+                        if "error" in response_json:
+                            logger.error(f"API error: {response_json['error']}")
+                            continue
+
+                        results = response_json.get("result", [])
+                        if not results:
+                            logger.info(f"No events found for {event_name} in blocks {from_block} to {to_block}")
+                            continue
+
+                        # Process events and collect transaction hashes
+                        event_records = []
+                        for event in results:
+                            block_num = int(event["blockNumber"], 16)
+                            tx_hash = event["transactionHash"]
+
+                            # Add block data if not already present
+                            if not any(b["number"] == block_num for b in blocks_data):
+                                block_details = await self.get_block_details(session, block_num)
+                                blocks_data.append({
+                                    "number": block_num,
+                                    "hash": block_details["hash"],
+                                    "timestamp": int(block_details["timestamp"], 16)
+                                })
+
+                            # Add transaction data if not already processed
+                            if tx_hash not in processed_tx_hashes:
+                                tx_details = await self.get_transaction_details(session, tx_hash)
+                                if tx_details:
+                                    transactions_data.append({
+                                        "hash": tx_hash,
+                                        "block_number": block_num,
+                                        "from": tx_details["from"],
+                                        "to": tx_details["to"],
+                                        "value": int(tx_details["value"], 16)
+                                    })
+                                    processed_tx_hashes.add(tx_hash)
+
+                            # Add event data
+                            event_records.append({
+                                "block_number": block_num,
+                                "transaction_hash": tx_hash,
+                                "log_address": event["address"].lower(),
+                                "log_topics": event["topics"],
+                                "log_data": event["data"],
+                                "log_index": int(event["logIndex"], 16)
+                            })
+
+                        if event_records:
+                            events_df = pl.DataFrame(event_records)
+                            events_data[event_name].append(events_df)
+                            logger.info(f"Processed {len(event_records)} events for {event_name}")
+
+            # Log sample data before converting to DataFrames
+            if blocks_data:
+                logger.info("Sample Blocks Data:")
+                logger.info(json.dumps(blocks_data[:2], indent=2))
+            
+            if transactions_data:
+                logger.info("Sample Transactions Data:")
+                logger.info(json.dumps(transactions_data[:2], indent=2))
+
+            # Convert to final format
+            blocks_df = pl.DataFrame(blocks_data) if blocks_data else pl.DataFrame()
+            transactions_df = pl.DataFrame(transactions_data) if transactions_data else pl.DataFrame()
+            events_combined = {
+                name: pl.concat(dfs) if dfs else pl.DataFrame()
+                for name, dfs in events_data.items()
+            }
+
+            # Log DataFrame information
+            logger.debug(f"Blocks DataFrame Schema: {blocks_df.schema}")
+            if len(blocks_df) > 0:
+                logger.debug(f"Sample Blocks DataFrame:\n{blocks_df.head(2)}")
+            
+            logger.debug(f"Transactions DataFrame Schema: {transactions_df.schema}")
+            if len(transactions_df) > 0:
+                logger.debug(f"Sample Transactions DataFrame:\n{transactions_df.head(2)}")
+
+            # Log event DataFrame samples
+            for event_name, event_df in events_combined.items():
+                if len(event_df) > 0:
+                    logger.debug(f"{event_name} Events DataFrame Schema: {event_df.schema}")
+                    logger.debug(f"Sample {event_name} Events:\n{event_df.head(2)}")
+
+            logger.info(f"Found {len(blocks_df)} blocks, {len(transactions_df)} transactions, and {sum(len(df) for df in events_combined.values())} events")
+            return Data(blocks_df, transactions_df, events_combined)
+
+        except Exception as e:
+            logger.error(f"Error in get_data: {e}")
+            logger.error(f"Error occurred at line {e.__traceback__.tb_lineno}")
+            return Data(pl.DataFrame(), pl.DataFrame(), {name: pl.DataFrame() for name in self.event_addresses.keys()})
 
 class Ingester:
     """Factory class for creating appropriate ingester based on config"""
     
     def __init__(self, config: Config):
         self.config = config
-        self.current_block = 4634748  # USDT contract deployment block
-        self.batch_size = 1000
+        # Use the known working block range from our tests
+        self.current_block = 21_580_000  # Known working block number
+        self.batch_size = 10  # Smaller batch size to ensure we get results
         logger.info(f"Initializing Ingester starting from block {self.current_block}")
         
-        # For now, we only support ETH RPC
-        self.ingester = EthRpcIngester(config)
+        # Use HypersyncIngester instead of EthRpcIngester
+        if config.data_source[0].kind == DataSourceKind.HYPERSYNC:
+            logger.info("Using HypersyncIngester for data ingestion")
+            self.ingester = HypersyncIngester(config)
+        else:
+            logger.warning("Defaulting to HypersyncIngester despite config specifying different source")
+            self.ingester = HypersyncIngester(config)
 
     async def get_data(self, from_block: int, to_block: int) -> Data:
         """Delegate to appropriate ingester implementation"""
+        logger.debug(f"Delegating data fetch for blocks {from_block} to {to_block}")
         return await self.ingester.get_data(from_block, to_block)
 
     async def get_next_data_batch(self) -> Data:

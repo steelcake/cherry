@@ -3,15 +3,26 @@ import logging
 import sys
 from datetime import datetime
 
+# Global variable to track if logging has been set up
+_is_logging_configured = False
+# Global variable to store the current log file path
+_current_log_file = None
+
 def setup_logging():
     """Configure logging for all modules"""
+    global _is_logging_configured, _current_log_file
+    
+    # If logging is already configured, return the existing logger
+    if _is_logging_configured:
+        return logging.getLogger(__name__)
+
     # Create logs directory if it doesn't exist
     log_dir = Path("logs")
     log_dir.mkdir(exist_ok=True)
 
     # Create a timestamp for the log file
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_file = log_dir / f"blockchain_ingestion_{timestamp}.log"
+    _current_log_file = log_dir / f"blockchain_ingestion_{timestamp}.log"
 
     # Configure logging format
     formatter = logging.Formatter(
@@ -20,7 +31,7 @@ def setup_logging():
     )
 
     # File handler - set to DEBUG level to capture all details
-    file_handler = logging.FileHandler(log_file)
+    file_handler = logging.FileHandler(_current_log_file)
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(formatter)
 
@@ -32,7 +43,7 @@ def setup_logging():
     # Configure root logger
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.DEBUG)
-    root_logger.handlers = []
+    root_logger.handlers = []  # Clear any existing handlers
     root_logger.addHandler(file_handler)
     root_logger.addHandler(console_handler)
 
@@ -41,4 +52,11 @@ def setup_logging():
     logging.getLogger('web3').setLevel(logging.INFO)
     logging.getLogger('asyncio').setLevel(logging.INFO)
     
-    return logging.getLogger(__name__) 
+    # Mark logging as configured
+    _is_logging_configured = True
+    
+    return logging.getLogger(__name__)
+
+def get_current_log_file() -> Path:
+    """Get the path to the current log file"""
+    return _current_log_file 
