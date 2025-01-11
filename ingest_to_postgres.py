@@ -1,14 +1,10 @@
 from ingester import Ingester, Data
-from parse import parse_config
-from pathlib import Path
-import polars as pl
-from sqlalchemy import create_engine, text
-import asyncio
 from datetime import datetime
-import logging
-import sys
+from pathlib import Path
+import polars as pl, logging, sys, json, asyncio
+from sqlalchemy import create_engine, text
+from parse import parse_config
 from logging_setup import setup_logging
-import json
 
 # Set up logging
 setup_logging()

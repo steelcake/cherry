@@ -1,19 +1,12 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 from dataclasses import dataclass
-import polars as pl
-import asyncio
-from pathlib import Path
+import polars as pl, asyncio, json, sys, logging, requests, aiohttp
 from web3 import Web3
 from web3.types import BlockData, TxData, LogReceipt
 from parse import Config, DataSourceKind
-import json
-import sys
-import requests
-import logging
+from pathlib import Path
 from logging_setup import setup_logging
-import aiohttp
-import pyarrow as pa
 
 # Set up logging
 setup_logging()

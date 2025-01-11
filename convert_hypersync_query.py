@@ -9,8 +9,7 @@ from hypersync import (
 from parse import Config, Event, parse_config
 from pathlib import Path
 from typing import List
-import logging
-import json
+import logging, json
 from logging_setup import setup_logging
 
 # Set up logging
