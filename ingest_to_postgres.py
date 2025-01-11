@@ -8,6 +8,7 @@ from datetime import datetime
 import logging
 import sys
 from logging_setup import setup_logging
+import json
 
 # Set up logging
 setup_logging()
@@ -24,8 +25,8 @@ def create_tables(engine):
                 CREATE TABLE IF NOT EXISTS blocks (
                     number BIGINT PRIMARY KEY,
                     timestamp TIMESTAMP,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    CONSTRAINT blocks_unique UNIQUE (number)
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    --CONSTRAINT blocks_unique UNIQUE (number)
                 )
             """))
             
@@ -38,13 +39,13 @@ def create_tables(engine):
                     from_address VARCHAR(42),
                     to_address VARCHAR(42),
                     value NUMERIC(78,0),
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (block_number) REFERENCES blocks(number),
-                    CONSTRAINT tx_unique UNIQUE (hash)
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    --FOREIGN KEY (block_number) REFERENCES blocks(number),
+                    --CONSTRAINT tx_unique UNIQUE (hash)
                 )
             """))
             
-            # Events table
+            # Events table - Updated schema to match DataFrame columns
             logger.debug("Creating events table")
             conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS events (
@@ -58,10 +59,11 @@ def create_tables(engine):
                     topic2 VARCHAR(66),
                     topic3 VARCHAR(66),
                     data TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (block_number) REFERENCES blocks(number),
-                    FOREIGN KEY (transaction_hash) REFERENCES transactions(hash),
-                    CONSTRAINT events_unique UNIQUE (transaction_hash, topic0, topic1, topic2, topic3)
+                    log_index INTEGER,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    --FOREIGN KEY (block_number) REFERENCES blocks(number),
+                    --FOREIGN KEY (transaction_hash) REFERENCES transactions(hash),
+                    --CONSTRAINT events_unique UNIQUE (transaction_hash, log_index)
                 )
             """))
             
@@ -81,30 +83,36 @@ def ingest_data(data: Data, engine):
         logger.info(f"Total transactions to ingest: {len(data.transactions) if data.transactions is not None else 0}")
         logger.info(f"Events to ingest: {', '.join(f'{name}: {len(df)}' for name, df in data.events.items())}")
         
-        # Log DataFrame details
-        if len(data.blocks) > 0:
-            logger.debug("Blocks DataFrame Schema:")
-            logger.debug(f"{data.blocks.schema}")
-            logger.debug("Sample Blocks Data:")
-            logger.debug(f"{data.blocks}")
-        
-        if data.transactions is not None and len(data.transactions) > 0:
-            logger.debug("Transactions DataFrame Schema:")
-            logger.debug(f"{data.transactions.schema}")
-            logger.debug("Sample Transactions Data:")
-            logger.debug(f"{data.transactions.head(2)}")
-        
-        for event_name, events_df in data.events.items():
-            if len(events_df) > 0:
-                logger.debug(f"{event_name} Events DataFrame Schema:")
-                logger.debug(f"{events_df.schema}")
-                logger.debug(f"Sample {event_name} Events Data:")
-                logger.debug(f"{events_df.head(2)}")
-        
-        # Ingest blocks
+        # Extract unique transaction hashes from events if no transactions provided
+        if data.transactions is None or len(data.transactions) == 0:
+            logger.info("No transactions provided, extracting from events")
+            tx_hashes = set()
+            block_numbers = {}  # Map tx_hash to block_number
+            
+            for events_df in data.events.values():
+                # Get unique transaction hashes and their block numbers
+                tx_data = events_df.select([
+                    "transaction_hash",
+                    "block_number"
+                ]).unique(subset=["transaction_hash"])
+                
+                for tx_hash, block_num in zip(tx_data["transaction_hash"], tx_data["block_number"]):
+                    tx_hashes.add(tx_hash)
+                    block_numbers[tx_hash] = block_num
+            
+            # Create transactions DataFrame
+            data.transactions = pl.DataFrame({
+                "hash": list(tx_hashes),
+                "block_number": [block_numbers[tx_hash] for tx_hash in tx_hashes],
+                "from": [""] * len(tx_hashes),  # Empty placeholder
+                "to": [""] * len(tx_hashes),    # Empty placeholder
+                "value": [0] * len(tx_hashes)   # Zero value placeholder
+            })
+            logger.info(f"Created {len(tx_hashes)} placeholder transactions from events")
+
+        # First ingest blocks
         if len(data.blocks) > 0:
             logger.info(f"Ingesting {len(data.blocks)} blocks")
-            logger.debug(f"Block numbers: {data.blocks['number'].to_list()}")
             blocks_df = data.blocks.select([
                 pl.col("number"),
                 pl.col("timestamp").cast(pl.Datetime)
@@ -123,11 +131,10 @@ def ingest_data(data: Data, engine):
                     logger.warning("Skipping duplicate block records")
                 else:
                     raise
-        
-        # Ingest transactions
-        if data.transactions is not None and len(data.transactions) > 0:
+
+        # Then ingest transactions
+        if len(data.transactions) > 0:
             logger.info(f"Ingesting {len(data.transactions)} transactions")
-            logger.debug(f"Transaction hashes: {data.transactions['hash'].to_list()[:5]}... (showing first 5)")
             tx_df = data.transactions.select([
                 pl.col("hash"),
                 pl.col("block_number"),
@@ -149,19 +156,35 @@ def ingest_data(data: Data, engine):
                     logger.warning("Skipping duplicate transaction records")
                 else:
                     raise
-        
+
         # Ingest events
         for event_name, events_df in data.events.items():
             if len(events_df) > 0:
                 logger.info(f"Processing events for {event_name}")
                 logger.debug(f"Event data sample: {events_df.head(1).to_dict()}")
+                
+                # Add event name column and rename columns to match DB schema
                 events_df = events_df.with_columns([
-                    pl.lit(event_name).alias("name"),
-                    pl.col("topics").list.get(0).alias("topic0"),
-                    pl.col("topics").list.get(1).alias("topic1"),
-                    pl.col("topics").list.get(2).alias("topic2"),
-                    pl.col("topics").list.get(3).alias("topic3"),
+                    pl.lit(event_name).alias("name")
+                ]).rename({
+                    "log_address": "address",
+                    "log_data": "data"
+                })
+                
+                # Select required columns in correct order
+                events_df = events_df.select([
+                    "name",
+                    "block_number",
+                    "transaction_hash",
+                    "address",
+                    "topic0",
+                    "topic1", 
+                    "topic2",
+                    "topic3",
+                    "data",
+                    "log_index"
                 ])
+                
                 try:
                     events_df.to_pandas().to_sql(
                         name="events",
@@ -175,6 +198,8 @@ def ingest_data(data: Data, engine):
                     if "duplicate key value" in str(e):
                         logger.warning(f"Skipping duplicate event records for {event_name}")
                     else:
+                        logger.error(f"Error ingesting data to PostgreSQL: {e}")
+                        logger.error(f"Error occurred at line {e.__traceback__.tb_lineno}")
                         raise
         
         logger.info("=== Data Ingestion Completed ===")

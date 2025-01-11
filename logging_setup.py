@@ -2,6 +2,7 @@ from pathlib import Path
 import logging
 import sys
 from datetime import datetime
+import codecs
 
 # Global variable to track if logging has been set up
 _is_logging_configured = False
@@ -30,13 +31,19 @@ def setup_logging():
         datefmt='%Y-%m-%d %H:%M:%S'
     )
 
-    # File handler - set to DEBUG level to capture all details
-    file_handler = logging.FileHandler(_current_log_file)
+    # File handler with UTF-8 encoding
+    file_handler = logging.FileHandler(_current_log_file, encoding='utf-8')
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(formatter)
 
-    # Console handler - keep at INFO level for cleaner console output
-    console_handler = logging.StreamHandler(sys.stdout)
+    # Console handler with proper encoding for Windows
+    if sys.platform == 'win32':
+        # Fix Windows console encoding
+        sys.stdout.reconfigure(encoding='utf-8')
+        console_handler = logging.StreamHandler(sys.stdout)
+    else:
+        console_handler = logging.StreamHandler(sys.stdout)
+    
     console_handler.setLevel(logging.INFO)
     console_handler.setFormatter(formatter)
 
