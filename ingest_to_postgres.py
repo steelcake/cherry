@@ -16,15 +16,10 @@ def create_tables(engine):
     logger.info("Creating database tables if they don't exist")
     try:
         with engine.connect() as conn:
-            # Drop existing tables if they exist
-            conn.execute(text("DROP TABLE IF EXISTS events"))
-            conn.execute(text("DROP TABLE IF EXISTS transactions"))
-            conn.execute(text("DROP TABLE IF EXISTS blocks"))
-            
             # Create blocks table
             logger.debug("Creating blocks table")
             conn.execute(text("""
-                CREATE TABLE blocks (
+                CREATE TABLE IF NOT EXISTS blocks (
                     number BIGINT,
                     timestamp BIGINT
                 )
@@ -33,7 +28,7 @@ def create_tables(engine):
             # Create transactions table
             logger.debug("Creating transactions table")
             conn.execute(text("""
-                CREATE TABLE transactions (
+                CREATE TABLE IF NOT EXISTS transactions (
                     transaction_hash VARCHAR(66),
                     block_number BIGINT,
                     from_address VARCHAR(42),
@@ -45,7 +40,7 @@ def create_tables(engine):
             # Create events table
             logger.debug("Creating events table")
             conn.execute(text("""
-                CREATE TABLE events (
+                CREATE TABLE IF NOT EXISTS events (
                     id SERIAL,
                     transaction_hash VARCHAR(66),
                     block_number BIGINT,

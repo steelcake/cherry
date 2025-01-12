@@ -1,15 +1,14 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Optional, List
 from dataclasses import dataclass
-import polars as pl, asyncio, json, sys, logging, requests, aiohttp
-from web3 import Web3
-from web3.types import BlockData, TxData, LogReceipt
-from parse import Config, DataSourceKind
-from pathlib import Path
-from logging_setup import setup_logging
-from pyarrow import flight
+from typing import Dict, Optional
+import aiohttp, json, logging, requests
+import cryo
+import polars as pl
 import pyarrow as pa
-from convert_hypersync_query import generate_hypersync_query
+import pyarrow.ipc as ipc
+
+from parse import Config, DataSourceKind
+from logging_setup import setup_logging
 
 # Set up logging
 setup_logging()
@@ -24,7 +23,6 @@ class Data:
 
 class DataIngester(ABC):
     """Abstract base class for data ingesters"""
-    
     @abstractmethod
     async def get_data(self, from_block: int, to_block: int) -> Data:
         """Fetch data for the specified block range"""
@@ -42,19 +40,12 @@ class EthRpcIngester(DataIngester):
         self.api_key = self.api_params.get('apikey')
         self.address = self.api_params.get('address')
         
-        # Initialize web3 with a dummy provider
-        self.web3 = Web3()
+        # Initialize cryo provider
+        self.provider = cryo.JsonRpc(self.api_url)
         
-        self.event_addresses = {
-            event.name: event.address if event.address else None 
-            for event in config.events
-        }
+        self.event_addresses = {event.name: event.address for event in config.events}
+        self.event_topics = {event.name: event.topics for event in config.events}
         logger.debug(f"Event addresses: {json.dumps(self.event_addresses, indent=2)}")
-        
-        self.event_topics = {
-            event.name: event.topics if event.topics else None 
-            for event in config.events
-        }
         logger.debug(f"Event topics: {json.dumps(self.event_topics, indent=2)}")
 
     async def get_data(self, from_block: int, to_block: int) -> Data:
@@ -63,61 +54,29 @@ class EthRpcIngester(DataIngester):
         events_data = {name: [] for name in self.event_addresses.keys()}
 
         try:
-            # Log API request parameters
-            params = {
-                'module': 'account',
-                'action': 'txlist',
-                'address': self.address,
-                'startblock': str(from_block),
-                'endblock': str(to_block),
-                'sort': 'asc',
-                'apikey': self.api_key,
-                'offset': '1000',
-                'page': '1'
-            }
-            logger.debug(f"API Request parameters: {json.dumps(params, indent=2)}")
+            # Use cryo to fetch block data
+            blocks = await self.provider.get_blocks(
+                start_block=from_block,
+                end_block=to_block,
+                include_transactions=True
+            )
             
-            # Fetch transactions from Etherscan API
-            logger.info(f"Fetching transactions for address {self.address} from block {from_block} to {to_block}")
-            response = requests.get(self.api_url, params=params)
-            
-            if response.status_code != 200:
-                logger.error(f"Error fetching from Etherscan: {response.status_code}")
-                logger.error(f"Response: {response.text}")
-                return Data(pl.DataFrame(), pl.DataFrame(), events_data)
+            for block in blocks:
+                blocks_data.append({
+                    'number': block['number'],
+                    'timestamp': block['timestamp'],
+                    'hash': block['hash']
+                })
                 
-            result = response.json()
-            logger.info(f"API Response status: {result['status']}, message: {result['message']}")
-            
-            if result['status'] == '0':
-                if 'No transactions found' in result['message']:
-                    logger.info(f"No transactions found in blocks {from_block} to {to_block}")
-                    return Data(pl.DataFrame(), pl.DataFrame(), events_data)
-                else:
-                    logger.error(f"Etherscan API error: {result['message']}")
-                    return Data(pl.DataFrame(), pl.DataFrame(), events_data)
-
-            # Process transactions
-            for tx in result['result']:
-                block_num = int(tx['blockNumber'])
-                
-                # Add block data if not already added
-                if not any(b['number'] == block_num for b in blocks_data):
-                    blocks_data.append({
-                        'number': block_num,
-                        'timestamp': int(tx['timeStamp']),
-                        'hash': tx['blockHash']
-                    })
-                
-                # Add transaction data
                 if self.config.blocks and self.config.blocks.include_transactions:
-                    transactions_data.append({
-                        'hash': tx['hash'],
-                        'block_number': block_num,
-                        'from': tx['from'],
-                        'to': tx['to'],
-                        'value': int(tx['value'])
-                    })
+                    for tx in block['transactions']:
+                        transactions_data.append({
+                            'hash': tx['hash'],
+                            'block_number': block['number'],
+                            'from': tx['from'],
+                            'to': tx['to'],
+                            'value': int(tx['value'])
+                        })
 
             # Log processed data
             if blocks_data:
@@ -154,15 +113,18 @@ class HypersyncIngester(DataIngester):
     def __init__(self, config: Config):
         self.config = config
         self.url = config.data_source[0].url
-        self.events = {
-            event.name: event for event in config.events
-        }
+        self.events = {event.name: event for event in config.events}
         logger.info(f"Initialized HypersyncIngester with URL: {self.url}")
 
     async def get_data(self, from_block: int, to_block: int) -> Data:
         try:
             all_transactions = []
             blocks_data = {}
+            
+            # Sample data for logging
+            sample_blocks = []
+            sample_transactions = []
+            sample_events = {name: [] for name in self.events.keys()}
             
             # Create Arrow schema for the stream
             schema = pa.schema([
@@ -204,15 +166,20 @@ class HypersyncIngester(DataIngester):
                         logs = data.get("result", [])
                         logger.info(f"Retrieved {len(logs)} {event_name} logs")
 
-                        # Process logs through Arrow stream
-                        for log in logs:
+                        # Process logs and collect samples
+                        for i, log in enumerate(logs):
                             block_num = int(log["blockNumber"], 16)
                             
                             # Store block data
-                            blocks_data[block_num] = {
+                            block_data = {
                                 "number": block_num,
                                 "timestamp": int(log.get("timeStamp", "0"), 16) if "timeStamp" in log else 0
                             }
+                            blocks_data[block_num] = block_data
+                            
+                            # Collect sample block data
+                            if len(sample_blocks) < 2 and block_data not in sample_blocks:
+                                sample_blocks.append(block_data)
 
                             # Convert log to transaction format
                             tx = {
@@ -227,6 +194,32 @@ class HypersyncIngester(DataIngester):
                                 "raw_data": log["data"]
                             }
                             all_transactions.append(tx)
+                            
+                            # Collect sample transaction data
+                            if len(sample_transactions) < 2:
+                                sample_transactions.append(tx)
+                            
+                            # Collect sample event data
+                            if len(sample_events[event_name]) < 2:
+                                sample_events[event_name].append({
+                                    "block_number": block_num,
+                                    "transaction_hash": log["transactionHash"],
+                                    "event_name": event_name,
+                                    "from": "0x" + log["topics"][1][-40:] if len(log["topics"]) > 1 else None,
+                                    "to": "0x" + log["topics"][2][-40:] if len(log["topics"]) > 2 else None,
+                                    "value": int(log["data"], 16)
+                                })
+
+            # Log sample data
+            logger.info("Sample Data Examples:")
+            logger.info("\nSample Blocks:")
+            logger.info(json.dumps(sample_blocks, indent=2))
+            
+            logger.info("\nSample Transactions:")
+            logger.info(json.dumps(sample_transactions, indent=2))
+            
+            logger.info("\nSample Events:")
+            logger.info(json.dumps(sample_events, indent=2))
 
             # Convert blocks_data to DataFrame
             blocks_df = pl.DataFrame([
@@ -267,6 +260,23 @@ class HypersyncIngester(DataIngester):
                 "raw_data": pl.Utf8
             })
 
+            # Log DataFrame statistics
+            logger.info(f"\nDataFrame Statistics:")
+            logger.info(f"Blocks DataFrame: {len(blocks_df)} rows")
+            logger.info(f"Transactions DataFrame: {len(transactions_df)} rows")
+            
+            if len(blocks_df) > 0:
+                logger.info("\nBlocks DataFrame Schema:")
+                logger.info(blocks_df.schema)
+                logger.info("\nSample Blocks DataFrame:")
+                logger.info(blocks_df.head(2))
+            
+            if len(transactions_df) > 0:
+                logger.info("\nTransactions DataFrame Schema:")
+                logger.info(transactions_df.schema)
+                logger.info("\nSample Transactions DataFrame:")
+                logger.info(transactions_df.head(2))
+
             return Data(
                 blocks=blocks_df,
                 transactions=transactions_df,
@@ -297,15 +307,10 @@ class Ingester:
             logger.warning("Defaulting to HypersyncIngester despite config specifying different source")
             self.ingester = HypersyncIngester(config)
 
-    async def get_data(self, from_block: int, to_block: int) -> Data:
-        """Delegate to appropriate ingester implementation"""
-        logger.debug(f"Delegating data fetch for blocks {from_block} to {to_block}")
-        return await self.ingester.get_data(from_block, to_block)
-
     async def get_next_data_batch(self) -> Data:
         """Get the next batch of data"""
         next_block = self.current_block + self.batch_size
         logger.debug(f"Fetching next batch from {self.current_block} to {next_block}")
-        data = await self.get_data(self.current_block, next_block)
+        data = await self.ingester.get_data(self.current_block, next_block)
         self.current_block = next_block
         return data
