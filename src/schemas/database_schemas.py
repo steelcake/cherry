@@ -1,8 +1,14 @@
 # SQL schemas for database tables
 BLOCKS_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS blocks (
-                    number BIGINT,
-                    timestamp BIGINT
+    block_hash VARCHAR(1000),
+    author VARCHAR(1000),
+    block_number BIGINT,
+    gas_used BIGINT,
+    extra_data VARCHAR(1000),
+    timestamp BIGINT,
+    base_fee_per_gas BIGINT,
+    chain_id BIGINT
 )
 """
 

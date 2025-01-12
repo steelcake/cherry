@@ -2,8 +2,14 @@ import polars as pl
 
 # Schema for blocks DataFrame
 BLOCKS_SCHEMA = {
-    "number": pl.Int64,
-    "timestamp": pl.Int64
+    "block_hash": pl.Utf8,
+    "author": pl.Utf8,
+    "block_number": pl.Int64,
+    "gas_used": pl.Int64,
+    "extra_data": pl.Utf8,
+    "timestamp": pl.Int64,
+    "base_fee_per_gas": pl.Int64,
+    "chain_id": pl.Int64
 }
 
 # Schema for transactions DataFrame

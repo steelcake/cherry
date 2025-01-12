@@ -5,3 +5,6 @@ logs/
 
 # Ignore hypersync test py file
 test_hypersync.py
+
+# Ignore cryo test py file
+test_cryo.py

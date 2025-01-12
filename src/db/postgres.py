@@ -38,27 +38,34 @@ def create_tables(engine):
 def ingest_data(engine, data: Data):
     """Ingest data into PostgreSQL database"""
     try:
+        # Log sample data before ingestion
+        if len(data.blocks) > 0:
+            logger.info("Sample blocks data to be ingested:")
+            logger.info(f"Schema: {data.blocks.schema}")
+            logger.info(f"First 2 rows:\n{data.blocks.head(2)}")
+
         # Ingest blocks
         if len(data.blocks) > 0:
             logger.info(f"Ingesting {len(data.blocks)} blocks")
-            temp_blocks = data.blocks.unique(subset=["number"]).to_pandas()
+            temp_blocks = data.blocks.unique(subset=["block_number"])
             
-            # Define the blocks table
-            metadata = MetaData()
-            blocks_table = Table(
-                'blocks', 
-                metadata,
-                Column('number', BigInteger, primary_key=True),
-                Column('timestamp', BigInteger)
+            # Log the data to be inserted
+            logger.info(f"Blocks to be inserted: {temp_blocks.head(2)}")
+            
+            temp_blocks.to_pandas().to_sql(
+                name="blocks",
+                con=engine,
+                if_exists='append',
+                index=False,
+                method='multi'
             )
-            
-            with engine.connect() as conn:
-                block_records = temp_blocks.to_dict('records')
-                insert_stmt = insert(blocks_table).values(block_records)
-                conn.execute(insert_stmt)
-                conn.commit()
-                
             logger.info("Successfully ingested blocks")
+
+        # Log sample transactions before ingestion
+        if len(data.transactions) > 0:
+            logger.info("Sample transactions data to be ingested:")
+            logger.info(f"Schema: {data.transactions.schema}")
+            logger.info(f"First 2 rows:\n{data.transactions.head(2)}")
 
         # Ingest transactions
         if len(data.transactions) > 0:
@@ -71,6 +78,9 @@ def ingest_data(engine, data: Data):
                     "to_address",
                     "value"
                 ])
+                
+                # Log the data to be inserted
+                logger.info(f"Transactions to be inserted: {unique_txs.head(2)}")
                 
                 unique_txs.to_pandas().to_sql(
                     name="transactions",
@@ -89,6 +99,11 @@ def ingest_data(engine, data: Data):
         # Ingest events
         for event_name, events_df in data.events.items():
             if len(events_df) > 0:
+                # Log sample events before ingestion
+                logger.info(f"Sample events data for {event_name} to be ingested:")
+                logger.info(f"Schema: {events_df.schema}")
+                logger.info(f"First 2 rows:\n{events_df.head(2)}")
+
                 logger.info(f"Processing events for {event_name}")
                 try:
                     unique_events = events_df.unique(
@@ -104,6 +119,9 @@ def ingest_data(engine, data: Data):
                         "topic0",
                         "raw_data"
                     ])
+                    
+                    # Log the data to be inserted
+                    logger.info(f"Events to be inserted for {event_name}: {unique_events.head(2)}")
                     
                     unique_events.to_pandas().to_sql(
                         name="events",

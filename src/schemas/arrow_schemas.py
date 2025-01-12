@@ -1,5 +1,17 @@
 import pyarrow as pa
 
+# Block schema for Arrow streaming
+BLOCK_SCHEMA = pa.schema([
+    ("block_hash", pa.string()),
+    ("author", pa.string()),
+    ("block_number", pa.int64()),
+    ("gas_used", pa.int64()),
+    ("extra_data", pa.string()),
+    ("timestamp", pa.int64()),
+    ("base_fee_per_gas", pa.int64()),
+    ("chain_id", pa.int64())
+])
+
 # Transaction schema for Arrow streaming
 TRANSACTION_SCHEMA = pa.schema([
     ("transaction_hash", pa.string()),
@@ -11,12 +23,6 @@ TRANSACTION_SCHEMA = pa.schema([
     ("contract_address", pa.string()),
     ("topic0", pa.string()),
     ("raw_data", pa.string())
-])
-
-# Block schema for Arrow streaming
-BLOCK_SCHEMA = pa.schema([
-    ("number", pa.int64()),
-    ("timestamp", pa.int64())
 ])
 
 # Event schema for Arrow streaming
