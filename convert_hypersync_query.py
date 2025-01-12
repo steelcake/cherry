@@ -19,10 +19,18 @@ logger = logging.getLogger(__name__)
 def convert_event_to_hypersync(event: Event) -> LogSelection:
     """Convert an Event model to Hypersync LogSelection"""
     logger.debug(f"Converting event {event.name} to Hypersync LogSelection")
-    logger.debug(f"Event details: {json.dumps(event.model_dump(), indent=2)}")
+    
+    # For address: only use if it's a single address
+    address = None
+    if event.address and isinstance(event.address, list) and len(event.address) == 1:
+        address = event.address[0]
+    
+    # For topics: only use the event signature as the first topic
+    topics = [event.signature] if event.signature else None
+    
     selection = LogSelection(
-        address=event.address,
-        topics=event.topics
+        address=address,
+        topics=topics
     )
     logger.debug(f"Created LogSelection: {selection}")
     return selection

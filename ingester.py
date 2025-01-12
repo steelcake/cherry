@@ -7,6 +7,9 @@ from web3.types import BlockData, TxData, LogReceipt
 from parse import Config, DataSourceKind
 from pathlib import Path
 from logging_setup import setup_logging
+from pyarrow import flight
+import pyarrow as pa
+from convert_hypersync_query import generate_hypersync_query
 
 # Set up logging
 setup_logging()
@@ -148,170 +151,133 @@ class EthRpcIngester(DataIngester):
             return Data(pl.DataFrame(), pl.DataFrame(), events_data)
 
 class HypersyncIngester(DataIngester):
-    """Hypersync API data ingester"""
-    
     def __init__(self, config: Config):
         self.config = config
         self.url = config.data_source[0].url
-        
-        # Override with USDT contract that we know works
-        self.event_addresses = {
-            "USDT": ["0xdAC17F958D2ee523a2206206994597C13D831ec7"]  # USDT contract
+        self.events = {
+            event.name: event for event in config.events
         }
-        self.event_topics = {
-            "USDT": [[  # Transfer event topic
-                "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
-            ]]
-        }
-        
         logger.info(f"Initialized HypersyncIngester with URL: {self.url}")
 
-    async def batch_request(self, session: aiohttp.ClientSession, requests: list) -> list:
-        """Make multiple JSON-RPC requests in a single HTTP request"""
-        async with session.post(
-            self.url,
-            json=requests,
-            headers={"Content-Type": "application/json"},
-            timeout=aiohttp.ClientTimeout(total=30)
-        ) as response:
-            return await response.json()
-
     async def get_data(self, from_block: int, to_block: int) -> Data:
-        """Stream data from Hypersync using optimized batching"""
-        logger.info(f"Streaming data from Hypersync for blocks {from_block} to {to_block}")
-        
         try:
-            blocks_data = []
-            transactions_data = []
-            events_data = {name: [] for name in self.event_addresses.keys()}
+            all_transactions = []
+            blocks_data = {}
+            
+            # Create Arrow schema for the stream
+            schema = pa.schema([
+                ("transaction_hash", pa.string()),
+                ("block_number", pa.int64()),
+                ("from_address", pa.string()),
+                ("to_address", pa.string()),
+                ("value", pa.int64()),
+                ("event_name", pa.string()),
+                ("contract_address", pa.string()),
+                ("topic0", pa.string()),
+                ("raw_data", pa.string())
+            ])
 
-            async with aiohttp.ClientSession() as session:
-                # Batch all event queries into a single request
-                event_queries = []
-                for i, (event_name, addresses) in enumerate(self.event_addresses.items(), 1):
-                    query = {
-                        "jsonrpc": "2.0",
-                        "id": i,  # Using numeric ID
-                        "method": "eth_getLogs",
-                        "params": [{
-                            "fromBlock": f"0x{hex(from_block)[2:]}",  # Proper hex format
-                            "toBlock": f"0x{hex(to_block)[2:]}",  # Proper hex format
-                            "address": addresses[0],  # Using single address
-                            "topics": self.event_topics[event_name][0]  # Using topic array
-                        }]
-                    }
-                    event_queries.append(query)
+            for event_name, event in self.events.items():
+                query = {
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "eth_getLogs",
+                    "params": [{
+                        "fromBlock": hex(from_block),
+                        "toBlock": hex(to_block),
+                        "address": event.address[0] if event.address else None,
+                        "topics": event.topics[0] if event.topics else None
+                    }]
+                }
 
-                # Get all events in one request
-                event_responses = await self.batch_request(session, event_queries)
-                if not isinstance(event_responses, list):
-                    event_responses = [event_responses]
+                logger.info(f"Fetching {event_name} events from block {from_block} to {to_block}")
+                
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(self.url, json=query) as response:
+                        if response.status != 200:
+                            raise Exception(f"HTTP {response.status}: {await response.text()}")
 
-                # Process events and collect unique blocks and transactions
-                block_numbers = set()
-                tx_hashes = set()
-                event_records = []
+                        data = await response.json()
+                        if "error" in data:
+                            raise Exception(f"RPC Error: {data['error']}")
 
-                for response in event_responses:
-                    if "error" in response:
-                        logger.error(f"API error: {response['error']}")
-                        continue
+                        logs = data.get("result", [])
+                        logger.info(f"Retrieved {len(logs)} {event_name} logs")
 
-                    results = response.get("result", [])
-                    if not results:
-                        continue
+                        # Process logs through Arrow stream
+                        for log in logs:
+                            block_num = int(log["blockNumber"], 16)
+                            
+                            # Store block data
+                            blocks_data[block_num] = {
+                                "number": block_num,
+                                "timestamp": int(log.get("timeStamp", "0"), 16) if "timeStamp" in log else 0
+                            }
 
-                    for event in results:
-                        block_num = int(event["blockNumber"], 16)
-                        tx_hash = event["transactionHash"]
-                        block_numbers.add(block_num)
-                        tx_hashes.add(tx_hash)
-                        
-                        # Extract topics individually
-                        topics = event["topics"]
-                        event_records.append({
-                            "block_number": block_num,
-                            "transaction_hash": tx_hash,
-                            "log_address": event["address"].lower(),
-                            "topic0": topics[0] if len(topics) > 0 else None,
-                            "topic1": topics[1] if len(topics) > 1 else None,
-                            "topic2": topics[2] if len(topics) > 2 else None,
-                            "topic3": topics[3] if len(topics) > 3 else None,
-                            "log_data": event["data"],
-                            "log_index": int(event["logIndex"], 16)
-                        })
+                            # Convert log to transaction format
+                            tx = {
+                                "transaction_hash": log["transactionHash"],
+                                "block_number": block_num,
+                                "from_address": "0x" + log["topics"][1][-40:] if len(log["topics"]) > 1 else None,
+                                "to_address": "0x" + log["topics"][2][-40:] if len(log["topics"]) > 2 else None,
+                                "value": int(log["data"], 16),
+                                "event_name": event_name,
+                                "contract_address": log["address"],
+                                "topic0": log["topics"][0],
+                                "raw_data": log["data"]
+                            }
+                            all_transactions.append(tx)
 
-                # Batch request block details
-                if block_numbers:
-                    block_queries = [
-                        {
-                            "jsonrpc": "2.0",
-                            "id": i,  # Using numeric ID
-                            "method": "eth_getBlockByNumber",
-                            "params": [f"0x{hex(num)[2:]}", False]
-                        }
-                        for i, num in enumerate(block_numbers, len(event_queries) + 1)
-                    ]
-                    block_responses = await self.batch_request(session, block_queries)
-                    if not isinstance(block_responses, list):
-                        block_responses = [block_responses]
-                    
-                    for response in block_responses:
-                        if "result" in response and response["result"]:
-                            block = response["result"]
-                            blocks_data.append({
-                                "number": int(block["number"], 16),
-                                "hash": block["hash"],
-                                "timestamp": int(block["timestamp"], 16)
-                            })
+            # Convert blocks_data to DataFrame
+            blocks_df = pl.DataFrame([
+                {"number": block["number"], "timestamp": block["timestamp"]}
+                for block in blocks_data.values()
+            ]) if blocks_data else pl.DataFrame(schema={"number": pl.Int64, "timestamp": pl.Int64})
 
-                # Batch request transaction details
-                if tx_hashes:
-                    tx_queries = [
-                        {
-                            "jsonrpc": "2.0",
-                            "id": i,  # Using numeric ID
-                            "method": "eth_getTransactionByHash",
-                            "params": [tx_hash]
-                        }
-                        for i, tx_hash in enumerate(tx_hashes, len(event_queries) + len(block_queries) + 1)
-                    ]
-                    tx_responses = await self.batch_request(session, tx_queries)
-                    if not isinstance(tx_responses, list):
-                        tx_responses = [tx_responses]
-                    
-                    for response in tx_responses:
-                        if "result" in response and response["result"]:
-                            tx = response["result"]
-                            transactions_data.append({
-                                "hash": tx["hash"],
-                                "block_number": int(tx["blockNumber"], 16),
-                                "from": tx["from"],
-                                "to": tx["to"],
-                                "value": int(tx["value"], 16)
-                            })
+            # Process transactions through Arrow
+            if all_transactions:
+                arrow_table = pa.Table.from_pylist(all_transactions, schema=schema)
+                
+                # Create a buffer for the Arrow stream
+                sink = pa.BufferOutputStream()
+                with pa.ipc.RecordBatchStreamWriter(sink, arrow_table.schema) as writer:
+                    writer.write_table(arrow_table)
+                
+                # Get the buffer and create a reader
+                buf = sink.getvalue()
+                reader = pa.ipc.RecordBatchStreamReader(pa.BufferReader(buf))
 
-                # Log sample data
-                if blocks_data:
-                    logger.info("Sample Blocks Data:")
-                    logger.info(json.dumps(blocks_data[:2], indent=2))
-                if transactions_data:
-                    logger.info("Sample Transactions Data:")
-                    logger.info(json.dumps(transactions_data[:2], indent=2))
+                # Process the Arrow stream in batches
+                while True:
+                    try:
+                        batch = reader.read_next_batch()
+                    except StopIteration:
+                        break
 
-                # Convert to DataFrames
-                blocks_df = pl.DataFrame(blocks_data) if blocks_data else pl.DataFrame()
-                transactions_df = pl.DataFrame(transactions_data) if transactions_data else pl.DataFrame()
-                events_df = pl.DataFrame(event_records) if event_records else pl.DataFrame()
-                events_combined = {"USDT": events_df}
+            # Convert transactions to DataFrame
+            transactions_df = pl.DataFrame(all_transactions) if all_transactions else pl.DataFrame(schema={
+                "transaction_hash": pl.Utf8,
+                "block_number": pl.Int64,
+                "from_address": pl.Utf8,
+                "to_address": pl.Utf8,
+                "value": pl.Int64,
+                "event_name": pl.Utf8,
+                "contract_address": pl.Utf8,
+                "topic0": pl.Utf8,
+                "raw_data": pl.Utf8
+            })
 
-                logger.info(f"Found {len(blocks_df)} blocks, {len(transactions_df)} transactions, and {len(events_df)} events")
-                return Data(blocks_df, transactions_df, events_combined)
+            return Data(
+                blocks=blocks_df,
+                transactions=transactions_df,
+                events={name: transactions_df.filter(pl.col("event_name") == name) 
+                       for name in self.events.keys()}
+            )
 
         except Exception as e:
-            logger.error(f"Error in get_data: {e}")
+            logger.error(f"Error fetching data from Hypersync: {e}")
             logger.error(f"Error occurred at line {e.__traceback__.tb_lineno}")
-            return Data(pl.DataFrame(), pl.DataFrame(), {name: pl.DataFrame() for name in self.event_addresses.keys()})
+            raise
 
 class Ingester:
     """Factory class for creating appropriate ingester based on config"""

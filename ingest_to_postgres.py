@@ -5,6 +5,7 @@ import polars as pl, logging, sys, json, asyncio
 from sqlalchemy import create_engine, text
 from parse import parse_config
 from logging_setup import setup_logging
+from sqlalchemy.types import BigInteger
 
 # Set up logging
 setup_logging()
@@ -15,138 +16,114 @@ def create_tables(engine):
     logger.info("Creating database tables if they don't exist")
     try:
         with engine.connect() as conn:
-            # Blocks table
+            # Drop existing tables if they exist
+            conn.execute(text("DROP TABLE IF EXISTS events"))
+            conn.execute(text("DROP TABLE IF EXISTS transactions"))
+            conn.execute(text("DROP TABLE IF EXISTS blocks"))
+            
+            # Create blocks table
             logger.debug("Creating blocks table")
             conn.execute(text("""
-                CREATE TABLE IF NOT EXISTS blocks (
-                    number BIGINT PRIMARY KEY,
-                    timestamp TIMESTAMP,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    --CONSTRAINT blocks_unique UNIQUE (number)
+                CREATE TABLE blocks (
+                    number BIGINT,
+                    timestamp BIGINT
                 )
             """))
             
-            # Transactions table
+            # Create transactions table
             logger.debug("Creating transactions table")
             conn.execute(text("""
-                CREATE TABLE IF NOT EXISTS transactions (
-                    hash VARCHAR(66) PRIMARY KEY,
+                CREATE TABLE transactions (
+                    transaction_hash VARCHAR(66),
+                    block_number BIGINT,
+                    from_address VARCHAR(42),
+                    to_address VARCHAR(42),
+                    value NUMERIC(78,0)
+                )
+            """))
+            
+            # Create events table
+            logger.debug("Creating events table")
+            conn.execute(text("""
+                CREATE TABLE events (
+                    id SERIAL,
+                    transaction_hash VARCHAR(66),
                     block_number BIGINT,
                     from_address VARCHAR(42),
                     to_address VARCHAR(42),
                     value NUMERIC(78,0),
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    --FOREIGN KEY (block_number) REFERENCES blocks(number),
-                    --CONSTRAINT tx_unique UNIQUE (hash)
-                )
-            """))
-            
-            # Events table - Updated schema to match DataFrame columns
-            logger.debug("Creating events table")
-            conn.execute(text("""
-                CREATE TABLE IF NOT EXISTS events (
-                    id SERIAL PRIMARY KEY,
-                    name VARCHAR(100),
-                    block_number BIGINT,
-                    transaction_hash VARCHAR(66),
-                    address VARCHAR(42),
+                    event_name VARCHAR(100),
+                    contract_address VARCHAR(42),
                     topic0 VARCHAR(66),
-                    topic1 VARCHAR(66),
-                    topic2 VARCHAR(66),
-                    topic3 VARCHAR(66),
-                    data TEXT,
-                    log_index INTEGER,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    --FOREIGN KEY (block_number) REFERENCES blocks(number),
-                    --FOREIGN KEY (transaction_hash) REFERENCES transactions(hash),
-                    --CONSTRAINT events_unique UNIQUE (transaction_hash, log_index)
+                    raw_data TEXT
                 )
             """))
             
             conn.commit()
             logger.info("Successfully created all database tables")
+            
     except Exception as e:
         logger.error(f"Error creating tables: {e}")
         logger.error(f"Error occurred at line {e.__traceback__.tb_lineno}")
         raise
 
-def ingest_data(data: Data, engine):
-    """Ingest data into PostgreSQL"""
+def ingest_data(engine, data: Data):
+    """Ingest data into PostgreSQL database"""
     try:
-        # Log detailed data statistics
-        logger.info("=== Starting Data Ingestion ===")
-        logger.info(f"Total blocks to ingest: {len(data.blocks)}")
-        logger.info(f"Total transactions to ingest: {len(data.transactions) if data.transactions is not None else 0}")
-        logger.info(f"Events to ingest: {', '.join(f'{name}: {len(df)}' for name, df in data.events.items())}")
-        
-        # Extract unique transaction hashes from events if no transactions provided
-        if data.transactions is None or len(data.transactions) == 0:
-            logger.info("No transactions provided, extracting from events")
-            tx_hashes = set()
-            block_numbers = {}  # Map tx_hash to block_number
-            
-            for events_df in data.events.values():
-                # Get unique transaction hashes and their block numbers
-                tx_data = events_df.select([
-                    "transaction_hash",
-                    "block_number"
-                ]).unique(subset=["transaction_hash"])
-                
-                for tx_hash, block_num in zip(tx_data["transaction_hash"], tx_data["block_number"]):
-                    tx_hashes.add(tx_hash)
-                    block_numbers[tx_hash] = block_num
-            
-            # Create transactions DataFrame
-            data.transactions = pl.DataFrame({
-                "hash": list(tx_hashes),
-                "block_number": [block_numbers[tx_hash] for tx_hash in tx_hashes],
-                "from": [""] * len(tx_hashes),  # Empty placeholder
-                "to": [""] * len(tx_hashes),    # Empty placeholder
-                "value": [0] * len(tx_hashes)   # Zero value placeholder
-            })
-            logger.info(f"Created {len(tx_hashes)} placeholder transactions from events")
-
-        # First ingest blocks
+        # Ingest blocks
         if len(data.blocks) > 0:
             logger.info(f"Ingesting {len(data.blocks)} blocks")
-            blocks_df = data.blocks.select([
-                pl.col("number"),
-                pl.col("timestamp").cast(pl.Datetime)
-            ])
-            try:
-                blocks_df.to_pandas().to_sql(
-                    name="blocks",
-                    con=engine,
-                    if_exists='append',
-                    index=False,
-                    method='multi'
-                )
-                logger.info(f"Successfully ingested {len(blocks_df)} blocks")
-            except Exception as e:
-                if "duplicate key value" in str(e):
-                    logger.warning("Skipping duplicate block records")
-                else:
-                    raise
+            # Create temporary table for blocks
+            temp_blocks = data.blocks.unique(subset=["number"]).to_pandas()
+            
+            # Use SQLAlchemy to handle conflicts
+            from sqlalchemy.dialects.postgresql import insert
+            from sqlalchemy import Table, MetaData, Column, BigInteger
+            
+            # Define the blocks table
+            metadata = MetaData()
+            blocks_table = Table(
+                'blocks', 
+                metadata,
+                Column('number', BigInteger, primary_key=True),
+                Column('timestamp', BigInteger)
+            )
+            
+            with engine.connect() as conn:
+                # Convert DataFrame to list of dictionaries
+                block_records = temp_blocks.to_dict('records')
+                
+                # Create insert statement with ON CONFLICT
+                insert_stmt = insert(blocks_table).values(block_records)
+                
+                # Execute the statement
+                conn.execute(insert_stmt)
+                conn.commit()
+                
+            logger.info("Successfully ingested blocks")
 
-        # Then ingest transactions
+        # Ingest transactions
         if len(data.transactions) > 0:
             logger.info(f"Ingesting {len(data.transactions)} transactions")
-            tx_df = data.transactions.select([
-                pl.col("hash"),
-                pl.col("block_number"),
-                pl.col("from").alias("from_address"),
-                pl.col("to").alias("to_address"),
-                pl.col("value")
-            ])
             try:
-                tx_df.to_pandas().to_sql(
+                # Remove duplicates and select required columns
+                unique_txs = data.transactions.unique(subset=["transaction_hash"]).select([
+                    "transaction_hash",
+                    "block_number",
+                    "from_address",
+                    "to_address",
+                    "value"
+                ])
+                
+                # Convert to pandas and use to_sql
+                unique_txs.to_pandas().to_sql(
                     name="transactions",
                     con=engine,
                     if_exists='append',
                     index=False,
                     method='multi'
                 )
-                logger.info(f"Successfully ingested {len(tx_df)} transactions")
+                logger.info("Successfully ingested transactions")
             except Exception as e:
                 if "duplicate key value" in str(e):
                     logger.warning("Skipping duplicate transaction records")
@@ -157,48 +134,37 @@ def ingest_data(data: Data, engine):
         for event_name, events_df in data.events.items():
             if len(events_df) > 0:
                 logger.info(f"Processing events for {event_name}")
-                logger.debug(f"Event data sample: {events_df.head(1).to_dict()}")
-                
-                # Add event name column and rename columns to match DB schema
-                events_df = events_df.with_columns([
-                    pl.lit(event_name).alias("name")
-                ]).rename({
-                    "log_address": "address",
-                    "log_data": "data"
-                })
-                
-                # Select required columns in correct order
-                events_df = events_df.select([
-                    "name",
-                    "block_number",
-                    "transaction_hash",
-                    "address",
-                    "topic0",
-                    "topic1", 
-                    "topic2",
-                    "topic3",
-                    "data",
-                    "log_index"
-                ])
-                
                 try:
-                    events_df.to_pandas().to_sql(
+                    # Remove duplicates based on transaction hash and log index
+                    unique_events = events_df.unique(
+                        subset=["transaction_hash", "block_number", "contract_address", "topic0"]
+                    ).select([
+                        "transaction_hash",
+                        "block_number",
+                        "from_address",
+                        "to_address",
+                        "value",
+                        "event_name",
+                        "contract_address",
+                        "topic0",
+                        "raw_data"
+                    ])
+                    
+                    # Convert to pandas and use to_sql
+                    unique_events.to_pandas().to_sql(
                         name="events",
                         con=engine,
                         if_exists='append',
                         index=False,
                         method='multi'
                     )
-                    logger.info(f"Successfully ingested {len(events_df)} events for {event_name}")
+                    logger.info(f"Successfully ingested {len(unique_events)} events for {event_name}")
                 except Exception as e:
                     if "duplicate key value" in str(e):
                         logger.warning(f"Skipping duplicate event records for {event_name}")
                     else:
-                        logger.error(f"Error ingesting data to PostgreSQL: {e}")
-                        logger.error(f"Error occurred at line {e.__traceback__.tb_lineno}")
                         raise
-        
-        logger.info("=== Data Ingestion Completed ===")
+
     except Exception as e:
         logger.error(f"Error ingesting data to PostgreSQL: {e}")
         logger.error(f"Error occurred at line {e.__traceback__.tb_lineno}")
@@ -229,7 +195,7 @@ async def process_batch(ingester: Ingester, engine) -> bool:
             
         # Ingest to PostgreSQL
         logger.info("Starting PostgreSQL ingestion...")
-        ingest_data(data, engine)
+        ingest_data(engine, data)
         
         logger.info(f"Successfully processed batch of {len(data.blocks)} blocks")
         logger.info("=== Batch Processing Completed ===")

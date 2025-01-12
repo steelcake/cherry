@@ -3,7 +3,7 @@ name: "my_project"
 
 # Data source configuration
 data_source:
-  - kind: hypersync
+  - kind: "hypersync"
     url: "https://eth.rpc.hypersync.xyz/"
 
 # Block processing configuration
@@ -13,26 +13,23 @@ blocks:
 
 # Transaction filtering configuration
 transactions:
-  address: []  # Empty list for addresses
-  from:
-    - address1  # Replace with the actual Ethereum address
-    - address2  # Replace with the actual Ethereum address
-  to:
-    - address3  # Replace with the actual Ethereum address
+  address: []
+  from: []
+  to: []
 
 # Traces processing
 traces: false
 
 # Contract and events processing configuration
 events:
-  - name: "MyContract"
-    address: ["0x1234567890123456789012345678901234567890"]
-    topics: [["0xabcdef..."]]
-    signature: "Transfer(address indexed token0, address indexed token1, bool indexed stable, address pool, uint256 length)"
+  - name: "USDT_Transfer"
+    address: ["0xdAC17F958D2ee523a2206206994597C13D831ec7"]  # USDT contract
+    topics: [["0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"]]  # Transfer event
+    signature: "Transfer(address indexed from,address indexed to,uint256 value)"
 
 # Transformation configuration
 transform:
-  - kind: Polars
+  - kind: "Polars"
 
 # Output configuration
 output:
