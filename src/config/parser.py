@@ -3,7 +3,7 @@ from pathlib import Path
 from pydantic import BaseModel
 import yaml, logging, json, sys
 from enum import Enum
-from logging_setup import setup_logging
+from src.utils.logging_setup import setup_logging
 
 # Set up logging
 setup_logging()

@@ -6,11 +6,11 @@ from hypersync import (
     LogField,
     BlockField
 )
-from parse import Config, Event, parse_config
+from src.config.parser import Config, Event, parse_config
 from pathlib import Path
 from typing import List
 import logging, json
-from logging_setup import setup_logging
+from src.utils.logging_setup import setup_logging
 
 # Set up logging
 setup_logging()

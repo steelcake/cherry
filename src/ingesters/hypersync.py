@@ -1,113 +1,15 @@
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from typing import Dict, Optional
-import aiohttp, json, logging, requests
-import cryo
+import json, logging, aiohttp
 import polars as pl
 import pyarrow as pa
-import pyarrow.ipc as ipc
-
-from parse import Config, DataSourceKind
-from logging_setup import setup_logging
+from src.ingesters.base import DataIngester, Data
+from src.config.parser import Config
+from src.utils.logging_setup import setup_logging
 
 # Set up logging
 setup_logging()
 logger = logging.getLogger(__name__)
 
-@dataclass
-class Data:
-    """Container for blockchain data"""
-    blocks: pl.DataFrame
-    transactions: Optional[pl.DataFrame]
-    events: Dict[str, pl.DataFrame]
-
-class DataIngester(ABC):
-    """Abstract base class for data ingesters"""
-    @abstractmethod
-    async def get_data(self, from_block: int, to_block: int) -> Data:
-        """Fetch data for the specified block range"""
-        pass
-
-class EthRpcIngester(DataIngester):
-    def __init__(self, config: Config):
-        self.config = config
-        logger.debug("Initializing EthRpcIngester")
-        # Parse Etherscan API URL components
-        self.api_url = config.data_source[0].url.split('?')[0]
-        self.api_params = dict(param.split('=') for param in config.data_source[0].url.split('?')[1].split('&'))
-        logger.debug(f"API Parameters: {json.dumps(self.api_params, indent=2)}")
-        
-        self.api_key = self.api_params.get('apikey')
-        self.address = self.api_params.get('address')
-        
-        # Initialize cryo provider
-        self.provider = cryo.JsonRpc(self.api_url)
-        
-        self.event_addresses = {event.name: event.address for event in config.events}
-        self.event_topics = {event.name: event.topics for event in config.events}
-        logger.debug(f"Event addresses: {json.dumps(self.event_addresses, indent=2)}")
-        logger.debug(f"Event topics: {json.dumps(self.event_topics, indent=2)}")
-
-    async def get_data(self, from_block: int, to_block: int) -> Data:
-        blocks_data = []
-        transactions_data = []
-        events_data = {name: [] for name in self.event_addresses.keys()}
-
-        try:
-            # Use cryo to fetch block data
-            blocks = await self.provider.get_blocks(
-                start_block=from_block,
-                end_block=to_block,
-                include_transactions=True
-            )
-            
-            for block in blocks:
-                blocks_data.append({
-                    'number': block['number'],
-                    'timestamp': block['timestamp'],
-                    'hash': block['hash']
-                })
-                
-                if self.config.blocks and self.config.blocks.include_transactions:
-                    for tx in block['transactions']:
-                        transactions_data.append({
-                            'hash': tx['hash'],
-                            'block_number': block['number'],
-                            'from': tx['from'],
-                            'to': tx['to'],
-                            'value': int(tx['value'])
-                        })
-
-            # Log processed data
-            if blocks_data:
-                logger.debug(f"Sample blocks data: {json.dumps(blocks_data[:2], indent=2)}")
-            if transactions_data:
-                logger.debug(f"Sample transactions data: {json.dumps(transactions_data[:2], indent=2)}")
-            
-            # Convert to DataFrames
-            blocks_df = pl.DataFrame(blocks_data) if blocks_data else pl.DataFrame()
-            transactions_df = pl.DataFrame(transactions_data) if transactions_data else pl.DataFrame()
-            
-            # Log DataFrame information
-            logger.debug(f"Blocks DataFrame Schema: {blocks_df.schema}")
-            if len(blocks_df) > 0:
-                logger.debug(f"Sample Blocks DataFrame:\n{blocks_df.head(2)}")
-            
-            logger.debug(f"Transactions DataFrame Schema: {transactions_df.schema}")
-            if len(transactions_df) > 0:
-                logger.debug(f"Sample Transactions DataFrame:\n{transactions_df.head(2)}")
-            
-            logger.info(f"Found {len(blocks_data)} blocks and {len(transactions_data)} transactions")
-            return Data(
-                blocks=blocks_df,
-                transactions=transactions_df,
-                events=events_data
-            )
-            
-        except Exception as e:
-            logger.error(f"Error processing data: {e}")
-            logger.error(f"Error occurred at line {e.__traceback__.tb_lineno}")
-            return Data(pl.DataFrame(), pl.DataFrame(), events_data)
+logger = logging.getLogger(__name__)
 
 class HypersyncIngester(DataIngester):
     def __init__(self, config: Config):
@@ -287,30 +189,4 @@ class HypersyncIngester(DataIngester):
         except Exception as e:
             logger.error(f"Error fetching data from Hypersync: {e}")
             logger.error(f"Error occurred at line {e.__traceback__.tb_lineno}")
-            raise
-
-class Ingester:
-    """Factory class for creating appropriate ingester based on config"""
-    
-    def __init__(self, config: Config):
-        self.config = config
-        # Use the known working block range from our tests
-        self.current_block = 21_580_000  # Known working block number
-        self.batch_size = 100  # Smaller batch size to ensure we get results
-        logger.info(f"Initializing Ingester starting from block {self.current_block}")
-        
-        # Use HypersyncIngester instead of EthRpcIngester
-        if config.data_source[0].kind == DataSourceKind.HYPERSYNC:
-            logger.info("Using HypersyncIngester for data ingestion")
-            self.ingester = HypersyncIngester(config)
-        else:
-            logger.warning("Defaulting to HypersyncIngester despite config specifying different source")
-            self.ingester = HypersyncIngester(config)
-
-    async def get_next_data_batch(self) -> Data:
-        """Get the next batch of data"""
-        next_block = self.current_block + self.batch_size
-        logger.debug(f"Fetching next batch from {self.current_block} to {next_block}")
-        data = await self.ingester.get_data(self.current_block, next_block)
-        self.current_block = next_block
-        return data
+            raise 

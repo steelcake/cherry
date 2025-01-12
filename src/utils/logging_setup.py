@@ -1,10 +1,10 @@
-from pathlib import Path
+import logging
+import sys
 from datetime import datetime
-import logging, sys, codecs
+from pathlib import Path
 
-# Global variable to track if logging has been set up
+# Global variables to track logging state
 _is_logging_configured = False
-# Global variable to store the current log file path
 _current_log_file = None
 
 def setup_logging():
@@ -48,19 +48,11 @@ def setup_logging():
     # Configure root logger
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.DEBUG)
-    root_logger.handlers = []  # Clear any existing handlers
     root_logger.addHandler(file_handler)
     root_logger.addHandler(console_handler)
 
-    # Disable debug logging for some noisy libraries
-    logging.getLogger('urllib3').setLevel(logging.INFO)
-    logging.getLogger('web3').setLevel(logging.INFO)
-    logging.getLogger('asyncio').setLevel(logging.INFO)
-    
-    # Mark logging as configured
     _is_logging_configured = True
-    
-    return logging.getLogger(__name__)
+    return root_logger
 
 def get_current_log_file() -> Path:
     """Get the path to the current log file"""
