@@ -21,7 +21,7 @@ TRANSACTIONS = BlockchainSchema("transactions", {
     "value": "int64",
     "event_name": "string",
     "contract_address": "string",
-    "topic0": "string",
+    "event_signature": "string",
     "raw_data": "string"
 })
 
@@ -34,6 +34,6 @@ EVENTS = BlockchainSchema("events", {
     "value": "int64",
     "event_name": "string",
     "contract_address": "string",
-    "topic0": "string",
+    "event_signature": "string",
     "raw_data": "string"
 })

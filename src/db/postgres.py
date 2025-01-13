@@ -66,7 +66,7 @@ def stream_arrow_to_postgresql(connection, table: pa.Table, table_name: str, bat
                 connection.rollback()
                 raise
                 
-        logger.info(f"Successfully streamed {batch_count} batches to {table_name}")
+        logger.info(f"Successfully streamed {batch_count} batches to {table_name} table")
         
     except Exception as e:
         logger.error(f"Error streaming to {table_name}: {e}")
@@ -86,11 +86,9 @@ def ingest_data(engine, data: Data):
             stream_arrow_to_postgresql(connection, data.blocks, "blocks")
             
         # Stream events to PostgreSQL
-        logger.info(f"Streaming {data.events.num_rows} events to PostgreSQL")
-        for event_name in data.events.column_names:
-            event_table = data.events.select([event_name])  # Select the column as a new pyarrow.Table
-            if event_table.num_rows > 0:  # Check if the table has rows
-                stream_arrow_to_postgresql(connection, event_table, "events")
+        if data.events and data.events.num_rows > 0:
+            logger.info(f"Streaming {data.events.num_rows} events to PostgreSQL")
+            stream_arrow_to_postgresql(connection, data.events, "events")
 
         connection.close()
                 

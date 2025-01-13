@@ -66,7 +66,7 @@ class HypersyncIngester(DataIngester):
                             logs = result['result']
                             logger.info(f"Found {len(logs)} logs for event {event_name}")
                             if logs:
-                                logger.debug(f"Sample log for {event_name}: {json.dumps(logs[0], indent=2)}")
+                                logger.debug(f"Sample log for {event_name}: {json.dumps(logs[:3], indent=2)}")
                                 
                                 # Convert to Polars DataFrame first
                                 events_df = pl.DataFrame({
@@ -77,7 +77,7 @@ class HypersyncIngester(DataIngester):
                                     "value": [int(log['data'], 16) if log['data'] != '0x' else 0 for log in logs],
                                     "event_name": [event_name] * len(logs),
                                     "contract_address": [log['address'] for log in logs],
-                                    "topic0": [log['topics'][0] for log in logs],
+                                    "event_signature": [log['topics'][0] for log in logs],
                                     "raw_data": [log['data'] for log in logs]
                                 })
                                 
