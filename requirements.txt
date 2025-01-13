@@ -38,6 +38,7 @@ polars==1.19.0
 propcache==0.2.1
 psycopg2-binary==2.9.10
 pyarrow==18.1.0
+pyarrow-flight==18.1.0
 pycryptodome==3.21.0
 pydantic==2.10.4
 pydantic_core==2.27.2

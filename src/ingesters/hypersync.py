@@ -5,7 +5,7 @@ import cryo
 from src.ingesters.base import DataIngester, Data
 from src.config.parser import Config
 from src.utils.logging_setup import setup_logging
-from src.schemas.arrow_schemas import BLOCK_SCHEMA, TRANSACTION_SCHEMA
+from src.schemas.blockchain_schemas import BLOCKS, TRANSACTIONS, EVENTS
 
 # Set up logging
 setup_logging()
@@ -36,7 +36,7 @@ class HypersyncIngester(DataIngester):
                 output_format="polars",
                 hex=True
             )
-            blocks_table = blocks_df.to_arrow()
+            blocks_table = pa.Table.from_pandas(blocks_df.to_pandas(), schema=BLOCKS.to_arrow())
             
             # Fetch events using eth_getLogs
             events_data = {}
@@ -61,7 +61,6 @@ class HypersyncIngester(DataIngester):
 
                     async with session.post(self.url, json=query) as response:
                         result = await response.json()
-                        logger.debug(f"Raw response for {event_name}: {json.dumps(result, indent=2)}")
                         
                         if 'result' in result:
                             logs = result['result']
@@ -85,9 +84,9 @@ class HypersyncIngester(DataIngester):
                                 logger.info(f"Created DataFrame for {event_name} with schema: {events_df.schema}")
                                 logger.debug(f"Sample DataFrame rows for {event_name}:\n{events_df.head(2)}")
                                 
-                                # Convert to Arrow table
-                                events_data[event_name] = events_df.to_arrow()
-                                logger.info(f"Converted {event_name} DataFrame to Arrow table with {events_data[event_name].num_rows} rows")
+                                # Convert to Arrow table with schema
+                                events_table = pa.Table.from_pandas(events_df.to_pandas(), schema=EVENTS.to_arrow())
+                                logger.info(f"Converted {event_name} DataFrame to Arrow table with {events_table.num_rows} rows")
                         else:
                             logger.warning(f"No 'result' field in response for {event_name}: {json.dumps(result, indent=2)}")
 
@@ -101,7 +100,7 @@ class HypersyncIngester(DataIngester):
             return Data(
                 blocks=blocks_table,
                 transactions=None,
-                events=events_data
+                events=events_table
             )
 
         except Exception as e:

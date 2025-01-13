@@ -8,3 +8,6 @@ test_hypersync.py
 
 # Ignore cryo test py file
 test_cryo.py
+
+# Ignore arrow flight py file
+test_arrow_flight.py

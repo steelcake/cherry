@@ -2,11 +2,7 @@ from sqlalchemy import create_engine, text
 import logging
 import pyarrow as pa
 import psycopg2
-from src.schemas.database_schemas import (
-    BLOCKS_TABLE_SQL, 
-    TRANSACTIONS_TABLE_SQL, 
-    EVENTS_TABLE_SQL
-)
+from src.schemas.blockchain_schemas import BLOCKS, TRANSACTIONS, EVENTS
 from src.ingesters.base import Data
 
 logger = logging.getLogger(__name__)
@@ -21,13 +17,13 @@ def create_tables(engine):
     try:
         with engine.connect() as conn:
             logger.debug("Creating blocks table")
-            conn.execute(text(BLOCKS_TABLE_SQL))
+            conn.execute(text(BLOCKS.to_sql()))
             
             logger.debug("Creating transactions table")
-            conn.execute(text(TRANSACTIONS_TABLE_SQL))
+            conn.execute(text(TRANSACTIONS.to_sql()))
             
             logger.debug("Creating events table")
-            conn.execute(text(EVENTS_TABLE_SQL))
+            conn.execute(text(EVENTS.to_sql()))
             
             conn.commit()
             logger.info("Successfully created all database tables")
@@ -66,6 +62,7 @@ def stream_arrow_to_postgresql(connection, table: pa.Table, table_name: str, bat
                 
             except Exception as e:
                 logger.error(f"Error processing batch {batch_count}: {e}")
+                logger.error(f"Error occurred at line {e.__traceback__.tb_lineno}")
                 connection.rollback()
                 raise
                 
@@ -89,11 +86,12 @@ def ingest_data(engine, data: Data):
             stream_arrow_to_postgresql(connection, data.blocks, "blocks")
             
         # Stream events to PostgreSQL
-        for event_name, event_table in data.events.items():
-            if event_table.num_rows > 0:
-                logger.info(f"Streaming {event_table.num_rows} {event_name} events to PostgreSQL")
+        logger.info(f"Streaming {data.events.num_rows} events to PostgreSQL")
+        for event_name in data.events.column_names:
+            event_table = data.events.select([event_name])  # Select the column as a new pyarrow.Table
+            if event_table.num_rows > 0:  # Check if the table has rows
                 stream_arrow_to_postgresql(connection, event_table, "events")
-                
+
         connection.close()
                 
     except Exception as e:

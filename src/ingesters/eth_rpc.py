@@ -4,6 +4,7 @@ import cryo
 import polars as pl
 from src.ingesters.base import DataIngester, Data
 from src.config.parser import Config
+from src.schemas.blockchain_schemas import BLOCKS, TRANSACTIONS, EVENTS
 
 logger = logging.getLogger(__name__)
 
@@ -64,8 +65,8 @@ class EthRpcIngester(DataIngester):
                 logger.debug(f"Sample transactions data: {json.dumps(transactions_data[:2], indent=2)}")
             
             # Convert to DataFrames
-            blocks_df = pl.DataFrame(blocks_data) if blocks_data else pl.DataFrame()
-            transactions_df = pl.DataFrame(transactions_data) if transactions_data else pl.DataFrame()
+            blocks_df = pl.DataFrame(blocks_data, schema=BLOCKS.to_polars()) if blocks_data else pl.DataFrame()
+            transactions_df = pl.DataFrame(transactions_data, schema=TRANSACTIONS.to_polars()) if transactions_data else pl.DataFrame()
             
             # Log DataFrame information
             logger.debug(f"Blocks DataFrame Schema: {blocks_df.schema}")

@@ -33,7 +33,8 @@ async def process_batch(ingester: Ingester, engine) -> bool:
         logger.info("Batch Statistics:")
         logger.info(f"- Blocks: {len(data.blocks)}")
         logger.info(f"- Transactions: {len(data.transactions) if data.transactions is not None else 0}")
-        logger.info(f"- Events: {sum(len(df) for df in data.events.values())}")
+        # Log only the first 5 values of each column to reduce noise
+        logger.info(", ".join(f"- {col_name}: {data.events[col_name].to_pylist()[:5]}" for col_name in data.events.column_names))
             
         # Ingest to PostgreSQL
         logger.info("Starting PostgreSQL ingestion...")
