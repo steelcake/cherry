@@ -42,7 +42,7 @@ class EthRpcIngester(DataIngester):
             
             for block in blocks:
                 blocks_data.append({
-                    'number': block['number'],
+                    'block_number': block['number'],
                     'timestamp': block['timestamp'],
                     'hash': block['hash']
                 })

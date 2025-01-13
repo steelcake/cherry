@@ -5,6 +5,7 @@ import cryo
 from src.ingesters.base import DataIngester, Data
 from src.config.parser import Config
 from src.utils.logging_setup import setup_logging
+from src.schemas.arrow_schemas import BLOCK_SCHEMA, TRANSACTION_SCHEMA
 
 # Set up logging
 setup_logging()
@@ -26,111 +27,84 @@ class HypersyncIngester(DataIngester):
 
     async def get_data(self, from_block: int, to_block: int) -> Data:
         try:
-            # Fetch blocks using cryo collect
+            # Fetch blocks using cryo with polars format and convert to Arrow
             blocks_range = [f"{from_block}:{to_block}"]
-            blocks_data = await cryo.async_collect(
+            blocks_df = await cryo.async_collect(
                 "blocks",
                 blocks=blocks_range,
                 rpc=self.url,
-                output_format="pandas",
+                output_format="polars",
                 hex=True
             )
-
-            # Convert numeric columns to Int64 in pandas first
-            numeric_columns = ['block_number', 'gas_used', 'timestamp', 'base_fee_per_gas', 'chain_id']
-            for col in numeric_columns:
-                if col in blocks_data.columns:
-                    blocks_data[col] = blocks_data[col].astype('int64')
-
-            # Convert blocks DataFrame to Polars with all available columns
-            blocks_df = pl.from_pandas(blocks_data[[
-                'block_hash',
-                'author',
-                'block_number',
-                'gas_used',
-                'extra_data',
-                'timestamp',
-                'base_fee_per_gas',
-                'chain_id'
-            ]])
+            blocks_table = blocks_df.to_arrow()
             
-            # Initialize empty transactions DataFrame with schema
-            transactions_df = pl.DataFrame(schema={
-                "transaction_hash": pl.Utf8,
-                "block_number": pl.Int64,
-                "from_address": pl.Utf8,
-                "to_address": pl.Utf8,
-                "value": pl.Int64,
-                "event_name": pl.Utf8,
-                "contract_address": pl.Utf8,
-                "topic0": pl.Utf8,
-                "raw_data": pl.Utf8
-            })
-            
-            # Fetch events for each configured event type
+            # Fetch events using eth_getLogs
             events_data = {}
-            for event_name, event in self.events.items():
-                # Fetch logs using cryo
-                logs_data = await cryo.async_collect(
-                    "logs",
-                    blocks=blocks_range,
-                    rpc=self.url,
-                    address=event.address,
-                    topic0=[event.topics[0][0]],  # Pass topic0 as a list
-                    output_format="pandas",
-                    hex=True
-                )
-                
-                if not logs_data.empty:
-                    # Convert block_number to Int64 in logs data
-                    if 'block_number' in logs_data.columns:
-                        logs_data['block_number'] = logs_data['block_number'].astype('int64')
-
-                    # Convert logs to our transaction format
-                    event_df = pl.DataFrame({
-                        "transaction_hash": logs_data['transaction_hash'],
-                        "block_number": logs_data['block_number'],
-                        "from_address": logs_data['topic1'].apply(lambda x: '0x' + x[-40:] if x else None),
-                        "to_address": logs_data['topic2'].apply(lambda x: '0x' + x[-40:] if x else None),
-                        "value": logs_data['data'].apply(lambda x: int(x, 16) if x else 0),
-                        "event_name": event_name,
-                        "contract_address": logs_data['address'],
-                        "topic0": logs_data['topic0'],
-                        "raw_data": logs_data['data']
-                    })
+            logger.info(f"Starting event fetching for {len(self.events)} event types")
+            logger.info(f"Event configurations: {json.dumps({name: {'address': event.address, 'topics': event.topics} for name, event in self.events.items()}, indent=2)}")
+            
+            async with aiohttp.ClientSession() as session:
+                for event_name, event in self.events.items():
+                    query = {
+                        "jsonrpc": "2.0",
+                        "id": 1,
+                        "method": "eth_getLogs",
+                        "params": [{
+                            "fromBlock": hex(from_block),
+                            "toBlock": hex(to_block),
+                            "address": event.address[0] if isinstance(event.address, list) else event.address,
+                            "topics": [event.topics[0][0]] if event.topics else None
+                        }]
+                    }
                     
-                    # Store event data
-                    events_data[event_name] = event_df
-                    
-                    # Append to transactions
-                    transactions_df = pl.concat([transactions_df, event_df])
-            
-            # Log statistics
-            logger.info(f"\nDataFrame Statistics:")
-            logger.info(f"Blocks DataFrame: {len(blocks_df)} rows")
-            logger.info(f"Transactions DataFrame: {len(transactions_df)} rows")
-            logger.info(f"Events DataFrame: {len(event_df)} rows")
+                    logger.info(f"Fetching {event_name} events with query: {json.dumps(query, indent=2)}")
 
-            if len(event_df) > 0:
-                logger.debug(f"Events DataFrame Schema: {event_df.schema}")
-                logger.debug(f"Sample Events DataFrame:\n{event_df.head(2)}")
-            
-            if len(blocks_df) > 0:
-                logger.debug(f"Blocks DataFrame Schema: {blocks_df.schema}")
-                logger.debug(f"Sample Blocks DataFrame:\n{blocks_df.head(2)}")
-            
-            if len(transactions_df) > 0:
-                logger.debug(f"Transactions DataFrame Schema: {transactions_df.schema}")
-                logger.debug(f"Sample Transactions DataFrame:\n{transactions_df.head(2)}")
-            
+                    async with session.post(self.url, json=query) as response:
+                        result = await response.json()
+                        logger.debug(f"Raw response for {event_name}: {json.dumps(result, indent=2)}")
+                        
+                        if 'result' in result:
+                            logs = result['result']
+                            logger.info(f"Found {len(logs)} logs for event {event_name}")
+                            if logs:
+                                logger.debug(f"Sample log for {event_name}: {json.dumps(logs[0], indent=2)}")
+                                
+                                # Convert to Polars DataFrame first
+                                events_df = pl.DataFrame({
+                                    "transaction_hash": [log['transactionHash'] for log in logs],
+                                    "block_number": [int(log['blockNumber'], 16) for log in logs],
+                                    "from_address": [f"0x{log['topics'][1][-40:]}" if len(log['topics']) > 1 else None for log in logs],
+                                    "to_address": [f"0x{log['topics'][2][-40:]}" if len(log['topics']) > 2 else None for log in logs],
+                                    "value": [int(log['data'], 16) if log['data'] != '0x' else 0 for log in logs],
+                                    "event_name": [event_name] * len(logs),
+                                    "contract_address": [log['address'] for log in logs],
+                                    "topic0": [log['topics'][0] for log in logs],
+                                    "raw_data": [log['data'] for log in logs]
+                                })
+                                
+                                logger.info(f"Created DataFrame for {event_name} with schema: {events_df.schema}")
+                                logger.debug(f"Sample DataFrame rows for {event_name}:\n{events_df.head(2)}")
+                                
+                                # Convert to Arrow table
+                                events_data[event_name] = events_df.to_arrow()
+                                logger.info(f"Converted {event_name} DataFrame to Arrow table with {events_data[event_name].num_rows} rows")
+                        else:
+                            logger.warning(f"No 'result' field in response for {event_name}: {json.dumps(result, indent=2)}")
+
+            # Log final statistics
+            logger.info(f"\nFinal Data Statistics:")
+            logger.info(f"Blocks: {len(blocks_df)} rows")
+            logger.info(f"Events summary:")
+            for name, table in events_data.items():
+                logger.info(f"- {name}: {table.num_rows} rows")
 
             return Data(
-                blocks=blocks_df,
-                transactions=transactions_df,
+                blocks=blocks_table,
+                transactions=None,
                 events=events_data
             )
 
         except Exception as e:
-            logger.error(f"Error fetching data from Hypersync: {e}")
+            logger.error(f"Error fetching data: {e}")
             logger.error(f"Error occurred at line {e.__traceback__.tb_lineno}")
             raise 
