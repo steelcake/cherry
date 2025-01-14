@@ -6,7 +6,7 @@ from src.config.parser import parse_config
 from src.utils.logging_setup import setup_logging
 from src.db.postgres import create_tables, create_engine_from_config, ingest_data
 from src.ingesters.base import Data
-from src.ingesters.ingester import Ingester
+from src.ingesters.factory import Ingester
 
 # Set up logging
 setup_logging()

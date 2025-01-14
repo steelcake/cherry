@@ -4,7 +4,8 @@ name: "my_project"
 # Data source configuration
 data_source:
   - kind: "hypersync"
-    url: "https://eth.rpc.hypersync.xyz/"
+    url: "https://eth.hypersync.xyz"
+    api_key: "fc85f54b-8c9c-448e-a39f-fcd3056b2914"
 
 # Block processing configuration
 blocks:
@@ -22,10 +23,21 @@ traces: false
 
 # Contract and events processing configuration
 events:
-  - name: "USDT_Transfer"
-    address: ["0xdAC17F958D2ee523a2206206994597C13D831ec7"]  # USDT contract
-    topics: [["0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"]]  # Transfer event
-    signature: "Transfer(address indexed from,address indexed to,uint256 value)"
+  - name: "Transfer"
+    address: ["0xdAC17F958D2ee523a2206206994597C13D831ec7"]
+    topics: [["0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"]]
+    signature: "Transfer(address indexed from, address indexed to, uint256 amount)"
+    column_mapping: {amount: "float64"}
+
+contract_identifier_signatures:
+  - "Approval(address indexed _owner, address indexed _spender, uint256 _value)"
+
+"items_per_section": 1000000
+
+"parquet_output_path": "data"
+
+"from_block": 21123123
+"to_block": null
 
 # Transformation configuration
 transform:

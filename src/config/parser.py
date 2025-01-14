@@ -1,9 +1,10 @@
-from typing import List, Optional
+from typing import List, Dict, Optional
 from pathlib import Path
 from pydantic import BaseModel
 import yaml, logging, json, sys
 from enum import Enum
 from src.utils.logging_setup import setup_logging
+import hypersync
 
 # Set up logging
 setup_logging()
@@ -24,6 +25,7 @@ class OutputKind(str, Enum):
 class DataSource(BaseModel):
     kind: DataSourceKind
     url: str  # Keeps string type (connection URL)
+    api_key: str
 
 class BlockConfig(BaseModel):
     index_blocks: bool
@@ -38,6 +40,7 @@ class Event(BaseModel):
     address: Optional[List[str]] = None
     topics: Optional[List[List[str]]] = None
     signature: str
+    column_mapping: Dict[str, hypersync.DataType]
 
 class Transform(BaseModel):
     kind: TransformKind
@@ -52,6 +55,11 @@ class Config(BaseModel):
     blocks: Optional[BlockConfig] = None
     transactions: Optional[TransactionFilters] = None
     events: List[Event]
+    contract_identifier_signatures: Optional[List[str]] = None
+    items_per_section: int
+    parquet_output_path: str
+    from_block: int
+    to_block: Optional[int]
     transform: List[Transform]
     output: List[Output]
 

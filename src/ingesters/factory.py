@@ -1,6 +1,6 @@
 import logging
 from src.utils.logging_setup import setup_logging
-from src.ingesters.hypersync import HypersyncIngester
+from src.ingesters.providers.hypersync import HypersyncIngester
 from src.config.parser import Config, DataSourceKind
 from src.ingesters.base import Data
 
@@ -14,7 +14,7 @@ class Ingester:
     def __init__(self, config: Config):
         self.config = config
         # Use the known working block range from our tests
-        self.current_block = 21_580_000  # Known working block number
+        self.current_block = 211_231_231  # Known working block number
         self.batch_size = 100  # Smaller batch size to ensure we get results
         logger.info(f"Initializing Ingester starting from block {self.current_block}")
         
