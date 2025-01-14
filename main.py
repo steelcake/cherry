@@ -70,6 +70,7 @@ async def main():
         # Process data in batches
         logger.info("Starting batch processing")
         while True:
+            logger.info(f"Processing batch {ingester.current_block} to {ingester.current_block + ingester.batch_size}")
             try:
                 has_more_data = await process_batch(ingester, engine)
                 if not has_more_data:
