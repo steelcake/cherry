@@ -27,7 +27,9 @@ class BlockchainSchema:
         """Convert to Polars schema"""
         polars_types = {
             "string": pl.Utf8,
-            "int64": pl.Int64
+            "int64": pl.Int64,
+            "bool": pl.Boolean,
+            "float64": pl.Float64
         }
         return {
             name: polars_types[dtype]
@@ -38,7 +40,9 @@ class BlockchainSchema:
         """Convert to SQL CREATE TABLE statement"""
         sql_types = {
             "string": "TEXT",
-            "int64": "BIGINT"
+            "int64": "BIGINT",
+            "bool": "BOOLEAN",
+            "float64": "FLOAT"
         }
         fields_sql = [
             f"{name} {sql_types[dtype]}"

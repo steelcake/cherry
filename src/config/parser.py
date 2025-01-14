@@ -24,7 +24,7 @@ class OutputKind(str, Enum):
 
 class DataSource(BaseModel):
     kind: DataSourceKind
-    url: str  # Keeps string type (connection URL)
+    url: str
     api_key: str
 
 class BlockConfig(BaseModel):

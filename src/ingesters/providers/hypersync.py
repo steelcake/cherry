@@ -19,8 +19,14 @@ import polars as pl
 from typing import Dict, List, cast, Optional
 from src.ingesters.base import DataIngester, Data
 from src.config.parser import Config
-
+from src.schemas.blockchain_schemas import EVENTS
 logger = logging.getLogger(__name__)
+
+from dotenv import load_dotenv
+import os
+
+# Load environment variables from .env file
+load_dotenv()
 
 @dataclass
 class GetParquetParams:
@@ -35,11 +41,14 @@ class GetParquetParams:
 
 class HypersyncIngester(DataIngester):
     def __init__(self, config: Config):
-        self.config = config
+        self.config = config   
+        logger.info("API Token retrieved successfully" 
+                     if (hypersyncapi_token := os.getenv('HYPERSYNC_API_TOKEN')) 
+                     else "API Token not found")
         logger.info(f"Initializing HypersyncIngester with URL: {config.data_source[0].url}")
         self.client = HypersyncClient(ClientConfig(
             url=config.data_source[0].url,
-            bearer_token=config.data_source[0].api_key,
+            bearer_token=hypersyncapi_token,
         ))
         self.events = {event.name: event for event in config.events}
 
@@ -172,14 +181,23 @@ class HypersyncIngester(DataIngester):
                     logger.error(f"Error occurred at line {e.__traceback__.tb_lineno}")
                     events_data[event.name] = pl.DataFrame()
 
+            logger.info(f"events_data: {events_data[event.name][:2]}")
+            logger.info(f"events_data keys: {events_data.keys()}")
+            logger.info(f"events_data dtypes: {events_data[event.name].dtypes}")
+            logger.info(f"events_data columns: {events_data[event.name].columns}")
+            logger.info(f"Polars schema: {EVENTS.to_polars()}")
             # Create empty blocks DataFrame if no events were processed
             logger.info("Creating empty blocks DataFrame")
             blocks_df = pl.DataFrame(schema={"block_number": pl.Int64, "block_timestamp": pl.Int64})
+            events_df = pl.DataFrame(events_data[event.name], schema=EVENTS.to_polars())
+
+            blocks_df.write_parquet(f"data/blocks_{from_block}_{to_block}.parquet")
+            events_df.write_parquet(f"data/events_{from_block}_{to_block}.parquet")
 
             return Data(
                 blocks=blocks_df,
                 transactions=None,
-                events=events_data
+                events=events_df
             )
 
         except Exception as e:

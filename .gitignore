@@ -3,6 +3,9 @@ __pycache__/
 *swp
 logs/
 
+# Ignore .env file
+.env
+
 # Ignore hypersync test py file
 test_hypersync.py
 
@@ -23,3 +26,6 @@ src/utils/
 
 # Ignore hypersync query generation .py file
 generate_hypersync_query.py
+
+#Ignore data folder
+data/

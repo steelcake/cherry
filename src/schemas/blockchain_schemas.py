@@ -27,13 +27,20 @@ TRANSACTIONS = BlockchainSchema("transactions", {
 
 # Event schema definition
 EVENTS = BlockchainSchema("events", {
+    "removed": "bool",
+    "log_index": "int64",
+    "transaction_index": "int64",
     "transaction_hash": "string",
+    "block_hash": "string",
     "block_number": "int64",
-    "from_address": "string",
-    "to_address": "string",
-    "value": "int64",
-    "event_name": "string",
-    "contract_address": "string",
-    "event_signature": "string",
-    "raw_data": "string"
+    "address": "string",
+    "data": "string",
+    "topic0": "string",
+    "topic1": "string",
+    "topic2": "string",
+    "topic3": "string",
+    "decoded_from": "string",
+    "decoded_to": "string",
+    "decoded_amount": "float64",
+    "block_timestamp": "int64"
 })
