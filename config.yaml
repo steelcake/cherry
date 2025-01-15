@@ -5,7 +5,6 @@ name: "my_project"
 data_source:
   - kind: "hypersync"
     url: "https://eth.hypersync.xyz"
-    api_key: "fc85f54b-8c9c-448e-a39f-fcd3056b2914"
 
 # Block processing configuration
 blocks:
@@ -47,4 +46,6 @@ transform:
 output:
   - kind: "Postgres"
     url: "postgresql://postgres:postgres@localhost:5432/postgres"
+  - kind: "Parquet"
+    output_dir: "data"
   

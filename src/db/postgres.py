@@ -4,6 +4,7 @@ import pyarrow as pa
 import psycopg2
 from src.schemas.blockchain_schemas import BLOCKS, TRANSACTIONS, EVENTS
 from src.ingesters.base import Data
+import polars as pl
 
 logger = logging.getLogger(__name__)
 
@@ -80,17 +81,38 @@ def ingest_data(engine, data: Data):
         # Get raw psycopg2 connection from SQLAlchemy engine
         connection = engine.raw_connection()
         
-        # Stream blocks to PostgreSQL
-        if data.blocks and data.blocks.num_rows > 0:
-            logger.info(f"Streaming {data.blocks.num_rows} blocks to PostgreSQL")
-            stream_arrow_to_postgresql(connection, data.blocks, "blocks")
+        try:
+            # Stream blocks to PostgreSQL if present
+            if data.blocks and isinstance(data.blocks, dict):
+                logger.info(f"Processing blocks from {len(data.blocks)} events")
+                # Combine all block DataFrames and deduplicate
+                all_blocks = []
+                for event_name, blocks_df in data.blocks.items():
+                    if blocks_df.height > 0:
+                        all_blocks.append(blocks_df)
+                
+                if all_blocks:
+                    combined_blocks = pl.concat(all_blocks).unique(subset=["block_number"])
+                    logger.info(f"Streaming {combined_blocks.height} unique blocks to PostgreSQL")
+                    stream_arrow_to_postgresql(
+                        connection, 
+                        combined_blocks.to_arrow(), 
+                        "blocks"
+                    )
             
-        # Stream events to PostgreSQL
-        if data.events and data.events.num_rows > 0:
-            logger.info(f"Streaming {data.events.num_rows} events to PostgreSQL")
-            stream_arrow_to_postgresql(connection, data.events, "events")
-
-        connection.close()
+            # Stream events to PostgreSQL
+            if data.events:
+                for event_name, event_df in data.events.items():
+                    if event_df.height > 0:
+                        logger.info(f"Streaming {event_df.height} events for {event_name} to PostgreSQL")
+                        stream_arrow_to_postgresql(
+                            connection, 
+                            event_df.to_arrow(), 
+                            "events"
+                        )
+                    
+        finally:
+            connection.close()
                 
     except Exception as e:
         logger.error(f"Error ingesting data to PostgreSQL: {e}")

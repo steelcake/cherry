@@ -1,7 +1,7 @@
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Union
 from pathlib import Path
-from pydantic import BaseModel
-import yaml, logging, json, sys
+from pydantic import BaseModel, RootModel
+import yaml, logging, json
 from enum import Enum
 from src.utils.logging_setup import setup_logging
 import hypersync
@@ -21,11 +21,12 @@ class TransformKind(str, Enum):
 class OutputKind(str, Enum):
     POSTGRES = "Postgres"
     DUCKDB = "Duckdb"
+    PARQUET = "Parquet"
 
 class DataSource(BaseModel):
     kind: DataSourceKind
     url: str
-    api_key: str
+    api_key: Optional[str] = None
 
 class BlockConfig(BaseModel):
     index_blocks: bool
@@ -45,9 +46,16 @@ class Event(BaseModel):
 class Transform(BaseModel):
     kind: TransformKind
 
-class Output(BaseModel):
-    kind: OutputKind
+class PostgresOutput(BaseModel):
+    kind: OutputKind = OutputKind.POSTGRES
     url: str
+
+class ParquetOutput(BaseModel):
+    kind: OutputKind = OutputKind.PARQUET
+    output_dir: str
+
+class Output(RootModel):
+    root: List[Union[PostgresOutput, ParquetOutput]]
 
 class Config(BaseModel):
     name: str
@@ -61,7 +69,7 @@ class Config(BaseModel):
     from_block: int
     to_block: Optional[int]
     transform: List[Transform]
-    output: List[Output]
+    output: List[Union[PostgresOutput, ParquetOutput]]
 
 def parse_config(config_path: Path) -> Config:
     """Parse configuration from YAML file"""
@@ -69,7 +77,7 @@ def parse_config(config_path: Path) -> Config:
     try:
         with open(config_path, 'r') as f:
             config_dict = yaml.safe_load(f)
-            logger.debug(f"Raw YAML data:\n{json.dumps(config_dict, indent=2)}")
+            logger.debug(f"Config dict: {config_dict}")
         
         config = Config.model_validate(config_dict)
         

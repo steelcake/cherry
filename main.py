@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from pathlib import Path
-from sqlalchemy import create_engine
+from sqlalchemy import Engine, create_engine
 from src.config.parser import parse_config
 from src.utils.logging_setup import setup_logging
 from src.db.postgres import create_tables, create_engine_from_config, ingest_data
@@ -12,7 +12,7 @@ from src.ingesters.factory import Ingester
 setup_logging()
 logger = logging.getLogger(__name__)
 
-async def process_batch(ingester: Ingester, engine) -> bool:
+async def process_batch(ingester: Ingester, engine: Engine) -> bool:
     """Process a single batch of data"""
     current_block = ingester.current_block
     next_block = current_block + ingester.batch_size
@@ -21,27 +21,25 @@ async def process_batch(ingester: Ingester, engine) -> bool:
     try:
         # Get next batch of data
         logger.info("Fetching next batch of data...")
-        data = await ingester.get_next_data_batch()
-        logger.info(f"Received data batch with {len(data.blocks)} blocks")
-        
-        # If no more data, return False
-        if len(data.blocks) == 0:
-            logger.info("No more blocks to process in this batch")
-            return False
+        data = await ingester.get_data_stream()
         
         # Log batch statistics
         logger.info("Batch Statistics:")
-        logger.info(f"- Blocks: {len(data.blocks)}")
-        logger.info(f"- Transactions: {len(data.transactions) if data.transactions is not None else 0}")
-        logger.info(f"- Events: {len(data.events)}")
-        # Log only the first 5 values of each column to reduce noise
-        logger.info(", ".join(f"- {col_name}: {data.events[col_name].to_pylist()[:5]}" for col_name in data.events.column_names))
+        for event_name, event_df in data.events.items():
+            logger.info(f"Event: {event_name}")
+            logger.info(f"- Rows: {event_df.height}")
+            if event_df.height > 0:
+                logger.info(f"- Columns: {event_df.columns}")
+                logger.info(f"- Block Range: {event_df['block_number'].min()} to {event_df['block_number'].max()}")
             
         # Ingest to PostgreSQL
-        logger.info("Starting PostgreSQL ingestion...")
-        ingest_data(engine, data)
+        if any(df.height > 0 for df in data.events.values()):
+            logger.info("Starting PostgreSQL ingestion...")
+            ingest_data(engine, data)
+            logger.info("PostgreSQL ingestion completed")
+        else:
+            logger.info("No data to ingest in this batch")
         
-        logger.info(f"Successfully processed batch of {len(data.blocks)} blocks")
         logger.info("=== Batch Processing Completed ===")
         return True
     except Exception as e:

@@ -5,6 +5,7 @@ BLOCKS = BlockchainSchema("blocks", {
     "block_hash": "string",
     "author": "string", 
     "block_number": "int64",
+    "block_timestamp": "int64",
     "gas_used": "int64",
     "extra_data": "string",
     "timestamp": "int64",

@@ -17,8 +17,23 @@ class BlockchainSchema:
         
     def to_arrow(self) -> pa.Schema:
         """Convert to Arrow schema"""
+        arrow_types = {
+            "string": pa.string(),
+            "int64": pa.int64(),
+            "bool": pa.bool_(),
+            "float64": pa.float64(),
+            "binary": pa.binary(),
+            "timestamp": pa.timestamp('ns'),
+            "date": pa.date32(),
+            "decimal": pa.decimal128(38, 18),  # Common for ETH amounts
+            "list_string": pa.list_(pa.string()),
+            "list_int": pa.list_(pa.int64()),
+            "bytes32": pa.binary(32),  # For hashes
+            "address": pa.string()  # ETH addresses
+        }
+        
         arrow_fields = [
-            (name, pa.string() if dtype == "string" else pa.int64())
+            (name, arrow_types.get(dtype, pa.string()))  # Default to string if type not found
             for name, dtype in self.fields.items()
         ]
         return pa.schema(arrow_fields)
@@ -29,10 +44,19 @@ class BlockchainSchema:
             "string": pl.Utf8,
             "int64": pl.Int64,
             "bool": pl.Boolean,
-            "float64": pl.Float64
+            "float64": pl.Float64,
+            "binary": pl.Binary,
+            "timestamp": pl.Datetime,
+            "date": pl.Date,
+            "decimal": pl.Decimal(38, 18),  # Common for ETH amounts
+            "list_string": pl.List(pl.Utf8),
+            "list_int": pl.List(pl.Int64),
+            "bytes32": pl.Binary,  # For hashes
+            "address": pl.Utf8  # ETH addresses
         }
+        
         return {
-            name: polars_types[dtype]
+            name: polars_types.get(dtype, pl.Utf8)  # Default to Utf8 if type not found
             for name, dtype in self.fields.items()
         }
         
@@ -42,10 +66,19 @@ class BlockchainSchema:
             "string": "TEXT",
             "int64": "BIGINT",
             "bool": "BOOLEAN",
-            "float64": "FLOAT"
+            "float64": "DOUBLE PRECISION",
+            "binary": "BYTEA",
+            "timestamp": "TIMESTAMP",
+            "date": "DATE",
+            "decimal": "DECIMAL(38,18)",  # Common for ETH amounts
+            "list_string": "TEXT[]",
+            "list_int": "BIGINT[]",
+            "bytes32": "BYTEA",  # For hashes
+            "address": "CHAR(42)"  # ETH addresses (0x + 40 hex chars)
         }
+        
         fields_sql = [
-            f"{name} {sql_types[dtype]}"
+            f"{name} {sql_types.get(dtype, 'TEXT')}"  # Default to TEXT if type not found
             for name, dtype in self.fields.items()
         ]
         sql = f"CREATE TABLE IF NOT EXISTS {self.name} ("
