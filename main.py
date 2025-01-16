@@ -27,9 +27,8 @@ async def process_batch(ingester: Ingester, engine: Engine) -> bool:
         logger.info("Batch Statistics:")
         for event_name, event_df in data.events.items():
             logger.info(f"Event: {event_name}")
-            logger.info(f"- Rows: {event_df.height}")
+            logger.info(f"- Event row count: {event_df.height}")
             if event_df.height > 0:
-                logger.info(f"- Columns: {event_df.columns}")
                 logger.info(f"- Block Range: {event_df['block_number'].min()} to {event_df['block_number'].max()}")
             
         # Ingest to PostgreSQL

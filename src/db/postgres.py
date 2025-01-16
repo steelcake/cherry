@@ -59,7 +59,6 @@ def stream_arrow_to_postgresql(connection, table: pa.Table, table_name: str, bat
                 connection.commit()
                 
                 batch_count += 1
-                logger.debug(f"Inserted batch {batch_count} into {table_name}")
                 
             except Exception as e:
                 logger.error(f"Error processing batch {batch_count}: {e}")
@@ -84,7 +83,7 @@ def ingest_data(engine, data: Data):
         try:
             # Stream blocks to PostgreSQL if present
             if data.blocks and isinstance(data.blocks, dict):
-                logger.info(f"Processing blocks from {len(data.blocks)} events")
+                logger.info(f"Processing blocks from {len(data.events)} events")
                 # Combine all block DataFrames and deduplicate
                 all_blocks = []
                 for event_name, blocks_df in data.blocks.items():

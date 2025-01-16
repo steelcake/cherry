@@ -15,9 +15,6 @@ test_cryo.py
 # Ignore arrow flight py file
 test_arrow_flight.py
 
-# Ignore get event data with hypersync query
-./examples/get_event_data.py
-
 # Ignore examples folder
 examples/
 
