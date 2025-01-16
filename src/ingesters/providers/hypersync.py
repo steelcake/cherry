@@ -1,15 +1,16 @@
 import logging
 import os
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional
 import polars as pl
 from hypersync import (
     HypersyncClient, ClientConfig, StreamConfig, HexOutput, Query,
     LogSelection, FieldSelection, LogField, BlockField, ColumnMapping,
-    signature_to_topic0, ArrowResponse, DataType
+    signature_to_topic0, DataType
 )
 from src.ingesters.base import DataIngester, Data
 from src.config.parser import Config
-from src.types.hypersync import StreamParams, EventData
+from src.types.hypersync import StreamParams
+from src.processors.hypersync import EventData
 import os
 import logging
 
