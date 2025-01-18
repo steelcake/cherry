@@ -46,16 +46,11 @@ class Event(BaseModel):
 class Transform(BaseModel):
     kind: TransformKind
 
-class PostgresOutput(BaseModel):
-    kind: OutputKind = OutputKind.POSTGRES
-    url: str
-
-class ParquetOutput(BaseModel):
-    kind: OutputKind = OutputKind.PARQUET
-    output_dir: str
-
-class Output(RootModel):
-    root: List[Union[PostgresOutput, ParquetOutput]]
+class Output(BaseModel):
+    enabled: bool = True
+    kind: OutputKind
+    url: Optional[str] = None
+    output_dir: Optional[str] = None
 
 class Config(BaseModel):
     name: str
@@ -69,7 +64,7 @@ class Config(BaseModel):
     from_block: int
     to_block: Optional[int]
     transform: List[Transform]
-    output: List[Union[PostgresOutput, ParquetOutput]]
+    output: List[Output]
 
 def parse_config(config_path: Path) -> Config:
     """Parse configuration from YAML file"""

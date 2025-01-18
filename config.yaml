@@ -45,7 +45,9 @@ transform:
 # Output configuration
 output:
   - kind: "Postgres"
+    enabled: true
     url: "postgresql://postgres:postgres@localhost:5432/postgres"
   - kind: "Parquet"
+    enabled: true
     output_dir: "data"
   

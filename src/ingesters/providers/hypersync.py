@@ -20,7 +20,6 @@ class HypersyncIngester(DataIngester):
     """Ingests data from Hypersync"""
     def __init__(self, config: Config):
         self.config = config
-        self.output_dir = self.config.output[1].output_dir
         self.hypersyncapi_token = os.getenv("HYPERSYNC_API_TOKEN")
         self.client = HypersyncClient(ClientConfig(
             url=self.config.data_source[0].url,
@@ -78,7 +77,6 @@ class HypersyncIngester(DataIngester):
                     contract_addr_list=contract_addr_list,
                     from_block=self.config.from_block,
                     to_block=None if self.config.to_block is None else self.config.to_block + 1,
-                    output_dir=self.output_dir  # Pass output_dir from config
                 )
 
                 query = Query(
@@ -115,9 +113,6 @@ class HypersyncIngester(DataIngester):
                         event_dfs.append(event_df)
                     if block_df is not None:
                         block_dfs.append(block_df)
-
-                # Write to parquet after processing all data for this event
-                event_data.write_parquet()
 
                 # Store processed data
                 if event_dfs:
