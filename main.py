@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from pathlib import Path
+from typing import Dict
 from sqlalchemy import create_engine
 from src.config.parser import parse_config, OutputKind
 from src.utils.logging_setup import setup_logging
@@ -15,27 +16,33 @@ from typing import Dict
 setup_logging()
 logger = logging.getLogger(__name__)
 
-async def write_to_targets(data: Data, loaders: Dict[str, DataLoader], current_block: int) -> None:
-    """Write data to all enabled targets in parallel"""
+def initialize_loaders(config) -> Dict[str, DataLoader]:
+    loaders = {}
+    for output in config.output:
+        if not output.enabled:
+            continue
+            
+        if output.kind == OutputKind.POSTGRES:
+            loaders['postgres'] = PostgresLoader(create_engine(output.url))
+        elif output.kind == OutputKind.PARQUET:
+            loaders['parquet'] = ParquetLoader(Path(output.output_dir))
+            
+    return loaders
+
+async def write_to_targets(data: Data, loaders: Dict[str, DataLoader]) -> None:
     if not any(df.height > 0 for df in data.events.values()):
-        logger.info("No data to write to targets")
+        logger.info("No data to write")
         return
 
-    write_tasks = []
-    for name, loader in loaders.items():
-        logger.info(f"Queuing write task for {name}")
-        task = asyncio.create_task(
-            loader.write_data(
-                data,
-                from_block=current_block
-            )
-        )
-        write_tasks.append(task)
+    write_tasks = [
+        asyncio.create_task(loader.write_data(data))
+        for loader in loaders.values()
+    ]
     
     if write_tasks:
-        logger.info(f"Writing to {len(write_tasks)} targets in parallel")
+        logger.info(f"Writing to {len(write_tasks)} targets")
         await asyncio.gather(*write_tasks)
-        logger.info("Completed writing to all targets")
+        logger.info("Write complete")
 
 async def process_batch(ingester: Ingester, loaders: Dict[str, DataLoader]) -> bool:
     """Process a single batch of data"""
@@ -43,8 +50,6 @@ async def process_batch(ingester: Ingester, loaders: Dict[str, DataLoader]) -> b
     logger.info(f"=== Processing Batch: Blocks {current_block} to ? ===")
     
     try:
-        # Get next batch of data
-        logger.info("Fetching next batch of data...")
         data = await ingester.get_data_stream()
         
         # Log batch statistics
@@ -56,11 +61,10 @@ async def process_batch(ingester: Ingester, loaders: Dict[str, DataLoader]) -> b
                 logger.info(f"- Block Range: {event_df['block_number'].min()} to {event_df['block_number'].max()}")
         
         # Write to all enabled targets in parallel
-        await write_to_targets(data, loaders, current_block)
+        await write_to_targets(data, loaders)
         
         logger.info("=== Batch Processing Completed ===")
         return True
-        
     except Exception as e:
         logger.error(f"Error processing batch: {e}")
         logger.error(f"Error occurred at line {e.__traceback__.tb_lineno}")
@@ -69,34 +73,10 @@ async def process_batch(ingester: Ingester, loaders: Dict[str, DataLoader]) -> b
 async def main():
     logger.info("Starting blockchain data ingestion")
     try:
-        # Load config
-        logger.info("Loading configuration")
         config = parse_config(Path("config.yaml"))
-        
-        # Initialize loaders based on configuration
-        loaders: Dict[str, DataLoader] = {}
-        
-        for output_config in config.output:
-            if output_config.enabled:
-                if output_config.kind == OutputKind.POSTGRES:
-                    logger.info("Initializing PostgreSQL loader")
-                    engine = create_engine(output_config.url)
-                    postgres_loader = PostgresLoader(engine)
-                    postgres_loader.create_tables()  # Create tables using loader method
-                    loaders['postgres'] = postgres_loader
-                elif output_config.kind == OutputKind.PARQUET:
-                    logger.info("Initializing Parquet loader")
-                    output_dir = Path(output_config.output_dir)
-                    loaders['parquet'] = ParquetLoader(output_dir)
-            else:
-                logger.info(f"Output {output_config.kind} is disabled")
-        
-        # Initialize ingester
-        logger.info("Initializing data ingester")
+        loaders = initialize_loaders(config)
         ingester = Ingester(config)
         
-        # Process data in batches
-        logger.info("Starting batch processing")
         while True:
             logger.info(f"Processing batch {ingester.current_block} to ?")
             try:
@@ -112,7 +92,8 @@ async def main():
         logger.error(f"Error occurred at line {e.__traceback__.tb_lineno}")
         raise
     finally:
-        logger.info("Blockchain data ingestion completed")
+        logger.info("Ingestion completed")
+
 
 if __name__ == "__main__":
     asyncio.run(main())

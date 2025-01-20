@@ -60,10 +60,9 @@ class Config(BaseModel):
     events: List[Event]
     contract_identifier_signatures: Optional[List[str]] = None
     items_per_section: int
-    parquet_output_path: str
     from_block: int
     to_block: Optional[int]
-    transform: List[TransformKind]
+    transform: List[Transform]
     output: List[Output]
 
 def parse_config(config_path: Path) -> Config:
@@ -81,18 +80,3 @@ def parse_config(config_path: Path) -> Config:
         logger.error(f"Error parsing configuration: {e}")
         logger.error(f"Error occurred at line {e.__traceback__.tb_lineno}")
         raise
-
-if __name__ == "__main__":
-    # Configure logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
-    )
-    
-    try:
-        config = parse_config(Path("config.yaml"))
-        logger.info("Configuration parsed successfully")
-        print(config.model_dump_json(indent=2))
-    except Exception as e:
-        logger.error(f"Failed to parse configuration: {e}")
