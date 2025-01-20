@@ -1,18 +1,11 @@
-import logging
-import os
+import logging, os
 from typing import List, Optional
 import polars as pl
-from hypersync import (
-    HypersyncClient, ClientConfig, StreamConfig, HexOutput, Query,
-    LogSelection, FieldSelection, LogField, BlockField, ColumnMapping,
-    signature_to_topic0, DataType
-)
+from hypersync import HypersyncClient, ClientConfig
 from src.ingesters.base import DataIngester, Data
 from src.config.parser import Config
-from src.types.hypersync import StreamParams
 from src.processors.hypersync import EventData
-import os
-import logging
+from src.utils.generate_hypersync_query import generate_contract_query, generate_event_query
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +18,7 @@ class HypersyncIngester(DataIngester):
             url=self.config.data_source[0].url,
             bearer_token=self.hypersyncapi_token,
         ))
+        logger.info("Initialized HypersyncIngester")
 
     async def get_contract_addresses(self) -> Optional[List[pl.Series]]:
         """Fetch unique contract addresses based on identifier signatures"""
@@ -33,19 +27,13 @@ class HypersyncIngester(DataIngester):
 
         addr_series_list: List[pl.Series] = []
         for sig in self.config.contract_identifier_signatures:
-            query = Query(
-                from_block=self.config.from_block,
-                logs=[LogSelection(topics=[[signature_to_topic0(sig)]])],
-                field_selection=FieldSelection(log=[LogField.ADDRESS])
-            )
-
-            receiver = await self.client.stream_arrow(query, StreamConfig(hex_output=HexOutput.PREFIXED))
+            query, stream_config = generate_contract_query(sig, self.config.from_block)
+            receiver = await self.client.stream_arrow(query, stream_config)
             addresses = set()
 
             for _ in range(5):  # Limit iterations
                 res = await receiver.recv()
-                if res is None:
-                    break
+                if res is None: break
                 
                 if res.data.logs is not None:
                     logs_df = pl.from_arrow(res.data.logs)
@@ -57,68 +45,34 @@ class HypersyncIngester(DataIngester):
 
         return addr_series_list if addr_series_list else None
 
-    async def get_data(self, from_block: int, to_block: int) -> Data:
+    async def get_data(self, from_block: int) -> Data:
         """Fetch and process blockchain data for the specified block range"""
         try:
-            events_data = {}
-            blocks_data = {}
+            events_data, blocks_data = {}, {}
             contract_addr_list = await self.get_contract_addresses()
-            
-            logger.info(f"Processing blocks {from_block} to {to_block}")
+            logger.debug(f"Contract address list: {contract_addr_list}")
+            logger.info(f"Processing blocks {from_block} to ?")
             
             for event in self.config.events:
                 logger.info(f"Processing event: {event.name}")
-                
-                params = StreamParams(
-                    client=self.client,
-                    column_mapping=event.column_mapping,
-                    event_name=event.name,
-                    signature=event.signature,
-                    contract_addr_list=contract_addr_list,
-                    from_block=self.config.from_block,
-                    to_block=None if self.config.to_block is None else self.config.to_block + 1,
+                query, stream_config, stream_params = generate_event_query(
+                    self.config, event, self.client, contract_addr_list, from_block
                 )
 
-                query = Query(
-                    from_block=params.from_block,
-                    to_block=None if params.to_block is None else params.to_block + 1,
-                    logs=[LogSelection(topics=[[signature_to_topic0(event.signature)]])],
-                    field_selection=FieldSelection(
-                        log=[e.value for e in LogField],
-                        block=[BlockField.NUMBER, BlockField.TIMESTAMP]
-                    )
-                )
-
-                stream_conf = StreamConfig(
-                    hex_output=HexOutput.PREFIXED,
-                    event_signature=event.signature,
-                    column_mapping=ColumnMapping(
-                        decoded_log=event.column_mapping,
-                        block={BlockField.TIMESTAMP: DataType.INT64}
-                    )
-                )
-
-                receiver = await self.client.stream_arrow(query, stream_conf)
-                event_data = EventData(params)
-                event_dfs = []
-                block_dfs = []
+                receiver = await self.client.stream_arrow(query, stream_config)
+                event_data = EventData(stream_params)
+                event_dfs, block_dfs = [], []
 
                 for _ in range(5):
                     res = await receiver.recv()
-                    if res is None:
-                        break
+                    if res is None: break
                     
                     event_df, block_df = event_data.append_data(res)
-                    if event_df is not None:
-                        event_dfs.append(event_df)
-                    if block_df is not None:
-                        block_dfs.append(block_df)
+                    if event_df is not None: event_dfs.append(event_df)
+                    if block_df is not None: block_dfs.append(block_df)
 
-                # Store processed data
-                if event_dfs:
-                    events_data[event.name] = pl.concat(event_dfs)
-                if block_dfs:
-                    blocks_data[event.name] = pl.concat(block_dfs)
+                if event_dfs: events_data[event.name] = pl.concat(event_dfs)
+                if block_dfs: blocks_data[event.name] = pl.concat(block_dfs)
 
             return Data(
                 blocks=blocks_data if blocks_data else None,

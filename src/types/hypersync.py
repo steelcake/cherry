@@ -12,7 +12,7 @@ class StreamParams:
     signature: str
     contract_addr_list: Optional[List[pl.Series]]
     from_block: int
-    to_block: Optional[int]
+    to_block: Optional[int] = None
     output_dir: Optional[str] = None
 
 @dataclass

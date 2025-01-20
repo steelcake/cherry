@@ -14,7 +14,7 @@ class Ingester:
     def __init__(self, config: Config):
         self.config = config
         self.current_block = self.config.from_block
-        self.batch_size = 2  # Smaller batch size to ensure we get results
+        self.to_block = self.config.to_block
         logger.info(f"Initializing Ingester starting from block {self.current_block}")
         
         # Use HypersyncIngester
@@ -27,8 +27,6 @@ class Ingester:
 
     async def get_data_stream(self) -> Data:
         """Stream data for the next batch"""
-        next_block = self.current_block + self.batch_size
-        logger.debug(f"Streaming data from {self.current_block} to {next_block}")
-        data = await self.ingester.get_data(self.current_block, next_block)
-        self.current_block = next_block
+        logger.debug(f"Streaming data from {self.current_block} to {self.to_block}")
+        data = await self.ingester.get_data(self.current_block)
         return data

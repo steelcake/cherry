@@ -1,8 +1,8 @@
-from typing import List, Dict, Optional, Union
+from typing import List, Dict, Optional
 from pathlib import Path
-from pydantic import BaseModel, RootModel
-import yaml, logging, json
+from pydantic import BaseModel
 from enum import Enum
+import yaml, logging, json
 from src.utils.logging_setup import setup_logging
 import hypersync
 
@@ -63,7 +63,7 @@ class Config(BaseModel):
     parquet_output_path: str
     from_block: int
     to_block: Optional[int]
-    transform: List[Transform]
+    transform: List[TransformKind]
     output: List[Output]
 
 def parse_config(config_path: Path) -> Config:
@@ -75,19 +75,7 @@ def parse_config(config_path: Path) -> Config:
             logger.debug(f"Config dict: {config_dict}")
         
         config = Config.model_validate(config_dict)
-        
-        # Log detailed configuration
-        logger.debug("Parsed configuration details:")
-        logger.debug(f"Project name: {config.name}")
-        logger.debug(f"Data sources: {json.dumps([ds.model_dump() for ds in config.data_source], indent=2)}")
-        if config.blocks:
-            logger.debug(f"Block config: {json.dumps(config.blocks.model_dump(), indent=2)}")
-        if config.transactions:
-            logger.debug(f"Transaction filters: {json.dumps(config.transactions.model_dump(), indent=2)}")
-        logger.debug(f"Events config: {json.dumps([event.model_dump() for event in config.events], indent=2)}")
-        logger.debug(f"Transform config: {json.dumps([t.model_dump() for t in config.transform], indent=2)}")
-        logger.debug(f"Output config: {json.dumps([o.model_dump() for o in config.output], indent=2)}")
-        
+        logger.debug(f"Parsed config: {json.dumps(config.model_dump(), indent=2)}")
         return config
     except Exception as e:
         logger.error(f"Error parsing configuration: {e}")

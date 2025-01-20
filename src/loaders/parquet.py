@@ -25,7 +25,7 @@ class ParquetLoader(DataLoader):
                 for event_name, event_df in data.events.items():
                     if event_df.height > 0:
                         try:
-                            parquet_path = self.output_dir / f"{event_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{from_block}_{to_block}.parquet"
+                            parquet_path = self.output_dir / f"events_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{from_block}_{to_block}.parquet"
                             logger.debug(f"Writing {event_df.height} {event_name} events to {parquet_path}")
                             event_df.write_parquet(parquet_path)
                             logger.info(f"Successfully wrote {event_df.height} {event_name} events to Parquet")

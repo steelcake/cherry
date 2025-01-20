@@ -5,8 +5,8 @@ from sqlalchemy import create_engine
 from src.config.parser import parse_config, OutputKind
 from src.utils.logging_setup import setup_logging
 from src.loaders.base import DataLoader
-from src.loaders.postgres_loader import PostgresLoader
-from src.loaders.parquet_loader import ParquetLoader
+from src.loaders.postgres import PostgresLoader
+from src.loaders.parquet import ParquetLoader
 from src.ingesters.factory import Ingester
 from src.ingesters.base import Data
 from typing import Dict
@@ -15,7 +15,7 @@ from typing import Dict
 setup_logging()
 logger = logging.getLogger(__name__)
 
-async def write_to_targets(data: Data, loaders: Dict[str, DataLoader], current_block: int, next_block: int) -> None:
+async def write_to_targets(data: Data, loaders: Dict[str, DataLoader], current_block: int) -> None:
     """Write data to all enabled targets in parallel"""
     if not any(df.height > 0 for df in data.events.values()):
         logger.info("No data to write to targets")
@@ -27,8 +27,7 @@ async def write_to_targets(data: Data, loaders: Dict[str, DataLoader], current_b
         task = asyncio.create_task(
             loader.write_data(
                 data,
-                from_block=current_block,
-                to_block=next_block
+                from_block=current_block
             )
         )
         write_tasks.append(task)
@@ -41,8 +40,7 @@ async def write_to_targets(data: Data, loaders: Dict[str, DataLoader], current_b
 async def process_batch(ingester: Ingester, loaders: Dict[str, DataLoader]) -> bool:
     """Process a single batch of data"""
     current_block = ingester.current_block
-    next_block = current_block + ingester.batch_size
-    logger.info(f"=== Processing Batch: Blocks {current_block} to {next_block} ===")
+    logger.info(f"=== Processing Batch: Blocks {current_block} to ? ===")
     
     try:
         # Get next batch of data
@@ -58,7 +56,7 @@ async def process_batch(ingester: Ingester, loaders: Dict[str, DataLoader]) -> b
                 logger.info(f"- Block Range: {event_df['block_number'].min()} to {event_df['block_number'].max()}")
         
         # Write to all enabled targets in parallel
-        await write_to_targets(data, loaders, current_block, next_block)
+        await write_to_targets(data, loaders, current_block)
         
         logger.info("=== Batch Processing Completed ===")
         return True
@@ -100,7 +98,7 @@ async def main():
         # Process data in batches
         logger.info("Starting batch processing")
         while True:
-            logger.info(f"Processing batch {ingester.current_block} to {ingester.current_block + ingester.batch_size}")
+            logger.info(f"Processing batch {ingester.current_block} to ?")
             try:
                 has_more_data = await process_batch(ingester, loaders)
                 if not has_more_data:

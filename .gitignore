@@ -19,7 +19,7 @@ test_arrow_flight.py
 examples/
 
 # Ignore utils folder
-src/utils/
+#src/utils/
 
 # Ignore hypersync query generation .py file
 generate_hypersync_query.py
