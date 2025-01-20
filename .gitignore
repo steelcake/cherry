@@ -22,7 +22,7 @@ examples/
 #src/utils/
 
 # Ignore hypersync query generation .py file
-generate_hypersync_query.py
+./generate_hypersync_query.py
 
 #Ignore data folder
 data/
