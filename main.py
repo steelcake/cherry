@@ -23,7 +23,9 @@ def initialize_loaders(config) -> Dict[str, DataLoader]:
             continue
             
         if output.kind == OutputKind.POSTGRES:
-            loaders['postgres'] = PostgresLoader(create_engine(output.url))
+            postgres_loader = PostgresLoader(create_engine(output.url))
+            postgres_loader.create_tables()  # Create tables during initialization
+            loaders['postgres'] = postgres_loader
         elif output.kind == OutputKind.PARQUET:
             loaders['parquet'] = ParquetLoader(Path(output.output_dir))
             
@@ -40,7 +42,7 @@ async def write_to_targets(data: Data, loaders: Dict[str, DataLoader]) -> None:
     ]
     
     if write_tasks:
-        logger.info(f"Writing to {len(write_tasks)} targets")
+        logger.info(f"Writing to {len(write_tasks)} ({', '.join(loaders.keys())}) targets")
         await asyncio.gather(*write_tasks)
         logger.info("Write complete")
 
@@ -93,7 +95,6 @@ async def main():
         raise
     finally:
         logger.info("Ingestion completed")
-
 
 if __name__ == "__main__":
     asyncio.run(main())

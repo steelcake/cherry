@@ -1,47 +1,40 @@
-from .base import BlockchainSchema
+import pyarrow as pa
 
 # Block schema definition
-BLOCKS = BlockchainSchema("blocks", {
-    "block_hash": "string",
-    "author": "string", 
-    "block_number": "int64",
-    "block_timestamp": "int64",
-    "gas_used": "int64",
-    "extra_data": "string",
-    "timestamp": "int64",
-    "base_fee_per_gas": "int64",
-    "chain_id": "int64"
-})
+BLOCKS = pa.schema([
+    pa.field("block_number", pa.int64()),
+    pa.field("block_timestamp", pa.int64()),
+])
 
 # Transaction schema definition
-TRANSACTIONS = BlockchainSchema("transactions", {
-    "transaction_hash": "string",
-    "block_number": "int64",
-    "from_address": "string",
-    "to_address": "string",
-    "value": "int64",
-    "event_name": "string",
-    "contract_address": "string",
-    "event_signature": "string",
-    "raw_data": "string"
-})
+TRANSACTIONS = pa.schema([
+    pa.field("transaction_hash", pa.string()),
+    pa.field("block_number", pa.int64()),
+    pa.field("from_address", pa.string()),
+    pa.field("to_address", pa.string()),
+    pa.field("value", pa.int64()),
+    pa.field("event_name", pa.string()),
+    pa.field("contract_address", pa.string()),
+    pa.field("event_signature", pa.string()),
+    pa.field("raw_data", pa.string())
+])
 
 # Event schema definition
-EVENTS = BlockchainSchema("events", {
-    "removed": "bool",
-    "log_index": "int64",
-    "transaction_index": "int64",
-    "transaction_hash": "string",
-    "block_hash": "string",
-    "block_number": "int64",
-    "address": "string",
-    "data": "string",
-    "topic0": "string",
-    "topic1": "string",
-    "topic2": "string",
-    "topic3": "string",
-    "decoded_from": "string",
-    "decoded_to": "string",
-    "decoded_amount": "float64",
-    "block_timestamp": "int64"
-})
+EVENTS = pa.schema([
+    pa.field("removed", pa.bool_()),
+    pa.field("log_index", pa.int64()),
+    pa.field("transaction_index", pa.int64()),
+    pa.field("transaction_hash", pa.string()),
+    pa.field("block_hash", pa.string()),
+    pa.field("block_number", pa.int64()),
+    pa.field("address", pa.string()),
+    pa.field("data", pa.string()),
+    pa.field("topic0", pa.string()),
+    pa.field("topic1", pa.string()),
+    pa.field("topic2", pa.string()),
+    pa.field("topic3", pa.string()),
+    pa.field("decoded_from", pa.string()),
+    pa.field("decoded_to", pa.string()),
+    pa.field("decoded_amount", pa.float64()),
+    pa.field("block_timestamp", pa.int64())
+])

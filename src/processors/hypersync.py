@@ -5,6 +5,8 @@ from typing import Optional, Tuple
 import polars as pl
 from hypersync import ArrowResponse
 from src.types.hypersync import StreamParams
+from src.schemas.blockchain_schemas import BLOCKS, EVENTS
+from src.schemas.base import SchemaConverter
 
 logger = logging.getLogger(__name__)
 
@@ -18,9 +20,11 @@ class EventData:
         self.blocks_df_list = []
         self.contract_addr_list = params.contract_addr_list
         self.output_dir = params.output_dir
+        self.events_schema = SchemaConverter.to_polars(EVENTS)
+        self.blocks_schema = SchemaConverter.to_polars(BLOCKS)
 
     def append_data(self, res: ArrowResponse) -> Tuple[Optional[pl.DataFrame], Optional[pl.DataFrame]]:
-        """Process and append new data, return the processed DataFrames"""
+        """Process and append new data with schema validation"""
         self.to_block = res.next_block
         logs_df = pl.from_arrow(res.data.logs)
         decoded_logs_df = pl.from_arrow(res.data.decoded_logs).rename(lambda n: f"decoded_{n}")
@@ -28,8 +32,10 @@ class EventData:
 
         logger.debug(f"Raw data - Logs: {logs_df.height}, Decoded Logs: {decoded_logs_df.height}, Blocks: {blocks_df.height}")
         
-        # Join the dataframes
+        # Join and validate schemas
         combined_df = logs_df.hstack(decoded_logs_df).join(blocks_df, on="block_number")
+        combined_df = combined_df.cast(self.events_schema)
+        blocks_df = blocks_df.cast(self.blocks_schema)
 
         if self.contract_addr_list:
             for addr_filter in self.contract_addr_list:

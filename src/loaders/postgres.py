@@ -3,6 +3,7 @@ import logging
 import pyarrow as pa
 import psycopg2
 from src.schemas.blockchain_schemas import BLOCKS, TRANSACTIONS, EVENTS
+from src.schemas.base import SchemaConverter
 from src.ingesters.base import Data
 from src.loaders.base import DataLoader
 import polars as pl
@@ -19,13 +20,13 @@ class PostgresLoader(DataLoader):
         try:
             with self.engine.connect() as conn:
                 logger.debug("Creating blocks table")
-                conn.execute(text(BLOCKS.to_sql()))
+                conn.execute(text(SchemaConverter.to_sql(BLOCKS, "blocks")))
                 
                 logger.debug("Creating transactions table")
-                conn.execute(text(TRANSACTIONS.to_sql()))
+                conn.execute(text(SchemaConverter.to_sql(TRANSACTIONS, "transactions")))
                 
                 logger.debug("Creating events table")
-                conn.execute(text(EVENTS.to_sql()))
+                conn.execute(text(SchemaConverter.to_sql(EVENTS, "events")))
                 
                 conn.commit()
                 logger.info("Successfully created all database tables")
