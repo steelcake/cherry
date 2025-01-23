@@ -35,14 +35,15 @@ def generate_event_stream_config(event: Event) -> StreamConfig:
         )
     )
 
-def generate_event_stream_params(client: HypersyncClient, event: Event, 
+def generate_event_stream_params(client: HypersyncClient, event: Event,
                                contract_addr_list: Optional[List[pl.Series]], 
-                               from_block: int) -> StreamParams:
+                               from_block: int, items_per_section: int) -> StreamParams:
     """Generate StreamParams for event data queries"""
     return StreamParams(
         client=client, column_mapping=event.column_mapping,
         event_name=event.name, signature=event.signature,
-        contract_addr_list=contract_addr_list, from_block=from_block
+        contract_addr_list=contract_addr_list, from_block=from_block,
+        items_per_section=items_per_section
     )
 
 def convert_event_to_hypersync(event: Event) -> LogSelection:
@@ -74,7 +75,7 @@ def generate_contract_query(signature: str, from_block: int) -> Tuple[Query, Str
 
 def generate_event_query(config: Config, event: Event, client: HypersyncClient,
                         contract_addr_list: Optional[List[pl.Series]], 
-                        from_block: int) -> Tuple[Query, StreamConfig, StreamParams]:
+                        from_block: int, items_per_section: int) -> Tuple[Query, StreamConfig, StreamParams]:
     """Generate query, stream config and params for event data"""
     logger.info(f"Generating event data query for blocks {from_block}")
     
@@ -97,5 +98,5 @@ def generate_event_query(config: Config, event: Event, client: HypersyncClient,
     return (
         query,
         generate_event_stream_config(event),
-        generate_event_stream_params(client, event, contract_addr_list, from_block)
+        generate_event_stream_params(client, event, contract_addr_list, from_block, items_per_section)
     )

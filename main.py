@@ -9,14 +9,14 @@ from src.loaders.base import DataLoader
 from src.loaders.postgres import PostgresLoader
 from src.loaders.parquet import ParquetLoader
 from src.ingesters.factory import Ingester
-from src.ingesters.base import Data
-from typing import Dict
+from src.loaders.loader import Loader
 
 # Set up logging
 setup_logging()
 logger = logging.getLogger(__name__)
 
 def initialize_loaders(config) -> Dict[str, DataLoader]:
+    """Initialize data loaders based on config"""
     loaders = {}
     for output in config.output:
         if not output.enabled:
@@ -24,77 +24,48 @@ def initialize_loaders(config) -> Dict[str, DataLoader]:
             
         if output.kind == OutputKind.POSTGRES:
             postgres_loader = PostgresLoader(create_engine(output.url))
-            postgres_loader.create_tables()  # Create tables during initialization
+            postgres_loader.create_tables()
             loaders['postgres'] = postgres_loader
         elif output.kind == OutputKind.PARQUET:
             loaders['parquet'] = ParquetLoader(Path(output.output_dir))
             
     return loaders
 
-async def write_to_targets(data: Data, loaders: Dict[str, DataLoader]) -> None:
-    if not any(df.height > 0 for df in data.events.values()):
-        logger.info("No data to write")
-        return
-
-    write_tasks = [
-        asyncio.create_task(loader.write_data(data))
-        for loader in loaders.values()
-    ]
-    
-    if write_tasks:
-        logger.info(f"Writing to {len(write_tasks)} ({', '.join(loaders.keys())}) targets")
-        await asyncio.gather(*write_tasks)
-        logger.info("Write complete")
-
-async def process_batch(ingester: Ingester, loaders: Dict[str, DataLoader]) -> bool:
-    """Process a single batch of data"""
-    current_block = ingester.current_block
-    logger.info(f"=== Processing Batch: Blocks {current_block} to ? ===")
-    
+async def process_data(ingester: Ingester, loader: Loader) -> None:
+    """Process blockchain data"""
     try:
-        data = await ingester.get_data_stream()
-        
-        # Log batch statistics
-        logger.info("Batch Statistics:")
-        for event_name, event_df in data.events.items():
-            logger.info(f"Event: {event_name}")
-            logger.info(f"- Event row count: {event_df.height}")
-            if event_df.height > 0:
-                logger.info(f"- Block Range: {event_df['block_number'].min()} to {event_df['block_number'].max()}")
-        
-        # Write to all enabled targets in parallel
-        await write_to_targets(data, loaders)
-        
-        logger.info("=== Batch Processing Completed ===")
-        return True
+        async for data in ingester:
+            logger.info(f"Processing data from block {ingester.current_block}")
+            await loader.load(data)
+            
     except Exception as e:
-        logger.error(f"Error processing batch: {e}")
+        logger.error(f"Error processing data: {e}")
         logger.error(f"Error occurred at line {e.__traceback__.tb_lineno}")
         raise
 
 async def main():
-    logger.info("Starting blockchain data ingestion")
+    """Main entry point"""
     try:
-        config = parse_config(Path("config.yaml"))
-        loaders = initialize_loaders(config)
-        ingester = Ingester(config)
+        logger.info("Starting blockchain data ingestion")
         
-        while True:
-            logger.info(f"Processing batch {ingester.current_block} to ?")
-            try:
-                has_more_data = await process_batch(ingester, loaders)
-                if not has_more_data:
-                    logger.info("Completed processing all blocks")
-                    break
-            except Exception as e:
-                logger.error(f"Error processing batch: {e}")
-                break
+        # Parse configuration
+        config = parse_config("config.yaml")
+        logger.info("Parsed configuration from config.yaml")
+        
+        # Initialize components
+        ingester = Ingester(config)
+        loaders = initialize_loaders(config)
+        loader = Loader(loaders)
+        
+        # Process data
+        await process_data(ingester, loader)
+        
     except Exception as e:
         logger.error(f"Fatal error: {e}")
         logger.error(f"Error occurred at line {e.__traceback__.tb_lineno}")
         raise
     finally:
-        logger.info("Ingestion completed")
+        logger.info("Blockchain data ingestion completed")
 
 if __name__ == "__main__":
     asyncio.run(main())

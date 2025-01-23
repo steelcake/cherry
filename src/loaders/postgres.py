@@ -7,12 +7,22 @@ from src.schemas.base import SchemaConverter
 from src.ingesters.base import Data
 from src.loaders.base import DataLoader
 import polars as pl
+from typing import Tuple, Optional, Dict
+import asyncio
 
 logger = logging.getLogger(__name__)
 
 class PostgresLoader(DataLoader):
     def __init__(self, engine: Engine):
         self.engine = engine
+        # Extract connection parameters from SQLAlchemy engine
+        self.conn_params = {
+            'host': engine.url.host,
+            'port': engine.url.port,
+            'database': engine.url.database,
+            'user': engine.url.username,
+            'password': engine.url.password
+        }
     
     def create_tables(self):
         """Create necessary tables if they don't exist"""
@@ -76,47 +86,95 @@ class PostgresLoader(DataLoader):
         finally:
             cursor.close()
 
-    async def write_data(self, data: Data, **kwargs) -> None:
-        """Write data to PostgreSQL"""
+    def _prepare_data_for_postgres(self, data: Data) -> Tuple[Optional[pl.DataFrame], Dict[str, pl.DataFrame]]:
+        """Prepare and validate data for PostgreSQL insertion"""
+        try:
+            # Prepare blocks data
+            blocks_df = None
+            if data.blocks and isinstance(data.blocks, dict):
+                all_blocks = []
+                for event_name, blocks_df in data.blocks.items():
+                    # Convert to arrow and back to get a fresh DataFrame
+                    blocks_arrow = blocks_df.to_arrow()
+                    fresh_blocks = pl.from_arrow(blocks_arrow)
+                    if fresh_blocks.height > 0:
+                        logger.debug(f"Processing {fresh_blocks.height} blocks from {event_name}")
+                        # Apply schema validation and casting
+                        fresh_blocks = fresh_blocks.cast(SchemaConverter.to_polars(BLOCKS))
+                        all_blocks.append(fresh_blocks)
+                
+                if all_blocks:
+                    blocks_df = pl.concat(all_blocks).unique(subset=["block_number"]).sort("block_number")
+                    logger.info(f"Prepared {blocks_df.height} unique blocks for insertion")
+                    logger.debug(f"Block range: {blocks_df['block_number'].min()} to {blocks_df['block_number'].max()}")
+
+            # Prepare events data
+            events_dict = {}
+            if data.events:
+                for event_name, event_df in data.events.items():
+                    # Convert to arrow and back to get a fresh DataFrame
+                    event_arrow = event_df.to_arrow()
+                    fresh_events = pl.from_arrow(event_arrow)
+                    if fresh_events.height > 0:
+                        logger.debug(f"Processing {fresh_events.height} events from {event_name}")
+                        # Apply schema validation and casting
+                        fresh_events = fresh_events.cast(SchemaConverter.to_polars(EVENTS))
+                        events_dict[event_name] = fresh_events.sort("block_number")
+                        logger.debug(f"Event block range: {fresh_events['block_number'].min()} to {fresh_events['block_number'].max()}")
+
+            return blocks_df, events_dict
+
+        except Exception as e:
+            logger.error(f"Error preparing data for PostgreSQL: {e}")
+            logger.error(f"Error occurred at line {e.__traceback__.tb_lineno}")
+            raise
+
+    async def load(self, data: Data) -> None:
+        """Load data into PostgreSQL database"""
         try:
             logger.info("Writing data to PostgreSQL")
-            connection = self.engine.raw_connection()
+            # Create connection using extracted parameters
+            connection = await asyncio.to_thread(
+                psycopg2.connect,
+                **self.conn_params
+            )
             
             try:
-                # Stream blocks to PostgreSQL if present
-                if data.blocks and isinstance(data.blocks, dict):
-                    logger.info(f"Processing blocks from {len(data.events)} events")
-                    # Combine all block DataFrames and deduplicate
-                    all_blocks = []
-                    for event_name, blocks_df in data.blocks.items():
-                        if blocks_df.height > 0:
-                            all_blocks.append(blocks_df)
-                    
-                    if all_blocks:
-                        combined_blocks = pl.concat(all_blocks).unique(subset=["block_number"])
-                        logger.info(f"Streaming {combined_blocks.height} unique blocks to PostgreSQL")
-                        self._stream_arrow_to_postgresql(
-                            connection, 
-                            combined_blocks.to_arrow(), 
-                            "blocks"
-                        )
+                # Prepare and validate data
+                blocks_df, events_dict = self._prepare_data_for_postgres(data)
+                
+                # Stream blocks to PostgreSQL
+                if blocks_df is not None:
+                    logger.info(f"Streaming {blocks_df.height} unique blocks to PostgreSQL")
+                    await asyncio.to_thread(
+                        self._stream_arrow_to_postgresql,
+                        connection, 
+                        blocks_df.to_arrow(), 
+                        "blocks"
+                    )
                 
                 # Stream events to PostgreSQL
-                if data.events:
-                    for event_name, event_df in data.events.items():
-                        if event_df.height > 0:
-                            logger.info(f"Streaming {event_df.height} events for {event_name} to PostgreSQL")
-                            self._stream_arrow_to_postgresql(
-                                connection, 
-                                event_df.to_arrow(), 
-                                "events"
-                            )
+                total_events = 0
+                for event_name, event_df in events_dict.items():
+                    logger.info(f"Streaming {event_df.height} events for {event_name} to PostgreSQL")
+                    await asyncio.to_thread(
+                        self._stream_arrow_to_postgresql,
+                        connection, 
+                        event_df.to_arrow(), 
+                        "events"
+                    )
+                    total_events += event_df.height
                 
-                logger.info("Successfully wrote data to PostgreSQL")
-                        
-            finally:
-                connection.close()
+                if total_events > 0:
+                    logger.info(f"Successfully streamed {total_events} total events to PostgreSQL")
+                
+                await asyncio.to_thread(connection.commit)
+                logger.info("Successfully committed all data to PostgreSQL")
                     
+            finally:
+                await asyncio.to_thread(connection.close)
+                logger.debug("Closed PostgreSQL connection")
+                
         except Exception as e:
             logger.error(f"Error writing to PostgreSQL: {e}")
             logger.error(f"Error occurred at line {e.__traceback__.tb_lineno}")

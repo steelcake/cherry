@@ -5,15 +5,17 @@ from hypersync import HypersyncClient, DataType
 
 @dataclass
 class StreamParams:
-    """Parameters for streaming data from Hypersync"""
+    """Parameters for streaming event data"""
     client: HypersyncClient
-    column_mapping: Dict[str, DataType]
     event_name: str
     signature: str
-    contract_addr_list: Optional[List[pl.Series]]
     from_block: int
+    items_per_section: int
     to_block: Optional[int] = None
+    contract_addr_list: Optional[List[pl.Series]] = None
+    column_mapping: Optional[Dict[str, pl.DataType]] = None
     output_dir: Optional[str] = None
+
 
 @dataclass
 class GetParquetParams:
