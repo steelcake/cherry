@@ -22,6 +22,7 @@ class OutputKind(str, Enum):
     POSTGRES = "Postgres"
     DUCKDB = "Duckdb"
     PARQUET = "Parquet"
+    S3 = "S3"
 
 class DataSource(BaseModel):
     kind: DataSourceKind
@@ -51,6 +52,12 @@ class Output(BaseModel):
     kind: OutputKind
     url: Optional[str] = None
     output_dir: Optional[str] = None
+    # S3 specific fields
+    endpoint: Optional[str] = None
+    access_key: Optional[str] = None
+    secret_key: Optional[str] = None
+    bucket: Optional[str] = None
+    secure: Optional[bool] = True
 
 class Config(BaseModel):
     name: str

@@ -10,6 +10,7 @@ from src.loaders.postgres import PostgresLoader
 from src.loaders.parquet import ParquetLoader
 from src.ingesters.factory import Ingester
 from src.loaders.loader import Loader
+from src.loaders.s3 import S3Loader
 
 # Set up logging
 setup_logging()
@@ -28,6 +29,14 @@ def initialize_loaders(config) -> Dict[str, DataLoader]:
             loaders['postgres'] = postgres_loader
         elif output.kind == OutputKind.PARQUET:
             loaders['parquet'] = ParquetLoader(Path(output.output_dir))
+        elif output.kind == OutputKind.S3:
+            loaders['s3'] = S3Loader(
+                endpoint=output.endpoint,
+                access_key=output.access_key,
+                secret_key=output.secret_key,
+                bucket=output.bucket,
+                secure=output.secure
+            )
             
     return loaders
 

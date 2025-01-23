@@ -48,4 +48,11 @@ output:
   - kind: Parquet
     enabled: true
     output_dir: "data"
+  - kind: S3
+    enabled: true
+    endpoint: "localhost:9000"  # MinIO server endpoint
+    access_key: "minioadmin"
+    secret_key: "minioadmin"
+    bucket: "blockchain-data"
+    secure: false
   
