@@ -52,10 +52,7 @@ class AsyncEventProcessor:
                         events={self.event_processor.event_name: combined_events} if combined_events is not None else None,
                         transactions=None
                     )
-                    logger.info(f"Batch complete for {self.event_processor.event_name}: {combined_events.height if combined_events else 0} events, "
-                              f"blocks {self.event_processor.from_block} to {self.event_processor.current_block}")
-                    # Update from_block for next batch
-                    self.event_processor.from_block = self.event_processor.current_block
+                    self.event_processor.current_block = self.event_processor.to_block
                     return data
             
             return None
