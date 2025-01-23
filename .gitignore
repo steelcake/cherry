@@ -1,3 +1,28 @@
 __pycache__/
 .venv/
 *swp
+logs/
+
+# Ignore .env file
+.env
+
+# Ignore hypersync test py file
+test_hypersync.py
+
+# Ignore cryo test py file
+test_cryo.py
+
+# Ignore arrow flight py file
+test_arrow_flight.py
+
+# Ignore examples folder
+examples/
+
+# Ignore utils folder
+#src/utils/
+
+# Ignore hypersync query generation .py file
+./generate_hypersync_query.py
+
+#Ignore data folder
+data/

@@ -1,0 +1,28 @@
+from abc import ABC, abstractmethod
+from typing import Dict, AsyncGenerator
+import logging
+from src.types.data import Data
+from src.loaders.base import DataLoader
+from src.utils.logging_setup import setup_logging
+
+# Set up logging
+setup_logging()
+logger = logging.getLogger(__name__)
+
+class DataIngester(ABC):
+    """Abstract base class for data ingesters"""
+    @abstractmethod
+    async def get_data(self, from_block: int) -> AsyncGenerator[Data, None]:
+        """Stream data from the specified block"""
+        pass 
+
+    @abstractmethod
+    async def initialize_loaders(self, loaders: Dict[str, DataLoader]) -> None:
+        """Initialize data loaders"""
+        pass
+
+    @property
+    @abstractmethod
+    def current_block(self) -> int:
+        """Get current block number"""
+        pass

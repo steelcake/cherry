@@ -3,8 +3,8 @@ name: "my_project"
 
 # Data source configuration
 data_source:
-  - kind: eth_rpc
-    url: "https://api.etherscan.io/api?module=account&action=txlist&address=0xdac17f958d2ee523a2206206994597c13d831ec7&startblock=4634748&endblock=99999999&page=1&offset=10000&sort=asc&apikey=9HI2GQT86AUSRSRZI9GBVH7DV23D3PW81P"
+  - kind: hypersync
+    url: "https://eth.hypersync.xyz"
 
 # Block processing configuration
 blocks:
@@ -13,29 +13,39 @@ blocks:
 
 # Transaction filtering configuration
 transactions:
-  address: []  # Empty list for addresses
-  from:
-    - address1  # Replace with the actual Ethereum address
-    - address2  # Replace with the actual Ethereum address
-  to:
-    - address3  # Replace with the actual Ethereum address
+  address: []
+  from: []
+  to: []
 
 # Traces processing
 traces: false
 
 # Contract and events processing configuration
 events:
-  - name: "MyContract"
-    address: ["0x1234567890123456789012345678901234567890"]
-    topics: [["0xabcdef..."]]
-    signature: "Transfer(address indexed token0, address indexed token1, bool indexed stable, address pool, uint256 length)"
+  - name: Transfer
+    signature: "Transfer(address indexed from, address indexed to, uint256 amount)"
+    column_mapping: {amount: float64}
+
+contract_identifier_signatures:
+  - "Approval(address indexed _owner, address indexed _spender, uint256 _value)"
+
+items_per_section: 30000
+
+parquet_output_path: "data"
+
+from_block: 21123123
+to_block: null
 
 # Transformation configuration
 transform:
-  - kind: Polars
+  - kind: "Polars"
 
 # Output configuration
 output:
-  - kind: "Postgres"
+  - kind: Postgres
+    enabled: true
     url: "postgresql://postgres:postgres@localhost:5432/postgres"
+  - kind: Parquet
+    enabled: true
+    output_dir: "data"
   
