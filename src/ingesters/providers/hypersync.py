@@ -31,13 +31,16 @@ class AsyncEventProcessor:
                 # Handle any remaining data before stopping
                 if self.event_processor.total_events > 0:
                     combined_events, combined_blocks = self.event_processor.get_combined_data()
-                    if combined_events is not None or combined_blocks is not None:
+                    if (combined_events is not None and not combined_events.is_empty()) or \
+                       (combined_blocks is not None and not combined_blocks.is_empty()):
                         data = Data(
+                            events={self.event_processor.event_name: combined_events} if combined_events is not None else None,
                             blocks={self.event_processor.event_name: combined_blocks} if combined_blocks is not None else None,
                             transactions=None
                         )
-                        logger.info(f"Final batch for {self.event_processor.event_name}: {combined_events.height if combined_events else 0} events, "
-                                  f"{combined_blocks.height if combined_blocks else 0} blocks")
+                        logger.info(f"Final batch for {self.event_processor.event_name}: "
+                                  f"{combined_events.height if combined_events is not None else 0} events, "
+                                  f"{combined_blocks.height if combined_blocks is not None else 0} blocks")
                         return data
                 raise StopAsyncIteration
 
@@ -45,13 +48,15 @@ class AsyncEventProcessor:
             
             if should_write:
                 combined_events, combined_blocks = self.event_processor.get_combined_data()
-                if combined_events is not None or combined_blocks is not None:
+                if (combined_events is not None and not combined_events.is_empty()) or \
+                   (combined_blocks is not None and not combined_blocks.is_empty()):
                     data = Data(
-                        blocks={self.event_processor.event_name: combined_blocks} if combined_blocks is not None else None,
                         events={self.event_processor.event_name: combined_events} if combined_events is not None else None,
+                        blocks={self.event_processor.event_name: combined_blocks} if combined_blocks is not None else None,
                         transactions=None
                     )
-                    self.event_processor.current_block = self.event_processor.to_block
+                    # Update current block to next block from response
+                    self.event_processor.current_block = res.next_block
                     return data
             
             return None
@@ -70,10 +75,10 @@ class HypersyncIngester(DataIngester):
             url=self.config.data_source[0].url,
             bearer_token=self.hypersyncapi_token,
         ))
-        # Use the new config structure for block range
         self._current_block = config.blocks.range.from_block
-        self._contract_addr_list = None  # Cache for contract addresses
-        self._event_queries = {}  # Cache for event queries and receivers
+        self._contract_addr_list = None
+        self._event_queries = {}
+        self._event_processors = {}  # Cache for event processors
         self._loaders = None
         logger.info("Initialized HypersyncIngester")
 
@@ -188,16 +193,16 @@ class HypersyncIngester(DataIngester):
         """Get cached query or create new one"""
         if event.name in self._event_queries:
             query, stream_config, stream_params = self._event_queries[event.name]
-            # Only update the from_block
-            query.from_block = self.current_block
-            stream_params.from_block = self.current_block
+            # Ensure we don't modify the cached query's from_block
+            query = Query(**{**query.__dict__, 'from_block': self.current_block})
+            stream_params = StreamParams(**{**stream_params.__dict__, 'from_block': self.current_block})
             return query, stream_config, stream_params
 
         logger.info(f"Generating query for event {event.name} (one-time operation)")
         contract_addr_list = await self.get_contract_addr_list()
         query, stream_config, stream_params = generate_event_query(
             self.config, event, self.client, contract_addr_list, self.current_block,
-            self.config.processing.items_per_batch  # Use new config structure
+            self.config.processing.items_per_batch
         )
         self._event_queries[event.name] = (query, stream_config, stream_params)
         logger.info(f"Cached query configuration for event {event.name}")
@@ -206,29 +211,34 @@ class HypersyncIngester(DataIngester):
     async def get_data(self, from_block: int) -> AsyncGenerator[Data, None]:
         """Process blockchain data and yield Data objects when batch is ready"""
         try:
-            # Get contract addresses once at the start if needed
-            if self._contract_addr_list is None:
-                await self.get_contract_addr_list()
+            await self.get_contract_addr_list()
 
             for event in self.config.events:
                 logger.info(f"Processing event: {event.name} from block {from_block}")
                 
-                query, stream_config, stream_params = await self._get_event_query(event)
-                query.from_block = from_block
-                stream_params.from_block = from_block
-                
-                receiver = await self.client.stream_arrow(query, stream_config)
-                event_data = EventData(stream_params)
-                event_data.receiver = receiver
-                event_data.from_block = from_block
-                logger.info(f"Initialized data processor for {event.name}")
+                # Get or create event processor
+                if event.name not in self._event_processors:
+                    query, stream_config, stream_params = await self._get_event_query(event)
+                    stream_params.from_block = from_block
+                    
+                    receiver = await self.client.stream_arrow(query, stream_config)
+                    event_data = EventData(stream_params)
+                    event_data.receiver = receiver
+                    event_data.from_block = from_block
+                    logger.info(f"Initialized data processor for {event.name}")
 
-                async_processor = AsyncEventProcessor(event_data)
+                    self._event_processors[event.name] = AsyncEventProcessor(event_data)
+                    logger.info(f"Initialized AsyncEventProcessor for {event.name}")
+                
+                # Use existing processor
+                async_processor = self._event_processors[event.name]
                 async for data in async_processor:
                     if data is not None:
+                        self._current_block = async_processor.event_processor.current_block
+                        logger.debug(f"Updated current block to {self._current_block} for {event.name}")
                         yield data
 
         except Exception as e:
             logger.error(f"Error processing data: {e}")
             logger.error(f"Error occurred at line {e.__traceback__.tb_lineno}")
-            raise
+            raise 

@@ -7,13 +7,18 @@ from src.loaders.base import DataLoader
 from src.schemas.blockchain_schemas import BLOCKS, EVENTS
 from src.schemas.base import SchemaConverter
 import asyncio
+from typing import Union
 
 logger = logging.getLogger(__name__)
 
 class ParquetLoader(DataLoader):
-    def __init__(self, output_dir: Path):
-        self.output_dir = output_dir
-        self.output_dir.mkdir(parents=True, exist_ok=True)
+    """Loader for writing data to Parquet files"""
+    def __init__(self, output_dir: Union[str, Path]):
+        self.output_dir = Path(output_dir)
+        # Create base directories
+        self.output_dir.mkdir(exist_ok=True)
+        (self.output_dir / "events").mkdir(exist_ok=True)
+        (self.output_dir / "blocks").mkdir(exist_ok=True)
         self.events_schema = SchemaConverter.to_polars(EVENTS)
         self.blocks_schema = SchemaConverter.to_polars(BLOCKS)
     
@@ -42,7 +47,7 @@ class ParquetLoader(DataLoader):
                 for event_name, event_df in data.events.items():
                     if event_df.height > 0:
                         try:
-                            parquet_path = self.output_dir / f"events_{event_name}_{timestamp}_block_{min_block}_to_{max_block}.parquet"
+                            parquet_path = self.output_dir / "events" / f"{timestamp}_events_{event_name.lower()}_block_{min_block}_to_{max_block}.parquet"
                             write_tasks.append(
                                 asyncio.create_task(
                                     asyncio.to_thread(
@@ -66,7 +71,7 @@ class ParquetLoader(DataLoader):
                     if block_df.height > 0:
                         try:
                             unique_blocks = block_df.unique(subset=["block_number"]).sort("block_number")
-                            parquet_path = self.output_dir / f"blocks_{event_name}_{timestamp}_block_{min_block}_to_{max_block}.parquet"
+                            parquet_path = self.output_dir / "blocks" / f"{timestamp}_blocks_{event_name.lower()}_block_{min_block}_to_{max_block}.parquet"
                             write_tasks.append(
                                 asyncio.create_task(
                                     asyncio.to_thread(

@@ -36,6 +36,7 @@ class EventData:
             if res is None:
                 return None, None, True
 
+            # Update current block from response
             self.current_block = res.next_block
             
             # Convert Arrow data to Polars with column mapping
@@ -82,7 +83,7 @@ class EventData:
             if blocks_df.height > 0:
                 self.blocks_df_list.append(blocks_df)
 
-            # Check if we should write
+            # Check if we should write based on block progress
             should_write = (
                 self.total_events >= self.items_per_section or 
                 (self.to_block and self.current_block >= self.to_block)

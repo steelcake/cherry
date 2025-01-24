@@ -21,7 +21,7 @@ def setup_logging():
 
     # Create a timestamp for the log file
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    _current_log_file = log_dir / f"blockchain_ingestion_{timestamp}.log"
+    _current_log_file = log_dir / f"blockchain_etl_{timestamp}.log"
 
     # Configure logging format
     formatter = logging.Formatter(

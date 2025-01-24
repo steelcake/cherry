@@ -25,10 +25,15 @@ class S3Loader(DataLoader):
             secure=secure
         )
         self.bucket = bucket
-        self._ensure_bucket()
+        self.events_schema = SchemaConverter.to_polars(EVENTS)
+        self.blocks_schema = SchemaConverter.to_polars(BLOCKS)
+        
         # Create temp directory
         self.temp_dir = Path(tempfile.gettempdir()) / "blockchain_s3_temp"
         self.temp_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Ensure bucket exists
+        self._ensure_bucket()
         logger.info(f"Initialized S3Loader with endpoint {endpoint}, bucket {bucket}")
 
     def _ensure_bucket(self):
@@ -46,7 +51,7 @@ class S3Loader(DataLoader):
     async def load(self, data: Data) -> None:
         """Load data to S3 storage"""
         try:
-            if not data or (not data.events and not data.blocks):
+            if not data or not data.events:
                 return
 
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -63,36 +68,57 @@ class S3Loader(DataLoader):
 
             # Process events data
             if data.events:
+                total_events = 0
                 for event_name, event_df in data.events.items():
                     if event_df.height > 0:
-                        write_tasks.append(
-                            asyncio.create_task(
-                                self._write_dataframe_to_s3(
-                                    event_df,
-                                    f"events/{event_name}/events_{timestamp}_block_{min_block}_to_{max_block}.parquet",
-                                    f"events for {event_name}"
+                        try:
+                            object_name = f"events/{event_name.lower()}/{timestamp}_events_block_{min_block}_to_{max_block}.parquet"
+                            write_tasks.append(
+                                asyncio.create_task(
+                                    self._write_dataframe_to_s3(
+                                        event_df.cast(self.events_schema),
+                                        object_name,
+                                        f"events for {event_name}"
+                                    ),
+                                    name=f"write_events_{event_name}"
                                 )
                             )
-                        )
+                            total_events += event_df.height
+                            logger.info(f"Queued {event_df.height} events for {event_name} to s3://{self.bucket}/{object_name}")
+                        except Exception as e:
+                            logger.error(f"Error queueing {event_name} events to S3: {e}")
+                            raise
+                logger.info(f"Queued {total_events} total events for upload to S3")
 
             # Process blocks data
             if data.blocks:
+                total_blocks = 0
                 for event_name, block_df in data.blocks.items():
                     if block_df.height > 0:
-                        unique_blocks = block_df.unique(subset=["block_number"]).sort("block_number")
-                        write_tasks.append(
-                            asyncio.create_task(
-                                self._write_dataframe_to_s3(
-                                    unique_blocks,
-                                    f"blocks/{event_name}/blocks_{timestamp}_block_{min_block}_to_{max_block}.parquet",
-                                    f"blocks for {event_name}"
+                        try:
+                            unique_blocks = block_df.unique(subset=["block_number"]).sort("block_number")
+                            object_name = f"blocks/{event_name.lower()}/{timestamp}_blocks_block_{min_block}_to_{max_block}.parquet"
+                            write_tasks.append(
+                                asyncio.create_task(
+                                    self._write_dataframe_to_s3(
+                                        unique_blocks.cast(self.blocks_schema),
+                                        object_name,
+                                        f"blocks for {event_name}"
+                                    ),
+                                    name=f"write_blocks_{event_name}"
                                 )
                             )
-                        )
+                            total_blocks += unique_blocks.height
+                            logger.info(f"Queued {unique_blocks.height} unique blocks for {event_name} to s3://{self.bucket}/{object_name}")
+                        except Exception as e:
+                            logger.error(f"Error queueing blocks to S3: {e}")
+                            raise
+                logger.info(f"Queued {total_blocks} total unique blocks for upload to S3")
 
+            # Wait for all writes to complete
             if write_tasks:
                 await asyncio.gather(*write_tasks)
-                logger.info("Successfully uploaded all data to S3")
+                logger.info("All S3 uploads completed successfully")
 
         except Exception as e:
             logger.error(f"Error writing to S3: {e}")
@@ -113,7 +139,6 @@ class S3Loader(DataLoader):
                 file_path=str(temp_file)
             )
             
-            logger.info(f"Uploaded {df.height} {description} to s3://{self.bucket}/{object_name}")
         except Exception as e:
             logger.error(f"Error uploading {description} to S3: {e}")
             raise
