@@ -1,58 +1,80 @@
-# Project name for reference
-name: "my_project"
+# Project name and description
+name: "cherry_event_indexer"
+description: "Cherry event indexing and data processing pipeline"
 
 # Data source configuration
 data_source:
   - kind: hypersync
     url: "https://eth.hypersync.xyz"
+    api_key: ${HYPERSYNC_API_TOKEN}  # From environment variable
 
 # Block processing configuration
 blocks:
   index_blocks: true
   include_transactions: true
+  # Block range for main event processing
+  range:
+    from_block: 21123123
+    to_block: null  # null means latest
+  # Block range for contract discovery
+  contract_discovery:
+    from_block: 21123123  # Start block for contract address discovery
+    to_block: null  # null means latest
 
 # Transaction filtering configuration
 transactions:
-  address: []
-  from: []
-  to: []
+  filters:
+    addresses: []  # Contract addresses to filter
+    from: []       # From addresses to filter
+    to: []         # To addresses to filter
 
-# Traces processing
-traces: false
+# Contract and events configuration
+contracts:
+  # Signatures used to discover contract addresses
+  identifier_signatures:
+    - name: "ERC20_Approval"
+      signature: "Approval(address indexed _owner, address indexed _spender, uint256 _value)"
+      description: "Used to identify ERC20 tokens"
 
-# Contract and events processing configuration
+# Event processing configuration
 events:
-  - name: Transfer
+  - name: "Transfer"
+    description: "ERC20 Transfer events"
     signature: "Transfer(address indexed from, address indexed to, uint256 amount)"
-    column_mapping: {amount: float64}
+    column_mapping: 
+      amount: float64
+    filters:
+      addresses: []  # Optional specific addresses
+      topics: []     # Optional additional topics
 
-contract_identifier_signatures:
-  - "Approval(address indexed _owner, address indexed _spender, uint256 _value)"
+# Processing configuration
+processing:
+  items_per_batch: 1000000  # Number of items to process per batch
+  parallel_events: true   # Process events in parallel
 
-items_per_section: 30000
-
-parquet_output_path: "data"
-
-from_block: 21123123
-to_block: null
-
-# Transformation configuration
+# Data transformation configuration
 transform:
   - kind: "Polars"
+    enabled: true
 
 # Output configuration
 output:
-  - kind: Postgres
-    enabled: true
+  postgres:
+    enabled: false
     url: "postgresql://postgres:postgres@localhost:5432/postgres"
-  - kind: Parquet
+    batch_size: 10000
+  
+  parquet:
     enabled: true
     output_dir: "data"
-  - kind: S3
+    compression: "snappy"
+  
+  s3:
     enabled: true
-    endpoint: "localhost:9000"  # MinIO server endpoint
+    endpoint: "localhost:9000"
     access_key: "minioadmin"
     secret_key: "minioadmin"
     bucket: "blockchain-data"
     secure: false
+    region: null
   

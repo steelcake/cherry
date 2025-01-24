@@ -1,43 +1,54 @@
 import asyncio
 import logging
 from pathlib import Path
-from typing import Dict
 from sqlalchemy import create_engine
-from src.config.parser import parse_config, OutputKind
+from src.config.parser import parse_config
 from src.utils.logging_setup import setup_logging
-from src.loaders.base import DataLoader
-from src.loaders.postgres import PostgresLoader
-from src.loaders.parquet import ParquetLoader
 from src.ingesters.factory import Ingester
 from src.loaders.loader import Loader
+from src.loaders.postgres import PostgresLoader
+from src.loaders.parquet import ParquetLoader
 from src.loaders.s3 import S3Loader
 
 # Set up logging
 setup_logging()
 logger = logging.getLogger(__name__)
 
-def initialize_loaders(config) -> Dict[str, DataLoader]:
+def initialize_loaders(config) -> dict:
     """Initialize data loaders based on config"""
     loaders = {}
-    for output in config.output:
-        if not output.enabled:
-            continue
-            
-        if output.kind == OutputKind.POSTGRES:
-            postgres_loader = PostgresLoader(create_engine(output.url))
-            postgres_loader.create_tables()
-            loaders['postgres'] = postgres_loader
-        elif output.kind == OutputKind.PARQUET:
-            loaders['parquet'] = ParquetLoader(Path(output.output_dir))
-        elif output.kind == OutputKind.S3:
-            loaders['s3'] = S3Loader(
-                endpoint=output.endpoint,
-                access_key=output.access_key,
-                secret_key=output.secret_key,
-                bucket=output.bucket,
-                secure=output.secure
-            )
-            
+    
+    # Initialize PostgreSQL loader
+    postgres_config = config.output.get('postgres')
+    if postgres_config and postgres_config.enabled:
+        postgres_loader = PostgresLoader(create_engine(postgres_config.url))
+        postgres_loader.create_tables()
+        loaders['postgres'] = postgres_loader
+        logger.info("Initialized PostgreSQL loader")
+
+    # Initialize Local Parquet loader
+    parquet_config = config.output.get('parquet')
+    if parquet_config and parquet_config.enabled:
+        loaders['local_parquet'] = ParquetLoader(Path(parquet_config.output_dir))
+        logger.info("Initialized Local Parquet loader")
+
+    # Initialize S3 loader
+    s3_config = config.output.get('s3')
+    if s3_config and s3_config.enabled:
+        loaders['s3'] = S3Loader(
+            endpoint=s3_config.endpoint,
+            access_key=s3_config.access_key,
+            secret_key=s3_config.secret_key,
+            bucket=s3_config.bucket,
+            secure=s3_config.secure
+        )
+        logger.info("Initialized S3 loader")
+
+    if not loaders:
+        logger.warning("No loaders were initialized!")
+    else:
+        logger.info(f"Initialized {len(loaders)} loaders: {', '.join(loaders.keys())}")
+
     return loaders
 
 async def process_data(ingester: Ingester, loader: Loader) -> None:
@@ -46,7 +57,6 @@ async def process_data(ingester: Ingester, loader: Loader) -> None:
         async for data in ingester:
             logger.info(f"Processing data from block {ingester.current_block}")
             await loader.load(data)
-            
     except Exception as e:
         logger.error(f"Error processing data: {e}")
         logger.error(f"Error occurred at line {e.__traceback__.tb_lineno}")

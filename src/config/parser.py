@@ -1,6 +1,6 @@
 from typing import List, Dict, Optional
 from pathlib import Path
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from enum import Enum
 import yaml, logging, json
 from src.utils.logging_setup import setup_logging
@@ -29,48 +29,67 @@ class DataSource(BaseModel):
     url: str
     api_key: Optional[str] = None
 
+class BlockRange(BaseModel):
+    from_block: int
+    to_block: Optional[int] = None
+
 class BlockConfig(BaseModel):
     index_blocks: bool
     include_transactions: bool
+    range: BlockRange
+    contract_discovery: BlockRange
 
 class TransactionFilters(BaseModel):
-    from_address: Optional[List[str]] = None
-    to_address: Optional[List[str]] = None
+    addresses: Optional[List[str]] = None
+    from_: Optional[List[str]] = Field(None, alias="from")
+    to: Optional[List[str]] = None
+
+class ContractIdentifier(BaseModel):
+    name: str
+    signature: str
+    description: Optional[str] = None
+
+class ContractConfig(BaseModel):
+    identifier_signatures: List[ContractIdentifier]
 
 class Event(BaseModel):
     name: str
-    address: Optional[List[str]] = None
-    topics: Optional[List[List[str]]] = None
+    description: Optional[str] = None
     signature: str
     column_mapping: Dict[str, hypersync.DataType]
+    filters: Optional[dict] = None
 
-class Transform(BaseModel):
-    kind: TransformKind
+class ProcessingConfig(BaseModel):
+    items_per_batch: int
+    parallel_events: bool = True
 
-class Output(BaseModel):
+class OutputConfig(BaseModel):
     enabled: bool = True
-    kind: OutputKind
     url: Optional[str] = None
     output_dir: Optional[str] = None
-    # S3 specific fields
     endpoint: Optional[str] = None
     access_key: Optional[str] = None
     secret_key: Optional[str] = None
     bucket: Optional[str] = None
     secure: Optional[bool] = True
+    region: Optional[str] = None
+    batch_size: Optional[int] = None
+    compression: Optional[str] = None
+
+class Transform(BaseModel):
+    kind: TransformKind
 
 class Config(BaseModel):
     name: str
+    description: Optional[str] = None
     data_source: List[DataSource]
-    blocks: Optional[BlockConfig] = None
+    blocks: BlockConfig
     transactions: Optional[TransactionFilters] = None
+    contracts: ContractConfig
     events: List[Event]
-    contract_identifier_signatures: Optional[List[str]] = None
-    items_per_section: int
-    from_block: int
-    to_block: Optional[int]
+    processing: ProcessingConfig
     transform: List[Transform]
-    output: List[Output]
+    output: Dict[str, OutputConfig]
 
 def parse_config(config_path: Path) -> Config:
     """Parse configuration from YAML file"""

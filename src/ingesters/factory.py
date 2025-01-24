@@ -44,31 +44,27 @@ class Ingester(DataIngester):
     def __init__(self, config: Config):
         self._config = config
         self._ingester = HypersyncIngester(config)
-        self._current_block = config.from_block
+        self._current_block = config.blocks.range.from_block
         logger.info(f"Initialized ingester starting from block {self.current_block}")
 
     def __aiter__(self):
         return self
 
     async def __anext__(self) -> Data:
-        if self._config.to_block and self.current_block > self._config.to_block:
-            logger.info(f"Reached target block {self._config.to_block}")
+        if self._config.blocks.range.to_block and self.current_block > self._config.blocks.range.to_block:
+            logger.info(f"Reached target block {self._config.blocks.range.to_block}")
             raise StopAsyncIteration
         
         try:
             logger.debug(f"Fetching data from block {self.current_block}")
             async for data in self._ingester.get_data(self.current_block):
-                if data is not None and (data.events or data.blocks):
-                    # Update current_block based on processed data
-                    next_block = max(
-                        max(df['block_number'].max() for df in data.events.values()) if data.events else 0,
-                        max(df['block_number'].max() for df in data.blocks.values()) if data.blocks else 0
-                    ) + 1
-                    
-                    # Update both ingester and underlying ingester block numbers
-                    self.current_block = next_block
-                    logger.debug(f"Updated current block to {self.current_block}")
-                    return data
+                if data is not None:
+                    if data.events or data.blocks:
+                        self._current_block = max(
+                            max(df['block_number'].max() for df in data.events.values()) if data.events else 0,
+                            max(df['block_number'].max() for df in data.blocks.values()) if data.blocks else 0
+                        ) + 1
+                        return data
             
             raise StopAsyncIteration
             

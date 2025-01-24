@@ -34,7 +34,6 @@ class AsyncEventProcessor:
                     if combined_events is not None or combined_blocks is not None:
                         data = Data(
                             blocks={self.event_processor.event_name: combined_blocks} if combined_blocks is not None else None,
-                            events={self.event_processor.event_name: combined_events} if combined_events is not None else None,
                             transactions=None
                         )
                         logger.info(f"Final batch for {self.event_processor.event_name}: {combined_events.height if combined_events else 0} events, "
@@ -71,7 +70,8 @@ class HypersyncIngester(DataIngester):
             url=self.config.data_source[0].url,
             bearer_token=self.hypersyncapi_token,
         ))
-        self._current_block = config.from_block
+        # Use the new config structure for block range
+        self._current_block = config.blocks.range.from_block
         self._contract_addr_list = None  # Cache for contract addresses
         self._event_queries = {}  # Cache for event queries and receivers
         self._loaders = None
@@ -87,20 +87,22 @@ class HypersyncIngester(DataIngester):
         """Set current block number"""
         self._current_block = value
 
-    @property
-    async def contract_addr_list(self) -> Optional[List[pl.Series]]:
-        """Fetch and cache unique contract addresses based on identifier signatures"""
+    async def get_contract_addr_list(self) -> Optional[List[pl.Series]]:
+        """Get or return cached contract addresses"""
         if self._contract_addr_list is not None:
             return self._contract_addr_list
 
-        if not self.config.contract_identifier_signatures:
+        if not self.config.contracts.identifier_signatures:
             return None
 
-        logger.info("Generating contract address list (one-time operation)")
+        logger.info("Getting contract address lists (one-time operation)")
         addr_series_list: List[pl.Series] = []
-        
-        for sig in self.config.contract_identifier_signatures:
-            query, stream_config = generate_contract_query(sig, self.config.from_block)
+
+        for contract in self.config.contracts.identifier_signatures:
+            query, stream_config = generate_contract_query(
+                contract.signature, 
+                self.config.blocks.contract_discovery.from_block
+            )
             receiver = await self.client.stream_arrow(query, stream_config)
             addresses = set()
 
@@ -114,9 +116,9 @@ class HypersyncIngester(DataIngester):
 
                 if addresses:
                     addr_series_list.append(pl.Series('address', list(addresses)))
-                    logger.info(f"Collected {len(addresses)} unique addresses for signature {sig}")
+                    logger.info(f"Collected {len(addresses)} unique addresses for signature {contract.signature}")
             except Exception as e:
-                logger.error(f"Error collecting addresses for signature {sig}: {e}")
+                logger.error(f"Error collecting addresses for signature {contract.signature}: {e}")
                 raise
 
         if addr_series_list:
@@ -183,41 +185,42 @@ class HypersyncIngester(DataIngester):
             raise
 
     async def _get_event_query(self, event: Event) -> Tuple[Query, StreamConfig, StreamParams]:
-        """Get or create cached query for event"""
-        if event.name not in self._event_queries:
-            logger.info(f"Generating query for event {event.name} (one-time operation)")
-            contract_addr_list = await self.contract_addr_list
-            query, stream_config, stream_params = generate_event_query(
-                self.config, event, self.client, contract_addr_list, self.current_block,
-                self.config.items_per_section
-            )
-            stream_params.items_per_section = self.config.items_per_section
-            self._event_queries[event.name] = (query, stream_config, stream_params)
-            logger.info(f"Cached query configuration for event {event.name}")
-        else:
+        """Get cached query or create new one"""
+        if event.name in self._event_queries:
             query, stream_config, stream_params = self._event_queries[event.name]
-            # Update the from_block in cached query
+            # Only update the from_block
             query.from_block = self.current_block
             stream_params.from_block = self.current_block
-            logger.debug(f"Using cached query for event {event.name}")
+            return query, stream_config, stream_params
 
+        logger.info(f"Generating query for event {event.name} (one-time operation)")
+        contract_addr_list = await self.get_contract_addr_list()
+        query, stream_config, stream_params = generate_event_query(
+            self.config, event, self.client, contract_addr_list, self.current_block,
+            self.config.processing.items_per_batch  # Use new config structure
+        )
+        self._event_queries[event.name] = (query, stream_config, stream_params)
+        logger.info(f"Cached query configuration for event {event.name}")
         return query, stream_config, stream_params
 
     async def get_data(self, from_block: int) -> AsyncGenerator[Data, None]:
         """Process blockchain data and yield Data objects when batch is ready"""
         try:
+            # Get contract addresses once at the start if needed
+            if self._contract_addr_list is None:
+                await self.get_contract_addr_list()
+
             for event in self.config.events:
                 logger.info(f"Processing event: {event.name} from block {from_block}")
                 
                 query, stream_config, stream_params = await self._get_event_query(event)
-                # Update the from_block in query and params
                 query.from_block = from_block
                 stream_params.from_block = from_block
                 
                 receiver = await self.client.stream_arrow(query, stream_config)
                 event_data = EventData(stream_params)
                 event_data.receiver = receiver
-                event_data.from_block = from_block  # Set starting block
+                event_data.from_block = from_block
                 logger.info(f"Initialized data processor for {event.name}")
 
                 async_processor = AsyncEventProcessor(event_data)
