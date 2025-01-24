@@ -19,28 +19,25 @@ def initialize_loaders(config) -> dict:
     loaders = {}
     
     # Initialize PostgreSQL loader
-    postgres_config = config.output.get('postgres')
-    if postgres_config and postgres_config.enabled:
-        postgres_loader = PostgresLoader(create_engine(postgres_config.url))
+    if config.output.postgres and config.output.postgres.get('enabled'):
+        postgres_loader = PostgresLoader(create_engine(config.output.postgres['url']))
         postgres_loader.create_tables()
         loaders['postgres'] = postgres_loader
         logger.info("Initialized PostgreSQL loader")
 
     # Initialize Local Parquet loader
-    parquet_config = config.output.get('parquet')
-    if parquet_config and parquet_config.enabled:
-        loaders['local_parquet'] = ParquetLoader(Path(parquet_config.output_dir))
+    if config.output.parquet and config.output.parquet.get('enabled'):
+        loaders['local_parquet'] = ParquetLoader(Path(config.output.parquet['output_dir']))
         logger.info("Initialized Local Parquet loader")
 
     # Initialize S3 loader
-    s3_config = config.output.get('s3')
-    if s3_config and s3_config.enabled:
+    if config.output.s3 and config.output.s3.get('enabled'):
         loaders['s3'] = S3Loader(
-            endpoint=s3_config.endpoint,
-            access_key=s3_config.access_key,
-            secret_key=s3_config.secret_key,
-            bucket=s3_config.bucket,
-            secure=s3_config.secure
+            endpoint=config.output.s3['endpoint'],
+            access_key=config.output.s3['access_key'],
+            secret_key=config.output.s3['secret_key'],
+            bucket=config.output.s3['bucket'],
+            secure=config.output.s3.get('secure', False)
         )
         logger.info("Initialized S3 loader")
 
