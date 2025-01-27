@@ -3,9 +3,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, Tuple
 import polars as pl
-from hypersync import ArrowResponse
+from hypersync import ArrowResponse, DataType
 from src.types.hypersync import StreamParams
-from src.schemas.blockchain_schemas import BLOCKS, EVENTS
+from src.schemas.blockchain_schemas import BLOCKS, EVENTS, EVENT_SCHEMAS
 from src.schemas.base import SchemaConverter
 import time
 
@@ -21,7 +21,7 @@ class EventData:
         self.logs_df_list = []
         self.blocks_df_list = []
         self.contract_addr_list = params.contract_addr_list
-        self.events_schema = SchemaConverter.to_polars(EVENTS)
+        self.events_schema = SchemaConverter.to_polars(EVENT_SCHEMAS[self.event_name])
         self.blocks_schema = SchemaConverter.to_polars(BLOCKS)
         self.total_events = 0
         self.items_per_section = params.items_per_section
@@ -30,11 +30,22 @@ class EventData:
         self.last_event_count = 0
         logger.info(f"Initialized EventData processor for {self.event_name} from block {self.from_block} to {self.to_block or 'latest'}")
 
-    def append_data(self, res: ArrowResponse) -> Tuple[Optional[pl.DataFrame], Optional[pl.DataFrame], bool]:
+    def _convert_hypersync_type(self, dtype: str) -> pl.DataType:
+        """Convert Hypersync DataType string to Polars DataType"""
+        type_mapping = {
+            "float64": pl.Float64,
+            "int64": pl.Int64,
+            "string": pl.Utf8,
+            "bool": pl.Boolean,
+            "bytes": pl.Binary
+        }
+        return type_mapping.get(str(dtype).lower(), pl.Utf8)
+
+    def append_data(self, res: ArrowResponse) -> bool:
         """Process and append new data"""
         try:
             if res is None:
-                return None, None, True
+                return False
 
             # Update current block from response
             self.current_block = res.next_block
@@ -42,7 +53,7 @@ class EventData:
             # Convert Arrow data to Polars with column mapping
             logs_df = pl.from_arrow(res.data.logs)
             if logs_df.height == 0:
-                return None, None, False
+                return False
 
             decoded_logs_df = pl.from_arrow(res.data.decoded_logs).rename(lambda n: f"decoded_{n}")
             blocks_df = pl.from_arrow(res.data.blocks).rename(lambda n: f"block_{n}")
@@ -50,8 +61,11 @@ class EventData:
             # Apply column mappings from hypersync config
             if self.column_mapping:
                 for col, dtype in self.column_mapping.items():
-                    if col in decoded_logs_df.columns:
-                        decoded_logs_df = decoded_logs_df.with_columns(pl.col(col).cast(dtype))
+                    decoded_col = f"decoded_{col}"
+                    if decoded_col in decoded_logs_df.columns:
+                        polars_type = self._convert_hypersync_type(dtype)
+                        logger.debug(f"Converting column {decoded_col} from {dtype} to {polars_type}")
+                        decoded_logs_df = decoded_logs_df.with_columns(pl.col(decoded_col).cast(polars_type))
 
             # Join and validate schemas
             combined_df = logs_df.hstack(decoded_logs_df).join(blocks_df, on="block_number")
@@ -89,7 +103,7 @@ class EventData:
                 (self.to_block and self.current_block >= self.to_block)
             )
 
-            return combined_df, blocks_df, should_write
+            return should_write
 
         except Exception as e:
             logger.error(f"Error processing data chunk: {e}")

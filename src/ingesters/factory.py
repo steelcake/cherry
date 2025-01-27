@@ -13,6 +13,8 @@ class Ingester(DataIngester):
     def __init__(self, config: Config):
         self._ingester = HypersyncIngester(config)
         self._current_block = config.blocks.range.from_block
+        self._start_block = config.blocks.range.from_block
+        self._current_event = None  # Track current event being processed
         logger.info(f"Initialized ingester starting from block {self._current_block}")
 
     @property
@@ -32,9 +34,13 @@ class Ingester(DataIngester):
 
     async def get_data(self, from_block: int) -> AsyncGenerator[Data, None]:
         """Get data from the underlying ingester"""
-        async for data in self._ingester.get_data(from_block):
-            if data is not None:
-                yield data
+        try:
+            async for data in self._ingester.get_data(from_block):
+                if data is not None:
+                    yield data
+        except StopAsyncIteration:
+            logger.info("Reached end of data stream")
+            raise
 
     def __aiter__(self):
         return self
@@ -42,11 +48,28 @@ class Ingester(DataIngester):
     async def __anext__(self) -> Data:
         """Get next batch of data"""
         try:
-            async for data in self._ingester.get_data(self.current_block):
+            if not self._current_event:
+                self._current_event = self.config.events[0]
+                self._current_block = self._start_block
+                
+            async for data in self._ingester.get_data(self._current_block, self._current_event):
                 if data:
-                    self.current_block = self._ingester.current_block
+                    self._current_block = self._ingester.current_block
                     return data
+
+            # Current event finished, move to next event
+            current_idx = self.config.events.index(self._current_event)
+            if current_idx < len(self.config.events) - 1:
+                self._current_event = self.config.events[current_idx + 1]
+                self._current_block = self._start_block  # Reset to initial start block
+                self._ingester.current_block = self._start_block  # Reset ingester's block too
+                return await self.__anext__()
+            
+            logger.info("Completed processing all events")
             raise StopAsyncIteration
+
+        except StopAsyncIteration:
+            raise
         except Exception as e:
             logger.error(f"Error getting data: {e}")
             logger.error(f"Error occurred at line {e.__traceback__.tb_lineno}")

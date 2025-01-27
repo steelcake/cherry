@@ -68,7 +68,7 @@ python-dateutil==2.9.0.post0
 python-dotenv==1.0.1
 pytz==2024.2
 pyunormalize==16.0.0
-pywin32==308
+pywin32==308; platform_system == "Windows"  # Only install on Windows
 PyYAML==6.0.2
 regex==2024.11.6
 requests==2.32.3
@@ -93,5 +93,5 @@ tzdata==2024.2
 urllib3==2.3.0
 web3==7.6.1
 websockets==13.1
-win-precise-time==1.4.2
+win-precise-time==1.4.2; platform_system == "Windows"  # Only install on Windows
 yarl==1.18.3

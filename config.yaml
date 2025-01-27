@@ -38,6 +38,15 @@ contracts:
 
 # Event processing configuration
 events:
+  - name: "Approval"
+    description: "ERC20 Approval events"
+    signature: "Approval(address indexed owner, address indexed spender, uint256 value)"
+    column_mapping:
+      value: intstr  # Changed from string to intstr for large numbers
+    filters:
+      addresses: []  # Optional specific addresses
+      topics: []     # Optional additional topics
+
   - name: "Transfer"
     description: "ERC20 Transfer events"
     signature: "Transfer(address indexed from, address indexed to, uint256 amount)"
@@ -46,6 +55,8 @@ events:
     filters:
       addresses: []  # Optional specific addresses
       topics: []     # Optional additional topics
+  
+  
 
 # Processing configuration
 processing:
