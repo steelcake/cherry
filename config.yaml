@@ -1,91 +1,86 @@
 # Project name and description
-name: "cherry_event_indexer"
+project_name: "cherry_event_indexer"
 description: "Cherry event indexing and data processing pipeline"
 
 # Data source configuration
 data_source:
   - kind: hypersync
     url: "https://eth.hypersync.xyz"
-    api_key: ${HYPERSYNC_API_TOKEN}  # From environment variable
+    token: ${HYPERSYNC_API_TOKEN}
 
-# Block processing configuration
-blocks:
-  index_blocks: true
-  include_transactions: true
-  # Block range for main event processing
-  range:
-    from_block: 21123123
-    to_block: null  # null means latest
-  # Block range for contract discovery
-  contract_discovery:
-    from_block: 21123123  # Start block for contract address discovery
-    to_block: null  # null means latest
+# Streams configuration
+streams:
+  - kind: block
+    include_transactions: true
+    include_logs: false
+    column_cast:
+      transaction:
+        value: "String"
+        block_number: "Int64"
+    hex_encode:
+      transaction: "Prefixed"
+      block: null
+      log: "HexEncode"
+    hash: []  # process all blocks regardless of hash
+    mapping: "polars"
+    state:
+      path: "state/block_stream.json"
+      resume: true
 
-# Transaction filtering configuration
-transactions:
-  filters:
-    addresses: []  # Contract addresses to filter
-    from: []       # From addresses to filter
-    to: []         # To addresses to filter
+  - kind: event
+    name: "Approval"
+    signature: "Approval(address indexed _owner, address indexed _spender, uint256 _value)"
+    from_block: 21653123  # Stream-specific from block
+    to_block: null        # Stream-specific to block (null means latest)
+    batch_size: 500000   # Stream-specific batch size
+    topics: []
+    address: []
+    include_blocks: true
+    include_transactions: false
+    include_traces: false
+    column_cast:
+      value: "float64"
+    mapping: "polars"
+    state:
+      path: "state/approval_stream.json"
+      resume: true
 
-# Contract and events configuration
-contracts:
-  # Signatures used to discover contract addresses
-  identifier_signatures:
-    - name: "ERC20_Approval"
-      signature: "Approval(address indexed _owner, address indexed _spender, uint256 _value)"
-      description: "Used to identify ERC20 tokens"
-
-# Event processing configuration
-events:
-  - name: "Approval"
-    description: "ERC20 Approval events"
-    signature: "Approval(address indexed owner, address indexed spender, uint256 value)"
-    column_mapping:
-      value: intstr  # Changed from string to intstr for large numbers
-    filters:
-      addresses: []  # Optional specific addresses
-      topics: []     # Optional additional topics
-
-  - name: "Transfer"
-    description: "ERC20 Transfer events"
+  - kind: event
+    name: "Transfer"
     signature: "Transfer(address indexed from, address indexed to, uint256 amount)"
-    column_mapping: 
-      amount: float64
-    filters:
-      addresses: []  # Optional specific addresses
-      topics: []     # Optional additional topics
-  
-  
-
-# Processing configuration
-processing:
-  items_per_batch: 1000000  # Number of items to process per batch
-  parallel_events: true   # Process events in parallel
-
-# Data transformation configuration
-transform:
-  - kind: "Polars"
-    enabled: true
+    from_block: 21653123  # Stream-specific from block
+    to_block: null        # Stream-specific to block (null means latest)
+    batch_size: 1000000   # Stream-specific batch size
+    topics: []
+    address: []
+    include_blocks: true
+    include_transactions: false
+    include_traces: false
+    column_cast:
+      amount: "float64"
+    mapping: "polars"
+    state:
+      path: "state/transfer_stream.json"
+      resume: true
 
 # Output configuration
 output:
-  postgres:
-    enabled: false
-    url: "postgresql://postgres:postgres@localhost:5432/postgres"
-    batch_size: 10000
-  
-  parquet:
-    enabled: true
-    output_dir: "data"
-    compression: "snappy"
-  
-  s3:
-    enabled: true
+  - kind: s3
     endpoint: "localhost:9000"
     access_key: "minioadmin"
     secret_key: "minioadmin"
     bucket: "blockchain-data"
     secure: false
     region: null
+    batch_size: 1000000  # S3 specific batch size
   
+  - kind: local_parquet
+    path: "data"
+    compression: "snappy"
+    batch_size: 500000  # Parquet specific batch size
+
+# Contracts configuration
+contracts:
+  identifier_signatures:
+    - name: "ERC20_Approval"
+      signature: "Approval(address indexed _owner, address indexed _spender, uint256 _value)"

@@ -26,55 +26,90 @@ class OutputKind(str, Enum):
     PARQUET = "Parquet"
     S3 = "S3"
 
-class DataSource(BaseModel):
-    kind: str
-    url: str
-    api_key: Optional[str] = None
+class DataType(str, Enum):
+    """Data type enum"""
+    UINT64 = "uint64"
+    UINT32 = "uint32"
+    INT64 = "int64"
+    INT32 = "int32"
+    FLOAT32 = "float32"
+    FLOAT64 = "float64"
+    INTSTR = "intstr"
+    STRING = "String"
+
+class StreamState(BaseModel):
+    """Stream state configuration"""
+    path: str
+    resume: bool = True
+    last_block: Optional[int] = None
+
+class ColumnCast(BaseModel):
+    """Column casting configuration"""
+    transaction: Optional[Dict[str, str]] = None
+    value: Optional[str] = None
+    amount: Optional[str] = None
+
+class HexEncode(BaseModel):
+    """Hex encoding configuration"""
+    transaction: Optional[str] = None
+    block: Optional[str] = None
+    log: Optional[str] = None
 
 class BlockRange(BaseModel):
     """Block range configuration"""
     from_block: int
     to_block: Optional[int] = None
 
-class BlockConfig(BaseModel):
-    """Block processing configuration"""
-    range: BlockRange
-    contract_discovery: BlockRange
-    index_blocks: bool = True
-    include_transactions: bool = False
+class Stream(BaseModel):
+    """Stream configuration"""
+    kind: str
+    name: Optional[str] = None
+    signature: Optional[str] = None
+    from_block: Optional[int] = None
+    to_block: Optional[int] = None
+    batch_size: Optional[int] = None
+    include_transactions: Optional[bool] = False
+    include_logs: Optional[bool] = False
+    include_blocks: Optional[bool] = False
+    include_traces: Optional[bool] = False
+    topics: Optional[List[str]] = []
+    address: Optional[List[str]] = []
+    column_cast: Optional[ColumnCast] = None
+    hex_encode: Optional[HexEncode] = None
+    hash: Optional[List[str]] = []
+    mapping: str
+    state: Optional[StreamState] = None
 
-class TransactionFilters(BaseModel):
-    addresses: Optional[List[str]] = None
-    from_: Optional[List[str]] = Field(None, alias="from")
-    to: Optional[List[str]] = None
+class DataSource(BaseModel):
+    """Data source configuration"""
+    kind: str
+    url: str
+    token: str
+
+class Output(BaseModel):
+    """Output configuration"""
+    kind: str
+    path: Optional[str] = None
+    endpoint: Optional[str] = None
+    access_key: Optional[str] = None
+    secret_key: Optional[str] = None
+    bucket: Optional[str] = None
+    secure: Optional[bool] = False
+    region: Optional[str] = None
+    compression: Optional[str] = None
+    batch_size: Optional[int] = None
+
+class ProcessingConfig(BaseModel):
+    """Processing configuration"""
+    default_batch_size: int = 100000
+    parallel_streams: bool = True
+    max_retries: int = 3
+    retry_delay: int = 5
 
 class ContractIdentifier(BaseModel):
     """Contract identifier configuration"""
     name: str
     signature: str
-    description: Optional[str] = None
-
-class Event(BaseModel):
-    """Event configuration"""
-    name: str
-    signature: str
-    description: Optional[str] = None
-    column_mapping: Optional[Dict[str, DataType]] = None
-    filters: Optional[Dict[str, List[str]]] = None
-
-class ProcessingConfig(BaseModel):
-    """Processing configuration"""
-    items_per_batch: int = 30000
-    parallel_events: bool = True
-
-class OutputConfig(BaseModel):
-    """Output configuration"""
-    postgres: Optional[Dict] = None
-    parquet: Optional[Dict] = None
-    s3: Optional[Dict] = None
-
-class Transform(BaseModel):
-    kind: TransformKind
 
 class ContractConfig(BaseModel):
     """Contract configuration"""
@@ -82,57 +117,27 @@ class ContractConfig(BaseModel):
 
 class Config(BaseModel):
     """Main configuration"""
-    name: str
+    project_name: str
     description: str
     data_source: List[DataSource]
-    blocks: BlockConfig
-    events: List[Event]
+    streams: List[Stream]
+    output: List[Output]
+    processing: Optional[ProcessingConfig] = ProcessingConfig()
     contracts: ContractConfig
-    processing: ProcessingConfig
-    output: OutputConfig
-    transactions: Optional[Dict] = None
+    blocks: Optional[BlockRange] = None
     transform: Optional[List[Dict]] = None
 
-def parse_config(config_path: Union[str, Path]) -> Config:
+def parse_config(config_path: str) -> Config:
     """Parse configuration from YAML file"""
-    logger.info(f"Parsing configuration from {config_path}")
-    
-    with open(config_path) as f:
+    with open(config_path, 'r') as f:
         raw_config = yaml.safe_load(f)
-
-    # Replace environment variables
-    for source in raw_config.get('data_source', []):
-        if 'api_key' in source and source['api_key'].startswith('${'):
-            env_var = source['api_key'][2:-1]
-            source['api_key'] = os.environ.get(env_var)
-
-    # Convert block ranges
-    blocks = raw_config.get('blocks', {})
-    blocks['range'] = BlockRange(**blocks.get('range', {}))
-    blocks['contract_discovery'] = BlockRange(**blocks.get('contract_discovery', {}))
-
-    # Convert contracts config
-    contracts_data = raw_config.get('contracts', {})
-    if isinstance(contracts_data, dict):
-        contracts = ContractConfig(
-            identifier_signatures=[
-                ContractIdentifier(**sig) 
-                for sig in contracts_data.get('identifier_signatures', [])
-            ]
-        )
-    else:
-        contracts = ContractConfig()
-
-    # Create and validate config
-    return Config(
-        name=raw_config.get('name', ''),
-        description=raw_config.get('description', ''),
-        data_source=[DataSource(**src) for src in raw_config.get('data_source', [])],
-        blocks=BlockConfig(**blocks),
-        events=[Event(**event) for event in raw_config.get('events', [])],
-        contracts=contracts,
-        processing=ProcessingConfig(**raw_config.get('processing', {})),
-        output=OutputConfig(**raw_config.get('output', {})),
-        transactions=raw_config.get('transactions'),
-        transform=raw_config.get('transform')
-    )
+        
+        # Convert project-name to project_name if needed
+        if 'project-name' in raw_config:
+            raw_config['project_name'] = raw_config.pop('project-name')
+            
+        # Convert blocks.range to blocks if needed
+        if 'blocks' in raw_config and 'range' in raw_config['blocks']:
+            raw_config['blocks'] = raw_config['blocks']['range']
+    
+    return Config(**raw_config)
