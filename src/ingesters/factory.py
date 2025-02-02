@@ -6,6 +6,7 @@ from src.ingesters.providers.hypersync import HypersyncIngester
 from src.types.data import Data
 from src.loaders.base import DataLoader
 import asyncio
+from src.processors.hypersync import ParallelEventProcessor
 
 logger = logging.getLogger(__name__)
 

@@ -14,13 +14,13 @@ from hypersync import (
     FieldSelection
 )
 from src.ingesters.base import DataIngester, Data
-from src.config.parser import Config, Stream
+from src.config.parser import Config, Stream, StreamState
 from src.processors.hypersync import EventData
 from src.types.hypersync import StreamParams
 from src.utils.generate_hypersync_query import generate_contract_query, generate_event_query
 from src.loaders.base import DataLoader
 import asyncio
-from src.processors.event_processor import ParallelEventProcessor
+from src.processors.hypersync import ParallelEventProcessor
 
 logger = logging.getLogger(__name__)
 
@@ -158,16 +158,18 @@ class HypersyncIngester(DataIngester):
         pass
 
     def get_stream_block(self, stream_name: str) -> int:
-        """Get current block for a stream"""
-        # Find the stream configuration
-        stream = next((s for s in self.config.streams if s.name == stream_name), None)
-        if not stream:
-            raise ValueError(f"Stream {stream_name} not found in configuration")
+        """Get current block for stream"""
+        stream = next(s for s in self.config.streams if s.name == stream_name)
+        
+        # Convert dict to StreamState if needed
+        if stream.state and isinstance(stream.state, dict):
+            stream_state = StreamState(**stream.state)
+        else:
+            stream_state = None
             
-        # Use stream's state or from_block
-        return self._stream_states.get(
-            stream_name, 
-            stream.state.last_block if stream.state and stream.state.resume else stream.from_block
+        return (
+            stream_state.last_block if stream_state and stream_state.resume 
+            else stream.from_block
         )
 
     def set_stream_block(self, stream_name: str, block: int):

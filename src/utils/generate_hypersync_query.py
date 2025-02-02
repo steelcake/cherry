@@ -84,6 +84,12 @@ def generate_contract_query(config: Config, signature: str, client: HypersyncCli
         blocks=[BlockField.NUMBER, BlockField.TIMESTAMP]
     )
 
+def pad_address(address: str) -> str:
+    """Pad address to 32 bytes (64 characters)"""
+    if address.startswith('0x'):
+        address = address[2:]  # Remove 0x prefix
+    return '0x' + '0' * 24 + address  # Pad with 24 zeros (12 bytes) to make it 32 bytes total
+
 def generate_event_query(
     stream: Stream,
     client: HypersyncClient,
@@ -93,15 +99,37 @@ def generate_event_query(
     """Generate query for event data"""
     logger.info(f"Generating event data query for blocks {from_block} onwards")
 
-    # Convert signature to topic0
-    topic0 = signature_to_topic0(stream.signature)
+    # Convert signature to topic0 if not provided in config
+    topic0 = stream.topics[0] if stream.topics else signature_to_topic0(stream.signature)
     
+    # Build topics list for query
+    topics = []
+    if stream.topics:
+        # First topic is always the event signature
+        topics.append([topic0])
+        
+        # Handle indexed parameters (topics[1:])
+        for topic in stream.topics[1:]:
+            if topic is None:
+                topics.append([])  # Empty list for wildcard match
+            elif isinstance(topic, list):
+                # Pad each address in the list
+                padded_topics = [pad_address(t) for t in topic]
+                topics.append(padded_topics)
+            else:
+                # Pad single address
+                topics.append([pad_address(topic)])
+    else:
+        topics = [[topic0]]  # Default to just the event signature
+    
+    # Create query
     query = Query(
         from_block=from_block,
-        to_block=stream.to_block,  # Use stream-specific to_block
+        to_block=stream.to_block,
         logs=[LogSelection(
-            topics=[[topic0]]
-                )],
+            topics=topics,
+            address=stream.address
+        )],
         field_selection=FieldSelection(
             log=[
                 LogField.ADDRESS,
@@ -117,6 +145,13 @@ def generate_event_query(
             block=[BlockField.NUMBER, BlockField.TIMESTAMP]
         )
     )
+    
+    # Log the generated query for debugging
+    logger.info(f"Generated Hypersync query for {stream.name}:")
+    logger.info(f"  From block: {from_block}")
+    logger.info(f"  To block: {stream.to_block}")
+    logger.info(f"  Topics: {topics}")
+    logger.info(f"  Addresses: {stream.address}")
     
     stream_config = StreamConfig(hex_output=HexOutput.PREFIXED)
     

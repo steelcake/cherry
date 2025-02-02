@@ -1,6 +1,6 @@
-from typing import List, Dict, Optional, Union
+from typing import List, Dict, Optional, Union, Any
 from pathlib import Path
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from enum import Enum
 import yaml, logging, json
 from src.utils.logging_setup import setup_logging
@@ -43,10 +43,14 @@ class StreamState(BaseModel):
     resume: bool = True
     last_block: Optional[int] = None
 
+class ColumnCastField(BaseModel):
+    """Column casting field configuration"""
+    value: Optional[str] = None
+    block_number: Optional[str] = None
+
 class ColumnCast(BaseModel):
     """Column casting configuration"""
     transaction: Optional[Dict[str, str]] = None
-    value: Optional[str] = None
     amount: Optional[str] = None
 
 class HexEncode(BaseModel):
@@ -72,13 +76,20 @@ class Stream(BaseModel):
     include_logs: Optional[bool] = False
     include_blocks: Optional[bool] = False
     include_traces: Optional[bool] = False
-    topics: Optional[List[str]] = []
-    address: Optional[List[str]] = []
-    column_cast: Optional[ColumnCast] = None
+    topics: Optional[List[Optional[Union[str, List[str]]]]] = None
+    address: Optional[List[str]] = None
+    column_cast: Optional[Dict[str, Union[str, ColumnCastField]]] = None
     hex_encode: Optional[HexEncode] = None
     hash: Optional[List[str]] = []
-    mapping: str
+    mapping: Optional[str] = None
     state: Optional[StreamState] = None
+
+    @model_validator(mode='before')
+    def convert_state_dict(cls, values):
+        """Convert state dict to StreamState if needed"""
+        if isinstance(values.get('state'), dict):
+            values['state'] = StreamState(**values['state'])
+        return values
 
 class DataSource(BaseModel):
     """Data source configuration"""
@@ -123,7 +134,7 @@ class Config(BaseModel):
     streams: List[Stream]
     output: List[Output]
     processing: Optional[ProcessingConfig] = ProcessingConfig()
-    contracts: ContractConfig
+    contracts: Optional[Dict[str, Any]] = None
     blocks: Optional[BlockRange] = None
     transform: Optional[List[Dict]] = None
 

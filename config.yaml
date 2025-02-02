@@ -30,16 +30,16 @@ streams:
   - kind: event
     name: "Approval"
     signature: "Approval(address indexed _owner, address indexed _spender, uint256 _value)"
-    from_block: 21653123  # Stream-specific from block
-    to_block: null        # Stream-specific to block (null means latest)
-    batch_size: 500000   # Stream-specific batch size
+    from_block: 21653123
+    to_block: null
+    batch_size: 500000
     topics: []
     address: []
     include_blocks: true
     include_transactions: false
     include_traces: false
     column_cast:
-      value: "float64"
+      value: "float64"  # Simple string value for single field
     mapping: "polars"
     state:
       path: "state/approval_stream.json"
@@ -48,9 +48,9 @@ streams:
   - kind: event
     name: "Transfer"
     signature: "Transfer(address indexed from, address indexed to, uint256 amount)"
-    from_block: 21653123  # Stream-specific from block
-    to_block: null        # Stream-specific to block (null means latest)
-    batch_size: 1000000   # Stream-specific batch size
+    from_block: 21653123
+    to_block: null
+    batch_size: 1000000
     topics: []
     address: []
     include_blocks: true
@@ -72,12 +72,12 @@ output:
     bucket: "blockchain-data"
     secure: false
     region: null
-    batch_size: 1000000  # S3 specific batch size
-  
+    batch_size: 1000000
+
   - kind: local_parquet
     path: "data"
     compression: "snappy"
-    batch_size: 500000  # Parquet specific batch size
+    batch_size: 500000
 
 # Contracts configuration
 contracts:
