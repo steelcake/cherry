@@ -8,15 +8,16 @@ from src.schemas.base import SchemaConverter
 
 logger = logging.getLogger(__name__)
 
-class DataLoader(ABC):
-    """Base class for data loaders"""
+class DataWriter(ABC):
+    """Base class for data writers"""
     
+
     def __init__(self):
         self.events_schema = SchemaConverter.to_polars(EVENTS)
         self.blocks_schema = SchemaConverter.to_polars(BLOCKS)
     
     def prepare_data(self, data: Data) -> tuple[Optional[pl.DataFrame], Dict[str, pl.DataFrame]]:
-        """Prepare and validate data for loading"""
+        """Prepare and validate data for writing"""
         try:
             # Prepare blocks data
             blocks_df = None
@@ -53,6 +54,6 @@ class DataLoader(ABC):
             raise
 
     @abstractmethod
-    async def load(self, data: Data) -> None:
-        """Load data to target"""
+    async def write(self, data: Data) -> None:
+        """Write data to target"""
         pass 

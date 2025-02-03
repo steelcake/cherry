@@ -1,51 +1,86 @@
-# Project name for reference
-name: "my_project"
+# Project name and description
+project_name: "cherry_event_indexer"
+description: "Cherry event indexing and data processing pipeline"
 
 # Data source configuration
 data_source:
   - kind: hypersync
     url: "https://eth.hypersync.xyz"
+    token: ${HYPERSYNC_API_TOKEN}
 
-# Block processing configuration
-blocks:
-  index_blocks: true
-  include_transactions: true
+# Streams configuration
+streams:
+  - kind: block
+    include_transactions: true
+    include_logs: false
+    column_cast:
+      transaction:
+        value: "String"
+        block_number: "Int64"
+    hex_encode:
+      transaction: "Prefixed"
+      block: null
+      log: "HexEncode"
+    hash: []  # process all blocks regardless of hash
+    mapping: "polars"
+    state:
+      path: "state/block_stream.json"
+      resume: true
 
-# Transaction filtering configuration
-transactions:
-  address: []
-  from: []
-  to: []
+  - kind: event
+    name: "Approval"
+    signature: "Approval(address indexed _owner, address indexed _spender, uint256 _value)"
+    from_block: 21653123
+    to_block: null
+    batch_size: 500000
+    topics: []
+    address: []
+    include_blocks: true
+    include_transactions: false
+    include_traces: false
+    column_cast:
+      value: "float64"  # Simple string value for single field
+    mapping: "polars"
+    state:
+      path: "state/approval_stream.json"
+      resume: true
 
-# Traces processing
-traces: false
-
-# Contract and events processing configuration
-events:
-  - name: Transfer
+  - kind: event
+    name: "Transfer"
     signature: "Transfer(address indexed from, address indexed to, uint256 amount)"
-    column_mapping: {amount: float64}
-
-contract_identifier_signatures:
-  - "Approval(address indexed _owner, address indexed _spender, uint256 _value)"
-
-items_per_section: 30000
-
-parquet_output_path: "data"
-
-from_block: 21123123
-to_block: null
-
-# Transformation configuration
-transform:
-  - kind: "Polars"
+    from_block: 21653123
+    to_block: null
+    batch_size: 1000000
+    topics: []
+    address: []
+    include_blocks: true
+    include_transactions: false
+    include_traces: false
+    column_cast:
+      amount: "float64"
+    mapping: "polars"
+    state:
+      path: "state/transfer_stream.json"
+      resume: true
 
 # Output configuration
 output:
-  - kind: Postgres
-    enabled: true
-    url: "postgresql://postgres:postgres@localhost:5432/postgres"
-  - kind: Parquet
-    enabled: true
-    output_dir: "data"
-  
+  - kind: s3
+    endpoint: "localhost:9000"
+    access_key: "minioadmin"
+    secret_key: "minioadmin"
+    bucket: "blockchain-data"
+    secure: false
+    region: null
+    batch_size: 1000000
+
+  - kind: local_parquet
+    path: "data"
+    compression: "snappy"
+    batch_size: 500000
+
+# Contracts configuration
+contracts:
+  identifier_signatures:
+    - name: "ERC20_Approval"
+      signature: "Approval(address indexed _owner, address indexed _spender, uint256 _value)"

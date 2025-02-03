@@ -1,10 +1,12 @@
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Union, Any
 from pathlib import Path
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, model_validator
 from enum import Enum
 import yaml, logging, json
 from src.utils.logging_setup import setup_logging
 import hypersync
+import os
+from hypersync import DataType
 
 # Set up logging
 setup_logging()
@@ -22,61 +24,131 @@ class OutputKind(str, Enum):
     POSTGRES = "Postgres"
     DUCKDB = "Duckdb"
     PARQUET = "Parquet"
+    S3 = "S3"
+
+class DataType(str, Enum):
+    """Data type enum"""
+    UINT64 = "uint64"
+    UINT32 = "uint32"
+    INT64 = "int64"
+    INT32 = "int32"
+    FLOAT32 = "float32"
+    FLOAT64 = "float64"
+    INTSTR = "intstr"
+    STRING = "String"
+
+class StreamState(BaseModel):
+    """Stream state configuration"""
+    path: str
+    resume: bool = True
+    last_block: Optional[int] = None
+
+class ColumnCastField(BaseModel):
+    """Column casting field configuration"""
+    value: Optional[str] = None
+    block_number: Optional[str] = None
+
+class ColumnCast(BaseModel):
+    """Column casting configuration"""
+    transaction: Optional[Dict[str, str]] = None
+    amount: Optional[str] = None
+
+class HexEncode(BaseModel):
+    """Hex encoding configuration"""
+    transaction: Optional[str] = None
+    block: Optional[str] = None
+    log: Optional[str] = None
+
+class BlockRange(BaseModel):
+    """Block range configuration"""
+    from_block: int
+    to_block: Optional[int] = None
+
+class Stream(BaseModel):
+    """Stream configuration"""
+    kind: str
+    name: Optional[str] = None
+    signature: Optional[str] = None
+    from_block: Optional[int] = None
+    to_block: Optional[int] = None
+    batch_size: Optional[int] = None
+    include_transactions: Optional[bool] = False
+    include_logs: Optional[bool] = False
+    include_blocks: Optional[bool] = False
+    include_traces: Optional[bool] = False
+    topics: Optional[List[Optional[Union[str, List[str]]]]] = None
+    address: Optional[List[str]] = None
+    column_cast: Optional[Dict[str, Union[str, ColumnCastField]]] = None
+    hex_encode: Optional[HexEncode] = None
+    hash: Optional[List[str]] = []
+    mapping: Optional[str] = None
+    state: Optional[StreamState] = None
+
+    @model_validator(mode='before')
+    def convert_state_dict(cls, values):
+        """Convert state dict to StreamState if needed"""
+        if isinstance(values.get('state'), dict):
+            values['state'] = StreamState(**values['state'])
+        return values
 
 class DataSource(BaseModel):
-    kind: DataSourceKind
+    """Data source configuration"""
+    kind: str
     url: str
-    api_key: Optional[str] = None
-
-class BlockConfig(BaseModel):
-    index_blocks: bool
-    include_transactions: bool
-
-class TransactionFilters(BaseModel):
-    from_address: Optional[List[str]] = None
-    to_address: Optional[List[str]] = None
-
-class Event(BaseModel):
-    name: str
-    address: Optional[List[str]] = None
-    topics: Optional[List[List[str]]] = None
-    signature: str
-    column_mapping: Dict[str, hypersync.DataType]
-
-class Transform(BaseModel):
-    kind: TransformKind
+    token: str
 
 class Output(BaseModel):
-    enabled: bool = True
-    kind: OutputKind
-    url: Optional[str] = None
-    output_dir: Optional[str] = None
+    """Output configuration"""
+    kind: str
+    path: Optional[str] = None
+    endpoint: Optional[str] = None
+    access_key: Optional[str] = None
+    secret_key: Optional[str] = None
+    bucket: Optional[str] = None
+    secure: Optional[bool] = False
+    region: Optional[str] = None
+    compression: Optional[str] = None
+    batch_size: Optional[int] = None
+
+class ProcessingConfig(BaseModel):
+    """Processing configuration"""
+    default_batch_size: int = 100000
+    parallel_streams: bool = True
+    max_retries: int = 3
+    retry_delay: int = 5
+
+class ContractIdentifier(BaseModel):
+    """Contract identifier configuration"""
+    name: str
+    signature: str
+
+class ContractConfig(BaseModel):
+    """Contract configuration"""
+    identifier_signatures: List[ContractIdentifier] = []
 
 class Config(BaseModel):
-    name: str
+    """Main configuration"""
+    project_name: str
+    description: str
     data_source: List[DataSource]
-    blocks: Optional[BlockConfig] = None
-    transactions: Optional[TransactionFilters] = None
-    events: List[Event]
-    contract_identifier_signatures: Optional[List[str]] = None
-    items_per_section: int
-    from_block: int
-    to_block: Optional[int]
-    transform: List[Transform]
+    streams: List[Stream]
     output: List[Output]
+    processing: Optional[ProcessingConfig] = ProcessingConfig()
+    contracts: Optional[Dict[str, Any]] = None
+    blocks: Optional[BlockRange] = None
+    transform: Optional[List[Dict]] = None
 
-def parse_config(config_path: Path) -> Config:
+def parse_config(config_path: str) -> Config:
     """Parse configuration from YAML file"""
-    logger.info(f"Parsing configuration from {config_path}")
-    try:
-        with open(config_path, 'r') as f:
-            config_dict = yaml.safe_load(f)
-            logger.debug(f"Config dict: {config_dict}")
+    with open(config_path, 'r') as f:
+        raw_config = yaml.safe_load(f)
         
-        config = Config.model_validate(config_dict)
-        logger.debug(f"Parsed config: {json.dumps(config.model_dump(), indent=2)}")
-        return config
-    except Exception as e:
-        logger.error(f"Error parsing configuration: {e}")
-        logger.error(f"Error occurred at line {e.__traceback__.tb_lineno}")
-        raise
+        # Convert project-name to project_name if needed
+        if 'project-name' in raw_config:
+            raw_config['project_name'] = raw_config.pop('project-name')
+            
+        # Convert blocks.range to blocks if needed
+        if 'blocks' in raw_config and 'range' in raw_config['blocks']:
+            raw_config['blocks'] = raw_config['blocks']['range']
+    
+    return Config(**raw_config)

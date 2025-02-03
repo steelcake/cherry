@@ -1,114 +1,169 @@
 import logging
-from src.utils.logging_setup import setup_logging
+from typing import AsyncGenerator, Dict
+from src.config.parser import Config, Stream
+from src.ingesters.base import DataIngester
 from src.ingesters.providers.hypersync import HypersyncIngester
-from src.config.parser import Config, DataSourceKind
-from src.ingesters.base import Data, DataIngester
-from typing import AsyncGenerator
+from src.types.data import Data
+from src.writers.base import DataWriter
+import asyncio
+from src.processors.hypersync import ParallelEventProcessor
 
 logger = logging.getLogger(__name__)
 
-class AsyncIngesterWrapper:
-    """Wrapper to handle async iteration of ingester data"""
-    def __init__(self, ingester: DataIngester, config: Config):
-        self._ingester = ingester
-        self._config = config
-        self.current_block = config.from_block
-        logger.info(f"Initialized ingester starting from block {self.current_block}")
-
-    async def __aiter__(self):
-        return self
-
-    async def __anext__(self) -> Data:
-        if self._config.to_block and self.current_block > self._config.to_block:
-            raise StopAsyncIteration
-        
-        try:
-            async for data in await self._ingester.get_data(self.current_block):
-                if data.events or data.blocks:
-                    self.current_block = max(
-                        max(df['block_number'].max() for df in data.events.values()) if data.events else 0,
-                        max(df['block_number'].max() for df in data.blocks.values()) if data.blocks else 0
-                    ) + 1
-                    return data
-            
-            raise StopAsyncIteration
-            
-        except Exception as e:
-            logger.error(f"Error getting data: {e}")
-            logger.error(f"Error occurred at line {e.__traceback__.tb_lineno}")
-            raise
-
 class Ingester(DataIngester):
-    """Factory class for creating appropriate ingester based on config"""
-    
+    """Manages ingestion of multiple event streams"""
     def __init__(self, config: Config):
         self._config = config
+        self._event_streams = [s for s in config.streams if s.kind == "event"]
         self._ingester = HypersyncIngester(config)
-        self._current_block = config.from_block
-        logger.info(f"Initialized ingester starting from block {self.current_block}")
-
-    def __aiter__(self):
-        return self
-
-    async def __anext__(self) -> Data:
-        if self._config.to_block and self.current_block > self._config.to_block:
-            logger.info(f"Reached target block {self._config.to_block}")
-            raise StopAsyncIteration
+        self._completed_streams = set()
+        self._active_tasks = {}  # Track active tasks per stream
         
-        try:
-            logger.debug(f"Fetching data from block {self.current_block}")
-            async for data in self._ingester.get_data(self.current_block):
-                if data is not None and (data.events or data.blocks):
-                    # Update current_block based on processed data
-                    next_block = max(
-                        max(df['block_number'].max() for df in data.events.values()) if data.events else 0,
-                        max(df['block_number'].max() for df in data.blocks.values()) if data.blocks else 0
-                    ) + 1
-                    
-                    # Update both ingester and underlying ingester block numbers
-                    self.current_block = next_block
-                    logger.debug(f"Updated current block to {self.current_block}")
-                    return data
-            
-            raise StopAsyncIteration
-            
-        except Exception as e:
-            logger.error(f"Error getting data: {e}")
-            logger.error(f"Error occurred at line {e.__traceback__.tb_lineno}")
-            raise
+        # Initialize stream states with stream-specific from_block
+        self._stream_states = {
+            s.name: s.from_block for s in self._event_streams
+        }
+        
+        logger.info(f"Initialized ingester with {len(self._event_streams)} event streams")
 
     @property
     def current_block(self) -> int:
         """Get current block number"""
-        return self._current_block
+        if not self._stream_states:
+            return self.config.blocks.from_block
+        return min(self._stream_states.values())
 
     @current_block.setter
     def current_block(self, value: int):
-        """Set current block number and propagate to underlying ingester"""
-        self._current_block = value
-        self._ingester.current_block = value  # Ensure underlying ingester is updated
+        """Set current block number"""
+        for stream in self._event_streams:
+            self._stream_states[stream.name] = value
+            self._ingester.current_block = value
 
-    @property
-    def config(self) -> Config:
-        """Get configuration"""
-        return self._config
-
-    @config.setter
-    def config(self, value: Config):
-        """Set configuration"""
-        self._config = value
+    async def initialize_writers(self, writers: Dict[str, DataWriter]):
+        """Initialize data writers"""
+        await self._ingester.initialize_writers(writers)
 
     async def get_data(self, from_block: int) -> AsyncGenerator[Data, None]:
         """Get data from the underlying ingester"""
-        async for data in self._ingester.get_data(from_block):
-            if data is not None:
-                yield data
+        try:
+            async for data in self._ingester.get_data(from_block):
+                if data is not None:
+                    yield data
+        except StopAsyncIteration:
+            logger.info("Reached end of data stream")
+            raise
 
-    async def initialize_loaders(self, loaders):
-        """Initialize data loaders in the underlying ingester"""
-        await self._ingester.initialize_loaders(loaders)
+    def __aiter__(self):
+        """Required for async iteration - should not be async"""
+        return self
 
-    async def get_data_stream(self) -> Data:
-        """Stream data for the next batch"""
-        logger.debug(f"Streaming data from {self.current_block} to {self._config.to_block}")
-        return await self._ingester.get_data(self.current_block)
+    async def __anext__(self) -> Data:
+        """Get next batch of data"""
+        try:
+            return await self.get_next_batch()
+        except StopAsyncIteration:
+            raise
+
+    async def get_next_batch(self) -> Data:
+        """Get next batch of data from any available stream"""
+        try:
+            # Create or get tasks for all active streams
+            for stream in self._event_streams:
+                if stream.name not in self._completed_streams and stream.name not in self._active_tasks:
+                    logger.info(f"Creating task for stream {stream.name}")
+                    task = asyncio.create_task(
+                        self._process_stream(stream),
+                        name=f"process_{stream.name}"
+                    )
+                    self._active_tasks[stream.name] = task
+
+            if not self._active_tasks:
+                logger.info("No active streams remaining")
+                raise StopAsyncIteration
+
+            # Wait for any stream to complete its current batch
+            done, pending = await asyncio.wait(
+                list(self._active_tasks.values()),
+                return_when=asyncio.FIRST_COMPLETED
+            )
+
+            # Process completed task and return its data immediately
+            for task in done:
+                stream_name = task.get_name().replace('process_', '')
+                try:
+                    result = await task
+                    # Remove completed task
+                    self._active_tasks.pop(stream_name, None)
+                    
+                    if result:
+                        # Create new task for this stream
+                        if stream_name not in self._completed_streams:
+                            new_task = asyncio.create_task(
+                                self._process_stream(next(s for s in self._event_streams if s.name == stream_name)),
+                                name=f"process_{stream_name}"
+                            )
+                            self._active_tasks[stream_name] = new_task
+                        return result
+                except StopAsyncIteration:
+                    # Stream completed
+                    self._active_tasks.pop(stream_name, None)
+                    if stream_name not in self._completed_streams:
+                        self._completed_streams.add(stream_name)
+                        logger.info(f"Stream {stream_name} completed")
+                except Exception as e:
+                    logger.error(f"Error in stream {stream_name}: {e}")
+                    # Cancel all tasks on error
+                    for t in self._active_tasks.values():
+                        t.cancel()
+                    self._active_tasks.clear()
+                    raise
+
+            # Check if all streams are done
+            if len(self._completed_streams) == len(self._event_streams):
+                raise StopAsyncIteration
+
+            # Continue with remaining tasks
+            return None
+
+        except Exception as e:
+            if not isinstance(e, StopAsyncIteration):
+                logger.error(f"Error getting next batch: {e}")
+            raise
+
+    async def _process_stream(self, stream: Stream) -> Data:
+        """Process a single event stream"""
+        try:
+            current_block = self._stream_states[stream.name]
+            logger.info(f"Starting to process stream {stream.name} from block {current_block}")
+
+            async for batch in self._ingester.get_data(current_block, stream):
+                if batch and (batch.events or batch.blocks):
+                    # Update stream's block state
+                    if batch.events and stream.name in batch.events:
+                        max_block = batch.events[stream.name]['block_number'].max()
+                        self._stream_states[stream.name] = max_block + 1
+                        logger.info(f"Stream {stream.name} processed batch with {len(batch.events[stream.name])} events")
+                    
+                    # Check if we've reached the stream's to_block
+                    if stream.to_block and current_block >= stream.to_block:
+                        self._completed_streams.add(stream.name)
+                        logger.info(f"Stream {stream.name} reached target block {stream.to_block}")
+                        raise StopAsyncIteration
+                        
+                    return batch
+
+            # Stream completed normally
+            logger.info(f"Stream {stream.name} completed normally")
+            self._completed_streams.add(stream.name)
+            raise StopAsyncIteration
+
+        except StopAsyncIteration:
+            raise
+        except Exception as e:
+            logger.error(f"Error processing stream {stream.name}: {e}")
+            raise
+
+    @property
+    def config(self) -> Config:
+        return self._ingester.config

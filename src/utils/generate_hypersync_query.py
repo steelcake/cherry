@@ -13,90 +13,146 @@ from hypersync import (
     DataType
 )
 import polars as pl
-from src.config.parser import Config, Event
+from src.config.parser import Config, Stream
 from src.types.hypersync import StreamParams
-from typing import List, Union, Optional, Tuple
+from typing import List, Union, Optional, Tuple, Dict
 import logging
 
 logger = logging.getLogger(__name__)
+
+def convert_column_cast_to_dict(column_cast) -> Dict[str, str]:
+    """Convert ColumnCast model to dictionary"""
+    if not column_cast:
+        return {}
+    
+    result = {}
+    if column_cast.transaction:
+        result.update(column_cast.transaction)
+    if column_cast.value:
+        result['value'] = column_cast.value
+    if column_cast.amount:
+        result['amount'] = column_cast.amount
+    return result
+
+def convert_event_to_hypersync(stream: Stream) -> LogSelection:
+    """Convert event config to Hypersync LogSelection"""
+    if not stream or not stream.signature:
+        raise ValueError("Stream or signature is missing")
+
+    # Convert signature to topic0
+    topic0 = signature_to_topic0(stream.signature)
+    
+    return LogSelection(
+        topics=[[topic0]]  # First topic is the event signature
+    )
 
 def generate_contract_stream_config() -> StreamConfig:
     """Generate StreamConfig for contract address queries"""
     return StreamConfig(hex_output=HexOutput.PREFIXED)
 
-def generate_event_stream_config(event: Event) -> StreamConfig:
+def generate_event_stream_config(stream: Stream) -> StreamConfig:
     """Generate StreamConfig for event data queries"""
     return StreamConfig(
         hex_output=HexOutput.PREFIXED,
-        event_signature=event.signature,
+        event_signature=stream.signature,
         column_mapping=ColumnMapping(
-            decoded_log=event.column_mapping,
+            decoded_log=stream.column_cast,
             block={BlockField.TIMESTAMP: DataType.INT64}
         )
     )
 
-def generate_event_stream_params(client: HypersyncClient, event: Event,
+def generate_event_stream_params(client: HypersyncClient, stream: Stream,
                                contract_addr_list: Optional[List[pl.Series]], 
                                from_block: int, items_per_section: int) -> StreamParams:
     """Generate StreamParams for event data queries"""
     return StreamParams(
-        client=client, column_mapping=event.column_mapping,
-        event_name=event.name, signature=event.signature,
-        contract_addr_list=contract_addr_list, from_block=from_block,
-        items_per_section=items_per_section
-    )
-
-def convert_event_to_hypersync(event: Event) -> LogSelection:
-    """Convert an Event model to Hypersync LogSelection"""
-    logger.debug(f"Converting event {event.name} to Hypersync LogSelection")
-    topic0 = signature_to_topic0(event.signature) if event.signature else None
-    addresses = []
-    if isinstance(event.address, list): addresses.extend(event.address)
-    elif event.address: addresses.append(event.address)
-    
-    selection = LogSelection(
-        address=addresses,
-        topics=[[topic0]] if topic0 else None
-    )
-    logger.debug(f"Created LogSelection: {selection}")
-    return selection
-
-def generate_contract_query(signature: str, from_block: int) -> Tuple[Query, StreamConfig]:
-    """Generate a query and stream config to fetch contract addresses"""
-    logger.info(f"Generating contract address query for signature {signature}")
-    topic0 = signature_to_topic0(signature)
-    query = Query(
+        client=client,
+        event_name=stream.name,
+        signature=stream.signature,
+        contract_addr_list=contract_addr_list,
         from_block=from_block,
-        logs=[LogSelection(topics=[[topic0]])],
-        field_selection=FieldSelection(log=[LogField.ADDRESS])
+        items_per_section=items_per_section,
+        column_mapping=stream.column_cast
     )
-    logger.debug(f"Contract query: {query}")
-    return query, generate_contract_stream_config()
 
-def generate_event_query(config: Config, event: Event, client: HypersyncClient,
-                        contract_addr_list: Optional[List[pl.Series]], 
-                        from_block: int, items_per_section: int) -> Tuple[Query, StreamConfig, StreamParams]:
-    """Generate query, stream config and params for event data"""
-    logger.info(f"Generating event data query for blocks {from_block}")
+def generate_contract_query(config: Config, signature: str, client: HypersyncClient) -> Query:
+    """Generate query for contract address discovery"""
+    return Query(
+        from_block=config.blocks.from_block,
+        to_block=config.blocks.to_block,
+        logs=[LogSelection(signature=signature)],
+        blocks=[BlockField.NUMBER, BlockField.TIMESTAMP]
+    )
+
+def pad_address(address: str) -> str:
+    """Pad address to 32 bytes (64 characters)"""
+    if address.startswith('0x'):
+        address = address[2:]  # Remove 0x prefix
+    return '0x' + '0' * 24 + address  # Pad with 24 zeros (12 bytes) to make it 32 bytes total
+
+def generate_event_query(
+    stream: Stream,
+    client: HypersyncClient,
+    from_block: int,
+    items_per_section: int
+) -> Tuple[Query, StreamConfig]:
+    """Generate query for event data"""
+    logger.info(f"Generating event data query for blocks {from_block} onwards")
+
+    # Convert signature to topic0 if not provided in config
+    topic0 = stream.topics[0] if stream.topics else signature_to_topic0(stream.signature)
     
-    # Convert events to LogSelections
-    event_filters = [convert_event_to_hypersync(event)]
-    logger.debug(f"Created event filter for {event.name}")
+    # Build topics list for query
+    topics = []
+    if stream.topics:
+        # First topic is always the event signature
+        topics.append([topic0])
+        
+        # Handle indexed parameters (topics[1:])
+        for topic in stream.topics[1:]:
+            if topic is None:
+                topics.append([])  # Empty list for wildcard match
+            elif isinstance(topic, list):
+                # Pad each address in the list
+                padded_topics = [pad_address(t) for t in topic]
+                topics.append(padded_topics)
+            else:
+                # Pad single address
+                topics.append([pad_address(topic)])
+    else:
+        topics = [[topic0]]  # Default to just the event signature
     
     # Create query
     query = Query(
         from_block=from_block,
+        to_block=stream.to_block,
+        logs=[LogSelection(
+            topics=topics,
+            address=stream.address
+        )],
         field_selection=FieldSelection(
-            log=[e.value for e in LogField],
-            block=[BlockField.NUMBER, BlockField.TIMESTAMP],
-        ),
-        logs=event_filters
+            log=[
+                LogField.ADDRESS,
+                LogField.TOPIC0,
+                LogField.TOPIC1,
+                LogField.TOPIC2,
+                LogField.TOPIC3,
+                LogField.DATA,
+                LogField.BLOCK_NUMBER,
+                LogField.TRANSACTION_INDEX,
+                LogField.LOG_INDEX
+            ],
+            block=[BlockField.NUMBER, BlockField.TIMESTAMP]
+        )
     )
-    logger.info("Successfully generated event data query")
-    logger.debug(f"Event query: {query}")
     
-    return (
-        query,
-        generate_event_stream_config(event),
-        generate_event_stream_params(client, event, contract_addr_list, from_block, items_per_section)
-    )
+    # Log the generated query for debugging
+    logger.info(f"Generated Hypersync query for {stream.name}:")
+    logger.info(f"  From block: {from_block}")
+    logger.info(f"  To block: {stream.to_block}")
+    logger.info(f"  Topics: {topics}")
+    logger.info(f"  Addresses: {stream.address}")
+    
+    stream_config = StreamConfig(hex_output=HexOutput.PREFIXED)
+    
+    return query, stream_config
