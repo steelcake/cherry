@@ -16,17 +16,16 @@ class ParquetWriter(DataWriter):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
-        # Initialize schemas
-        self.events_schema = SchemaConverter.to_polars(EVENTS)
-        self.blocks_schema = SchemaConverter.to_polars(BLOCKS)
-        
         logger.info(f"Initialized ParquetWriter with output directory {output_dir}")
 
     async def write(self, data: Data) -> None:
         """Write data to parquet files"""
         try:
+            # Prepare and validate data using base class method
+            blocks_df, events_dict = self.prepare_data(data)
+            
             if data.events:
-                for event_name, event_df in data.events.items():
+                for event_name, event_df in events_dict.items():
                     # Create events directory structure
                     event_dir = self.output_dir / "events" / event_name.lower()
                     event_dir.mkdir(parents=True, exist_ok=True)
@@ -42,8 +41,8 @@ class ParquetWriter(DataWriter):
                     event_df.write_parquet(output_path)
                     logger.info(f"Wrote {event_df.height} {event_name} events to {output_path}")
 
-            if data.blocks:
-                for event_name, blocks_df in data.blocks.items():
+            if blocks_df is not None:
+                for event_name in events_dict.keys():
                     # Create blocks directory structure
                     blocks_dir = self.output_dir / "blocks" / event_name.lower()
                     blocks_dir.mkdir(parents=True, exist_ok=True)

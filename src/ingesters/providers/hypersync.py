@@ -17,7 +17,7 @@ from src.ingesters.base import DataIngester, Data
 from src.config.parser import Config, Stream, StreamState
 from src.processors.hypersync import EventData
 from src.types.hypersync import StreamParams
-from src.utils.generate_hypersync_query import generate_contract_query, generate_event_query
+from src.utils.generate_hypersync_query import generate_event_query
 from src.writers.base import DataWriter
 import asyncio
 from src.processors.hypersync import ParallelEventProcessor

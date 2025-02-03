@@ -52,9 +52,6 @@ class S3Writer(DataWriter):
             self.client.make_bucket(self.bucket)
             logger.info(f"Created S3 bucket: {self.bucket}")
         
-        self.events_schema = SchemaConverter.to_polars(EVENTS)
-        self.blocks_schema = SchemaConverter.to_polars(BLOCKS)
-        
         # Create temp directory
         self.temp_dir = Path(tempfile.gettempdir()) / "blockchain_s3_temp"
         self.temp_dir.mkdir(parents=True, exist_ok=True)
@@ -62,14 +59,17 @@ class S3Writer(DataWriter):
     async def write(self, data: Data) -> None:
         """Write data to S3"""
         try:
+            # Prepare and validate data using base class method
+            blocks_df, events_dict = self.prepare_data(data)
+            
             tasks = []
             
             # Queue all events and blocks for parallel upload
             if data.events:
-                for event_name, event_df in data.events.items():
+                for event_name, event_df in events_dict.items():
                     tasks.append(self._queue_events(event_name, event_df))
-            if data.blocks:
-                for event_name, blocks_df in data.blocks.items():
+            if blocks_df is not None:
+                for event_name in events_dict.keys():
                     tasks.append(self._queue_blocks(event_name, blocks_df))
             
             # Execute all uploads in parallel

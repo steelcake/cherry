@@ -17,6 +17,8 @@ streams:
       transaction:
         value: "String"
         block_number: "Int64"
+      block:
+        timestamp: "Int64"
     hex_encode:
       transaction: "Prefixed"
       block: null
@@ -50,7 +52,7 @@ streams:
     signature: "Transfer(address indexed from, address indexed to, uint256 amount)"
     from_block: 21653123
     to_block: null
-    batch_size: 1000000
+    batch_size: 2500000
     topics: []
     address: []
     include_blocks: true

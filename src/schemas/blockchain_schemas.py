@@ -3,7 +3,7 @@ import pyarrow as pa
 # Block schema definition
 BLOCKS = pa.schema([
     pa.field("block_number", pa.int64()),
-    pa.field("block_timestamp", pa.int64()),
+    pa.field("block_timestamp", pa.uint64()),
 ])
 
 # Base event schema (common fields)
@@ -20,7 +20,7 @@ BASE_EVENT_FIELDS = [
     pa.field("topic1", pa.string()),
     pa.field("topic2", pa.string()),
     pa.field("topic3", pa.string()),
-    pa.field("block_timestamp", pa.int64())
+    pa.field("block_timestamp", pa.uint64()),
 ]
 
 # Event-specific fields
@@ -37,7 +37,7 @@ APPROVAL_FIELDS = BASE_EVENT_FIELDS + [
 ]
 
 # Create schemas
-EVENTS = pa.schema(BASE_EVENT_FIELDS)  # Keep this for backward compatibility
+EVENTS = pa.schema(BASE_EVENT_FIELDS)
 TRANSFER_EVENTS = pa.schema(TRANSFER_FIELDS)
 APPROVAL_EVENTS = pa.schema(APPROVAL_FIELDS)
 

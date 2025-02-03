@@ -46,10 +46,6 @@ def convert_event_to_hypersync(stream: Stream) -> LogSelection:
         topics=[[topic0]]  # First topic is the event signature
     )
 
-def generate_contract_stream_config() -> StreamConfig:
-    """Generate StreamConfig for contract address queries"""
-    return StreamConfig(hex_output=HexOutput.PREFIXED)
-
 def generate_event_stream_config(stream: Stream) -> StreamConfig:
     """Generate StreamConfig for event data queries"""
     return StreamConfig(
@@ -73,15 +69,6 @@ def generate_event_stream_params(client: HypersyncClient, stream: Stream,
         from_block=from_block,
         items_per_section=items_per_section,
         column_mapping=stream.column_cast
-    )
-
-def generate_contract_query(config: Config, signature: str, client: HypersyncClient) -> Query:
-    """Generate query for contract address discovery"""
-    return Query(
-        from_block=config.blocks.from_block,
-        to_block=config.blocks.to_block,
-        logs=[LogSelection(signature=signature)],
-        blocks=[BlockField.NUMBER, BlockField.TIMESTAMP]
     )
 
 def pad_address(address: str) -> str:
