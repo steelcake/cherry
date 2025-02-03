@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Dict, AsyncGenerator
 import logging
 from src.types.data import Data
-from src.loaders.base import DataLoader
+from src.writers.base import DataWriter
 from src.utils.logging_setup import setup_logging
 
 # Set up logging
@@ -17,8 +17,8 @@ class DataIngester(ABC):
         pass 
 
     @abstractmethod
-    async def initialize_loaders(self, loaders: Dict[str, DataLoader]) -> None:
-        """Initialize data loaders"""
+    async def initialize_writers(self, writers: Dict[str, DataWriter]) -> None:
+        """Initialize data writers"""
         pass
 
     @property

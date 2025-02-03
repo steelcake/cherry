@@ -2,15 +2,15 @@ import logging
 from pathlib import Path
 from datetime import datetime
 import polars as pl
-from src.loaders.base import DataLoader
+from src.writers.base import DataWriter
 from src.types.data import Data
 from src.schemas.blockchain_schemas import EVENTS, BLOCKS
 from src.utils.schema_converter import SchemaConverter
 
 logger = logging.getLogger(__name__)
 
-class ParquetLoader(DataLoader):
-    """Loader for writing data to local parquet files"""
+class ParquetWriter(DataWriter):
+    """Writer for writing data to local parquet files"""
     def __init__(self, output_dir: str):
         super().__init__()
         self.output_dir = Path(output_dir)
@@ -20,10 +20,10 @@ class ParquetLoader(DataLoader):
         self.events_schema = SchemaConverter.to_polars(EVENTS)
         self.blocks_schema = SchemaConverter.to_polars(BLOCKS)
         
-        logger.info(f"Initialized ParquetLoader with output directory {output_dir}")
+        logger.info(f"Initialized ParquetWriter with output directory {output_dir}")
 
-    async def load(self, data: Data) -> None:
-        """Load data to parquet files"""
+    async def write(self, data: Data) -> None:
+        """Write data to parquet files"""
         try:
             if data.events:
                 for event_name, event_df in data.events.items():

@@ -5,7 +5,7 @@ from datetime import datetime
 import polars as pl
 from minio import Minio
 from minio.error import S3Error
-from src.loaders.base import DataLoader
+from src.writers.base import DataWriter
 from src.types.data import Data
 from src.schemas.blockchain_schemas import BLOCKS, EVENTS
 from src.schemas.base import SchemaConverter
@@ -19,8 +19,8 @@ import aioboto3
 
 logger = logging.getLogger(__name__)
 
-class S3Loader(DataLoader):
-    """Loader for writing data to S3"""
+class S3Writer(DataWriter):
+    """Writer for writing data to S3"""
     def __init__(self, endpoint: str, bucket: str, access_key: Optional[str] = None, 
                  secret_key: Optional[str] = None, region: Optional[str] = None,
                  secure: bool = True):
@@ -36,7 +36,7 @@ class S3Loader(DataLoader):
         self.region = region
         self.secure = secure
         self.session = aioboto3.Session()
-        logger.info(f"Initialized S3Loader with endpoint {endpoint}, bucket {bucket}")
+        logger.info(f"Initialized S3Writer with endpoint {endpoint}, bucket {bucket}")
         
         # Initialize S3 client
         self.client = Minio(
@@ -59,8 +59,8 @@ class S3Loader(DataLoader):
         self.temp_dir = Path(tempfile.gettempdir()) / "blockchain_s3_temp"
         self.temp_dir.mkdir(parents=True, exist_ok=True)
 
-    async def load(self, data: Data) -> None:
-        """Load data to S3"""
+    async def write(self, data: Data) -> None:
+        """Write data to S3"""
         try:
             tasks = []
             

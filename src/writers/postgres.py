@@ -5,14 +5,14 @@ import psycopg2
 from src.schemas.blockchain_schemas import BLOCKS, TRANSACTIONS, EVENTS
 from src.schemas.base import SchemaConverter
 from src.ingesters.base import Data
-from src.loaders.base import DataLoader
+from src.writers.base import DataWriter
 import polars as pl
 from typing import Tuple, Optional, Dict
 import asyncio
 
 logger = logging.getLogger(__name__)
 
-class PostgresLoader(DataLoader):
+class PostgresWriter(DataWriter):
     def __init__(self, engine: Engine):
         self.engine = engine
         # Extract connection parameters from SQLAlchemy engine
@@ -129,8 +129,8 @@ class PostgresLoader(DataLoader):
             logger.error(f"Error occurred at line {e.__traceback__.tb_lineno}")
             raise
 
-    async def load(self, data: Data) -> None:
-        """Load data into PostgreSQL database"""
+    async def write(self, data: Data) -> None:
+        """Write data into PostgreSQL database"""
         try:
             logger.info("Writing data to PostgreSQL")
             # Create connection using extracted parameters

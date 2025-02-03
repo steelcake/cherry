@@ -5,11 +5,11 @@ from sqlalchemy import create_engine
 from src.config.parser import parse_config, Config
 from src.utils.logging_setup import setup_logging
 from src.ingesters.factory import Ingester
-from src.loaders.loader import Loader
-from src.loaders.postgres import PostgresLoader
-from src.loaders.parquet import ParquetLoader
-from src.loaders.s3 import S3Loader
-from src.loaders.base import DataLoader
+from src.writers.writer import Writer
+from src.writers.postgres import PostgresWriter
+from src.writers.parquet import ParquetWriter
+from src.writers.s3 import S3Writer
+from src.writers.base import DataWriter
 from typing import Dict
 import sys
 
@@ -17,14 +17,14 @@ import sys
 setup_logging()
 logger = logging.getLogger(__name__)
 
-def initialize_loaders(config: Config) -> Dict[str, DataLoader]:
-    """Initialize data loaders based on config"""
-    loaders = {}
+def initialize_writers(config: Config) -> Dict[str, DataWriter]:
+    """Initialize data writers based on config"""
+    writers = {}
     
     for output in config.output:
         if output.kind.lower() == 's3':
-            logger.info("Initializing S3 loader")
-            loaders['s3'] = S3Loader(
+            logger.info("Initializing S3 writer")
+            writers['s3'] = S3Writer(
                 endpoint=output.endpoint,
                 bucket=output.bucket,
                 access_key=output.access_key,
@@ -32,23 +32,23 @@ def initialize_loaders(config: Config) -> Dict[str, DataLoader]:
                 region=output.region,
                 secure=output.secure
             )
-            logger.info(f"Initialized S3Loader with endpoint {output.endpoint}, bucket {output.bucket}")
+            logger.info(f"Initialized S3Writer with endpoint {output.endpoint}, bucket {output.bucket}")
 
         elif output.kind.lower() == 'local_parquet':
-            logger.info("Initializing Local Parquet loader")
-            loaders['local_parquet'] = ParquetLoader(
+            logger.info("Initializing Local Parquet writer")
+            writers['local_parquet'] = ParquetWriter(
                 output_dir=output.path
             )
-            logger.info(f"Initialized ParquetLoader with output directory {output.path}")
+            logger.info(f"Initialized ParquetWriter with output directory {output.path}")
 
-    if not loaders:
-        raise ValueError("No loaders configured")
+    if not writers:
+        raise ValueError("No writers configured")
 
-    logger.info(f"Initialized {len(loaders)} loaders: {', '.join(loaders.keys())}")
-    return loaders
+    logger.info(f"Initialized {len(writers)} writers: {', '.join(writers.keys())}")
+    return writers
 
-async def process_data(ingester: Ingester, loader: Loader):
-    """Process blockchain data from ingester and write to loader"""
+async def process_data(ingester: Ingester, writer: Writer):
+    """Process blockchain data from ingester and write to writer"""
     try:
         async for data in ingester:
             if data is None:
@@ -66,7 +66,7 @@ async def process_data(ingester: Ingester, loader: Loader):
             logger.info(f"Processing data from block {latest_block}")
 
             # Write data to all targets
-            await loader.load(data)
+            await writer.write(data)
 
     except StopAsyncIteration:
         logger.info("All data streams completed")
@@ -87,10 +87,10 @@ async def main():
 
         # Initialize components
         ingester = Ingester(config)
-        loader = Loader(initialize_loaders(config))
+        writer = Writer(initialize_writers(config))
 
         # Process data
-        await process_data(ingester, loader)
+        await process_data(ingester, writer)
 
         logger.info("Blockchain data ingestion completed successfully")
 

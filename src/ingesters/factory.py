@@ -4,7 +4,7 @@ from src.config.parser import Config, Stream
 from src.ingesters.base import DataIngester
 from src.ingesters.providers.hypersync import HypersyncIngester
 from src.types.data import Data
-from src.loaders.base import DataLoader
+from src.writers.base import DataWriter
 import asyncio
 from src.processors.hypersync import ParallelEventProcessor
 
@@ -40,9 +40,9 @@ class Ingester(DataIngester):
             self._stream_states[stream.name] = value
             self._ingester.current_block = value
 
-    async def initialize_loaders(self, loaders: Dict[str, DataLoader]):
-        """Initialize data loaders"""
-        await self._ingester.initialize_loaders(loaders)
+    async def initialize_writers(self, writers: Dict[str, DataWriter]):
+        """Initialize data writers"""
+        await self._ingester.initialize_writers(writers)
 
     async def get_data(self, from_block: int) -> AsyncGenerator[Data, None]:
         """Get data from the underlying ingester"""

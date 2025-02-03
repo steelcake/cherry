@@ -18,7 +18,7 @@ from src.config.parser import Config, Stream, StreamState
 from src.processors.hypersync import EventData
 from src.types.hypersync import StreamParams
 from src.utils.generate_hypersync_query import generate_contract_query, generate_event_query
-from src.loaders.base import DataLoader
+from src.writers.base import DataWriter
 import asyncio
 from src.processors.hypersync import ParallelEventProcessor
 
@@ -141,7 +141,7 @@ class HypersyncIngester(DataIngester):
         ))
         self._event_processors = {}
         self._completed_events = set()
-        self._loaders = None
+        self._writers = None
         self._stream_states = {}  # Track block state per stream
         logger.info("Initialized HypersyncIngester")
 
@@ -176,15 +176,15 @@ class HypersyncIngester(DataIngester):
         """Set current block for a stream"""
         self._stream_states[stream_name] = block
 
-    async def initialize_loaders(self, loaders: Dict[str, DataLoader]):
-        """Initialize data loaders"""
-        self._loaders = loaders
-        logger.info(f"Initialized {len(loaders)} data loaders: {', '.join(loaders.keys())}")
+    async def initialize_writers(self, writers: Dict[str, DataWriter]):
+        """Initialize data writers"""
+        self._writers = writers
+        logger.info(f"Initialized {len(writers)} data writers: {', '.join(writers.keys())}")
 
     async def _write_to_targets(self, data: Data) -> None:
         """Write data to configured targets in parallel"""
-        if not self._loaders:
-            logger.error("No loaders initialized")
+        if not self._writers:
+            logger.error("No writers initialized")
             return
 
         if not data.events or not any(df.height > 0 for df in data.events.values()):
@@ -192,26 +192,26 @@ class HypersyncIngester(DataIngester):
             return
 
         try:
-            # Create separate copies for each loader
-            loader_data = {}
-            for loader_type in self._loaders.keys():
-                loader_data[loader_type] = Data(
+            # Create separate copies for each writer
+            writer_data = {}
+            for writer_type in self._writers.keys():
+                writer_data[writer_type] = Data(
                     events={name: df.clone() for name, df in data.events.items()} if data.events else None,
                     blocks={name: df.clone() for name, df in data.blocks.items()} if data.blocks else None,
                     transactions=data.transactions
                 )
 
-            # Create tasks for all loaders to write in parallel
+            # Create tasks for all writers to write in parallel
             write_tasks = {
-                loader_type: asyncio.create_task(
-                    loader.write_data(loader_data[loader_type]),
-                    name=f"write_{loader_type}"
+                writer_type: asyncio.create_task(
+                    writer.write_data(writer_data[writer_type]),
+                    name=f"write_{writer_type}"
                 )
-                for loader_type, loader in self._loaders.items()
+                for writer_type, writer in self._writers.items()
             }
             
             if write_tasks:
-                logger.info(f"Writing in parallel to {len(write_tasks)} targets ({', '.join(self._loaders.keys())})")
+                logger.info(f"Writing in parallel to {len(write_tasks)} targets ({', '.join(self._writers.keys())})")
                 
                 # Wait for all writes to complete concurrently
                 results = await asyncio.gather(
@@ -220,9 +220,9 @@ class HypersyncIngester(DataIngester):
                 )
                 
                 # Check for any errors
-                for loader_type, result in zip(write_tasks.keys(), results):
+                for writer_type, result in zip(write_tasks.keys(), results):
                     if isinstance(result, Exception):
-                        logger.error(f"Error in {loader_type} writer: {result}")
+                        logger.error(f"Error in {writer_type} writer: {result}")
                         raise result
 
         except Exception as e:
