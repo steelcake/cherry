@@ -52,7 +52,7 @@ streams:
     signature: "Transfer(address indexed from, address indexed to, uint256 amount)"
     from_block: 21653123
     to_block: null
-    batch_size: 2500000
+    batch_size: 2000000
     topics: []
     address: []
     include_blocks: true
@@ -80,6 +80,14 @@ output:
     path: "data"
     compression: "snappy"
     batch_size: 500000
+
+  - kind: clickhouse
+    host: localhost
+    port: 8123
+    database: blockchain
+    username: default
+    password: clickhouse
+    secure: false
 
 # Contracts configuration
 contracts:

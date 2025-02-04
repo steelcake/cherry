@@ -7,6 +7,7 @@ from src.utils.logging_setup import setup_logging
 import hypersync
 import os
 from hypersync import DataType
+from dataclasses import dataclass
 
 # Set up logging
 setup_logging()
@@ -97,18 +98,27 @@ class DataSource(BaseModel):
     url: str
     token: str
 
-class Output(BaseModel):
-    """Output configuration"""
+@dataclass
+class Output:
     kind: str
-    path: Optional[str] = None
+    # S3 fields
     endpoint: Optional[str] = None
+    bucket: Optional[str] = None
     access_key: Optional[str] = None
     secret_key: Optional[str] = None
-    bucket: Optional[str] = None
-    secure: Optional[bool] = False
     region: Optional[str] = None
-    compression: Optional[str] = None
+    secure: Optional[bool] = None
+    # Parquet fields
+    path: Optional[str] = None
+    # Common fields
     batch_size: Optional[int] = None
+    compression: Optional[str] = None
+    # ClickHouse fields
+    host: Optional[str] = None
+    port: Optional[int] = None
+    database: Optional[str] = None
+    username: Optional[str] = None
+    password: Optional[str] = None
 
 class ProcessingConfig(BaseModel):
     """Processing configuration"""
@@ -126,17 +136,14 @@ class ContractConfig(BaseModel):
     """Contract configuration"""
     identifier_signatures: List[ContractIdentifier] = []
 
-class Config(BaseModel):
-    """Main configuration"""
+@dataclass
+class Config:
     project_name: str
     description: str
     data_source: List[DataSource]
     streams: List[Stream]
     output: List[Output]
-    processing: Optional[ProcessingConfig] = ProcessingConfig()
-    contracts: Optional[Dict[str, Any]] = None
-    blocks: Optional[BlockRange] = None
-    transform: Optional[List[Dict]] = None
+    contracts: Optional[dict] = None
 
 def parse_config(config_path: str) -> Config:
     """Parse configuration from YAML file"""
@@ -150,5 +157,15 @@ def parse_config(config_path: str) -> Config:
         # Convert blocks.range to blocks if needed
         if 'blocks' in raw_config and 'range' in raw_config['blocks']:
             raw_config['blocks'] = raw_config['blocks']['range']
+        
+        # Convert raw dicts to proper objects
+        if 'data_source' in raw_config:
+            raw_config['data_source'] = [DataSource(**ds) for ds in raw_config['data_source']]
+        
+        if 'streams' in raw_config:
+            raw_config['streams'] = [Stream(**s) for s in raw_config['streams']]
+        
+        if 'output' in raw_config:
+            raw_config['output'] = [Output(**o) for o in raw_config['output']]
     
     return Config(**raw_config)

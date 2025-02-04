@@ -18,31 +18,29 @@ setup_logging()
 logger = logging.getLogger(__name__)
 
 def initialize_writers(config: Config) -> Dict[str, DataWriter]:
-    """Initialize data writers based on config"""
+    """Initialize configured writers"""
     writers = {}
     
-    for output in config.output:
-        if output.kind.lower() == 's3':
-            logger.info("Initializing S3 writer")
-            writers['s3'] = S3Writer(
-                endpoint=output.endpoint,
-                bucket=output.bucket,
-                access_key=output.access_key,
-                secret_key=output.secret_key,
-                region=output.region,
-                secure=output.secure
-            )
-            logger.info(f"Initialized S3Writer with endpoint {output.endpoint}, bucket {output.bucket}")
+    # Initialize S3 writer if configured
+    s3_config = next((w for w in config.output if w.kind == 's3'), None)
+    if s3_config:
+        logger.info("Initializing S3 writer")
+        writers['s3'] = Writer.create_writer('s3', s3_config)
+        logger.info(f"Initialized S3Writer with endpoint {s3_config.endpoint}, bucket {s3_config.bucket}")
+    
+    # Initialize Parquet writer if configured
+    parquet_config = next((w for w in config.output if w.kind == 'local_parquet'), None)
+    if parquet_config:
+        logger.info("Initializing Local Parquet writer")
+        writers['local_parquet'] = Writer.create_writer('local_parquet', parquet_config)
+        logger.info(f"Initialized ParquetWriter with output directory {parquet_config.path}")
 
-        elif output.kind.lower() == 'local_parquet':
-            logger.info("Initializing Local Parquet writer")
-            writers['local_parquet'] = ParquetWriter(
-                output_dir=output.path
-            )
-            logger.info(f"Initialized ParquetWriter with output directory {output.path}")
-
-    if not writers:
-        raise ValueError("No writers configured")
+    # Initialize ClickHouse writer if configured
+    clickhouse_config = next((w for w in config.output if w.kind == 'clickhouse'), None)
+    if clickhouse_config:
+        logger.info("Initializing ClickHouse writer")
+        writers['clickhouse'] = Writer.create_writer('clickhouse', clickhouse_config)
+        logger.info(f"Initialized ClickHouseWriter with host {clickhouse_config.host}:{clickhouse_config.port}")
 
     logger.info(f"Initialized {len(writers)} writers: {', '.join(writers.keys())}")
     return writers
