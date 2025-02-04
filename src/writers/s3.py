@@ -1,19 +1,11 @@
 import logging
 import asyncio
-from pathlib import Path
 from datetime import datetime
 import polars as pl
 from minio import Minio
-from minio.error import S3Error
 from src.writers.base import DataWriter
 from src.types.data import Data
-from src.schemas.blockchain_schemas import BLOCKS, EVENTS
-from src.schemas.base import SchemaConverter
-import tempfile
-import os
 from typing import Optional
-import pyarrow as pa
-import pyarrow.parquet as pq
 import io
 import aioboto3
 
@@ -51,10 +43,6 @@ class S3Writer(DataWriter):
         if not self.client.bucket_exists(self.bucket):
             self.client.make_bucket(self.bucket)
             logger.info(f"Created S3 bucket: {self.bucket}")
-        
-        # Create temp directory
-        self.temp_dir = Path(tempfile.gettempdir()) / "blockchain_s3_temp"
-        self.temp_dir.mkdir(parents=True, exist_ok=True)
 
     async def write(self, data: Data) -> None:
         """Write data to S3"""
@@ -74,7 +62,14 @@ class S3Writer(DataWriter):
             
             # Execute all uploads in parallel
             if tasks:
-                await asyncio.gather(*tasks)
+                logger.info(f"Starting parallel upload of {len(tasks)} files to S3")
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+                
+                # Check for any errors
+                for i, result in enumerate(results):
+                    if isinstance(result, Exception):
+                        logger.error(f"Error in S3 upload task {i}: {result}")
+                        raise result
                 
         except Exception as e:
             logger.error(f"Error writing to S3: {e}")
@@ -89,24 +84,6 @@ class S3Writer(DataWriter):
             min_block = event_df['block_number'].min()
             max_block = event_df['block_number'].max()
             key = f"events/{event_name.lower()}/{timestamp}_{min_block}_{max_block}.parquet"
-            
-            # Convert to Arrow table with schema
-            required_columns = [
-                "log_index", "transaction_index", "transaction_hash", 
-                "block_number", "address", "data", "topic0", "topic1", 
-                "topic2", "topic3"
-            ]
-            
-            # Ensure all required columns exist
-            for col in required_columns:
-                if col not in event_df.columns:
-                    event_df = event_df.with_columns(pl.lit(None).alias(col))
-            
-            # Select and order columns
-            event_df = event_df.select(required_columns + [
-                col for col in event_df.columns 
-                if col not in required_columns
-            ])
             
             # Write to buffer
             buffer = io.BytesIO()
@@ -139,20 +116,6 @@ class S3Writer(DataWriter):
             max_block = blocks_df['block_number'].max()
             key = f"blocks/{event_name.lower()}/{timestamp}_{min_block}_{max_block}.parquet"
             
-            # Convert to Arrow table with schema
-            required_columns = ["block_number", "block_timestamp"]
-            
-            # Ensure all required columns exist
-            for col in required_columns:
-                if col not in blocks_df.columns:
-                    blocks_df = blocks_df.with_columns(pl.lit(None).alias(col))
-            
-            # Select and order columns
-            blocks_df = blocks_df.select(required_columns + [
-                col for col in blocks_df.columns 
-                if col not in required_columns
-            ])
-            
             # Write to buffer
             buffer = io.BytesIO()
             blocks_df.write_parquet(buffer)
@@ -173,42 +136,4 @@ class S3Writer(DataWriter):
             
         except Exception as e:
             logger.error(f"Error queueing {event_name} blocks to S3: {e}")
-            raise
-
-    async def _write_dataframe_to_s3(self, df: pl.DataFrame, object_name: str, description: str) -> None:
-        """Write a DataFrame to S3 as parquet file"""
-        temp_file = self.temp_dir / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{object_name.replace('/', '_')}"
-        try:
-            # Write DataFrame to temporary file
-            df.write_parquet(temp_file)
-            
-            # Upload to S3
-            self.client.fput_object(
-                bucket_name=self.bucket,
-                object_name=object_name,
-                file_path=str(temp_file)
-            )
-            
-        except Exception as e:
-            logger.error(f"Error uploading {description} to S3: {e}")
-            raise
-        finally:
-            # Clean up temp file
-            try:
-                if temp_file.exists():
-                    temp_file.unlink()
-            except Exception as e:
-                logger.warning(f"Failed to delete temporary file {temp_file}: {e}")
-
-    def __del__(self):
-        """Cleanup temp directory on object destruction"""
-        try:
-            if hasattr(self, 'temp_dir') and self.temp_dir.exists():
-                for file in self.temp_dir.glob('*'):
-                    try:
-                        file.unlink()
-                    except Exception as e:
-                        logger.warning(f"Failed to delete temp file {file}: {e}")
-                self.temp_dir.rmdir()
-        except Exception as e:
-            logger.warning(f"Error cleaning up temp directory: {e}") 
+            raise 

@@ -1,11 +1,8 @@
 import logging
 from pathlib import Path
 from datetime import datetime
-import polars as pl
 from src.writers.base import DataWriter
 from src.types.data import Data
-from src.schemas.blockchain_schemas import EVENTS, BLOCKS
-from src.utils.schema_converter import SchemaConverter
 
 logger = logging.getLogger(__name__)
 

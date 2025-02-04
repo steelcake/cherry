@@ -1,10 +1,10 @@
-from sqlalchemy import Engine, create_engine, text
+from sqlalchemy import Engine, text
 import logging
 import pyarrow as pa
 import psycopg2
 from src.schemas.blockchain_schemas import BLOCKS, TRANSACTIONS, EVENTS
 from src.schemas.base import SchemaConverter
-from src.ingesters.base import Data
+from src.types.data import Data
 from src.writers.base import DataWriter
 import polars as pl
 from typing import Tuple, Optional, Dict

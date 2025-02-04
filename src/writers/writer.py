@@ -1,6 +1,6 @@
 import asyncio, logging
 from typing import Dict
-from src.ingesters.base import Data
+from src.types.data import Data
 from src.writers.base import DataWriter
 
 
@@ -47,9 +47,12 @@ class Writer:
             }
             
             if write_tasks:
-                logger.info(f"Writing batch to {len(write_tasks)} targets")
+                logger.info(f"Writing in parallel to {len(write_tasks)} targets ({', '.join(self._writers.keys())})")
+                
+                # Wait for all writes to complete concurrently
                 results = await asyncio.gather(*write_tasks.values(), return_exceptions=True)
                 
+                # Check for any errors
                 for writer_type, result in zip(write_tasks.keys(), results):
                     if isinstance(result, Exception):
                         logger.error(f"Error in {writer_type} writer: {result}")
