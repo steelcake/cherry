@@ -1,98 +1,73 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 import polars as pl
 import logging
 from src.types.data import Data
 from src.schemas.blockchain_schemas import BLOCKS, EVENTS
 from src.schemas.base import SchemaConverter
+import pyarrow as pa
+from src.config.parser import Output
+import numpy as np
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
 class DataWriter(ABC):
     """Base class for data writers"""
-    
 
-    def __init__(self):
-        self.events_schema = SchemaConverter.to_polars(EVENTS)
-        self.blocks_schema = SchemaConverter.to_polars(BLOCKS)
-    
-    def prepare_data(self, data: Data) -> tuple[Optional[pl.DataFrame], Dict[str, pl.DataFrame]]:
-        """Prepare and validate data for writing"""
-        try:
-            # Prepare blocks data
-            blocks_df = None
-            if data.blocks and isinstance(data.blocks, dict):
-                all_blocks = []
-                for event_name, blocks_df in data.blocks.items():
-                    if blocks_df.height > 0:
-                        logger.debug(f"Processing {blocks_df.height} blocks from {event_name}")
-                        
-                        # Convert hex timestamp to integer before schema validation
-                        if "block_timestamp" in blocks_df.columns:
-                            blocks_df = blocks_df.with_columns([
-                                pl.col("block_timestamp")
-                                .str.replace_all("0x", "")
-                                .map_elements(lambda x: int(x, 16), return_dtype=pl.UInt64)  # Convert hex to int
-                                .cast(pl.UInt64)  # Cast to uint64
-                                .alias("block_timestamp")
-                            ])
-                            
-                        # Apply schema validation and casting
-                        blocks_df = blocks_df.cast(self.blocks_schema)
-                        all_blocks.append(blocks_df)
-                
-                if all_blocks:
-                    blocks_df = pl.concat(all_blocks).unique(subset=["block_number"]).sort("block_number")
-                    logger.info(f"Prepared {blocks_df.height} unique blocks")
-                    logger.debug(f"Block range: {blocks_df['block_number'].min()} to {blocks_df['block_number'].max()}")
+    @staticmethod
+    def combine_blocks(data: Dict[str, pa.RecordBatch]) -> Optional[pa.Table]:
+        """Combine and deduplicate block tables"""
+        blocks_tables = [name for name in data if name.startswith('blocks_')]
+        if not blocks_tables:
+            return None
+        
+        # Combine all blocks into one table
+        blocks_data = pa.concat_tables([
+            pa.Table.from_batches([data[name]]) 
+            for name in blocks_tables
+        ])
+        
+        # Convert to pandas for easier manipulation
+        blocks_df = blocks_data.to_pandas()
+        
+        # Get block range from events
+        event_tables = [name for name in data if name.endswith('_events')]
+        if event_tables:
+            # Find min/max blocks across all event tables
+            event_blocks = pd.concat([
+                data[table].to_pandas()['block_number'] 
+                for table in event_tables
+            ])
+            min_block = event_blocks.min()
+            max_block = event_blocks.max()
+            
+            # Filter blocks to event range
+            blocks_df = blocks_df[
+                (blocks_df['block_number'] >= min_block) & 
+                (blocks_df['block_number'] <= max_block)
+            ]
+            logger.info(f"Filtered blocks to event range {min_block} to {max_block}")
+        
+        # Sort and deduplicate
+        blocks_df = (blocks_df
+                    .sort_values('block_number')
+                    .drop_duplicates(subset=['block_number'], keep='last'))
+        
+        logger.info(f"Combined {len(blocks_df)} unique blocks from "
+                   f"{blocks_df['block_number'].min()} to {blocks_df['block_number'].max()}")
+        
+        return pa.Table.from_pandas(blocks_df)
 
-            # Prepare events data
-            events_dict = {}
-            if data.events:
-                for event_name, event_df in data.events.items():
-                    if event_df.height > 0:
-                        logger.debug(f"Processing {event_df.height} events from {event_name}")
-                        
-                        # Convert hex timestamp to integer before schema validation
-                        if "block_timestamp" in event_df.columns:
-                            event_df = event_df.with_columns([
-                                pl.col("block_timestamp")
-                                .str.replace_all("0x", "")
-                                .map_elements(lambda x: int(x, 16), return_dtype=pl.UInt64)  # Convert hex to int
-                                .cast(pl.UInt64)  # Cast to uint64
-                                .alias("block_timestamp")
-                            ])
-                        
-                        # Add missing columns with default values
-                        required_columns = {
-                            "removed": False,
-                            "transaction_hash": "",
-                            "block_hash": "",
-                            "topic0": "",
-                            "topic1": "",
-                            "topic2": "",
-                            "topic3": "",
-                            "data": ""
-                        }
-                        
-                        for col, default_value in required_columns.items():
-                            if col not in event_df.columns:
-                                event_df = event_df.with_columns(pl.lit(default_value).alias(col))
-                        
-                        # Apply schema validation and casting
-                        event_df = event_df.cast(self.events_schema)
-                        events_dict[event_name] = event_df.sort("block_number")
-                        logger.debug(f"Event block range: {event_df['block_number'].min()} to {event_df['block_number'].max()}")
-
-
-            return blocks_df, events_dict
-
-        except Exception as e:
-            logger.error(f"Error preparing data: {e}")
-            logger.error(f"Error occurred at line {e.__traceback__.tb_lineno}")
-            raise
+    @staticmethod
+    def log_event_stats(data: Dict[str, pa.RecordBatch]) -> None:
+        """Log statistics for event tables"""
+        for table_name in [t for t in data if t.endswith('_events')]:
+            df = data[table_name].to_pandas()
+            logger.info(f"{table_name}: {len(df)} events, blocks "
+                       f"{df['block_number'].min()} to {df['block_number'].max()}")
 
     @abstractmethod
-    async def write(self, data: Data) -> None:
-        """Write data to target"""
-        pass 
+    async def push_data(self, data: Dict[str, pa.RecordBatch]) -> None:
+        """Push data to target storage"""
+        pass

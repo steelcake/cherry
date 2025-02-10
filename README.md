@@ -124,7 +124,7 @@ Note: The MinIO service will be automatically configured with the correct ports 
 python main.py
 ```
 
-## Data Output Locations
+## Output Formats
 
 ### Local Parquet Files
 ```
@@ -138,15 +138,10 @@ data/
 │       ├── YYYYMMDD_HHMMSS_startblock_endblock.parquet
 │       ├── ...
 │       └── YYYYMMDD_HHMMSS_startblock_endblock.parquet
-├── blocks/
-│   ├── approval/
-│   │   ├── YYYYMMDD_HHMMSS_startblock_endblock.parquet
-│   │   ├── ...
-│   │   └── YYYYMMDD_HHMMSS_startblock_endblock.parquet
-│   └── transfer/
-│       ├── YYYYMMDD_HHMMSS_startblock_endblock.parquet
-│       ├── ...
-│       └── YYYYMMDD_HHMMSS_startblock_endblock.parquet
+└── blocks/
+    ├── YYYYMMDD_HHMMSS_startblock_endblock.parquet
+    ├── ...
+    └── YYYYMMDD_HHMMSS_startblock_endblock.parquet
 ```
 
 ### S3/MinIO Storage
@@ -161,21 +156,25 @@ blockchain-data/
 │       ├── YYYYMMDD_HHMMSS_startblock_endblock.parquet
 │       ├── ...
 │       └── YYYYMMDD_HHMMSS_startblock_endblock.parquet
-├── blocks/
-│   ├── approval/
-│   │   ├── YYYYMMDD_HHMMSS_startblock_endblock.parquet
-│   │   ├── ...
-│   │   └── YYYYMMDD_HHMMSS_startblock_endblock.parquet
-│   └── transfer/
-│       ├── YYYYMMDD_HHMMSS_startblock_endblock.parquet
-│       ├── ...
-│       └── YYYYMMDD_HHMMSS_startblock_endblock.parquet
+└── blocks/
+    ├── YYYYMMDD_HHMMSS_startblock_endblock.parquet  # Combined and deduplicated blocks
+    ├── ...
+    └── YYYYMMDD_HHMMSS_startblock_endblock.parquet
 ```
 
+The file naming format is:
+- YYYYMMDD: Date (e.g., 20250207)
+- HHMMSS: Time (e.g., 003355)
+- startblock: First block number in the file
+- endblock: Last block number in the file
 
-Access via:
-- MinIO Console: http://localhost:9001
-- S3 Endpoint: http://localhost:9000
+For example: `20250207_003355_21653123_21671109.parquet`
+
+Notes:
+- Events are organized by event type (approval, transfer)
+- Blocks are combined and deduplicated from all event sources
+- Each file contains data for a specific block range
+- Files are not compressed to maintain compatibility
 
 ## Monitoring
 
@@ -189,7 +188,9 @@ Access via:
 
 3. View processed data:
    - Local: Check `data/` directory
-   - S3: Access MinIO console at http://localhost:9001
+   - S3/MinIO:
+     - Console UI: http://localhost:9001
+     - S3 Endpoint: http://localhost:9000
    - Data is organized by event type and timestamp
    - Each file contains events from a specific block range
 

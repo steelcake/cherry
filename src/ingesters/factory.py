@@ -141,9 +141,11 @@ class Ingester(DataIngester):
                 if batch and (batch.events or batch.blocks):
                     # Update stream's block state
                     if batch.events and stream.name in batch.events:
+                        min_block = batch.events[stream.name]['block_number'].min()
                         max_block = batch.events[stream.name]['block_number'].max()
                         self._stream_states[stream.name] = max_block + 1
-                        logger.info(f"Stream {stream.name} processed batch with {len(batch.events[stream.name])} events")
+                        logger.info(f"Stream {stream.name} processed batch with {len(batch.events[stream.name])} events "
+                                  f"(blocks {min_block} to {max_block})")
                     
                     # Check if we've reached the stream's to_block
                     if stream.to_block and current_block >= stream.to_block:

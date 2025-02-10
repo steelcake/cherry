@@ -1,0 +1,145 @@
+{
+  "items_per_section": 1000000,
+  "chain_id": 1,
+  "parquet_output_path": "data",
+  "from_block": 21123123,
+  "to_block": 21123923,
+  "events": [
+    {
+      "name": "Burn (DEX v2)",
+      "signature": "Burn(address indexed sender, uint256 amount0, uint256 amount1, address indexed to)",
+      "column_mapping": {
+        "amount1": "float64",
+        "amount0": "float64"
+      }
+    },
+    {
+      "name": "ReserveInitialized (Lending Aave)",
+      "signature": "ReserveInitialized(address indexed asset, address indexed aToken, address stableDebtToken, address variableDebtToken, address interestRateStrategyAddress)",
+      "column_mapping": {}
+    },
+    {
+      "name": "Transfer (ERC20) (generic)",
+      "signature": "Transfer(address indexed from, address indexed to, uint256 value)",
+      "column_mapping": {
+        "value": "float64"
+      }
+    },
+    {
+      "name": "Transfer (ERC721) (generic)",
+      "signature": "Transfer(address indexed from, address indexed to, uint256 indexed tokenId)",
+      "column_mapping": {
+        "tokenId": "float64"
+      }
+    },
+    {
+      "name": "ReserveFactorChanged (Lending Aave)",
+      "signature": "ReserveFactorChanged(address indexed asset, uint256 oldReserveFactor, uint256 newReserveFactor)",
+      "column_mapping": {
+        "oldReserveFactor": "float64",
+        "newReserveFactor": "float64"
+      }
+    },
+    {
+      "name": "ReserveDataUpdated (Lending Aave)",
+      "signature": "ReserveDataUpdated(address indexed reserve, uint256 liquidityRate, uint256 stableBorrowRate, uint256 variableBorrowRate, uint256 liquidityIndex, uint256 variableBorrowIndex)",
+      "column_mapping": {
+        "stableBorrowRate": "float64",
+        "variableBorrowRate": "float64",
+        "liquidityRate": "float64"
+      }
+    },
+    {
+      "name": "ReserveFactorChanged (Lending Aave)",
+      "signature": "ReserveFactorChanged(address indexed asset, uint256 oldReserveFactor, uint256 newReserveFactor)",
+      "column_mapping": {
+        "oldReserveFactor": "float64",
+        "newReserveFactor": "float64"
+      }
+    },
+    {
+      "name": "DecreaseLiquidity (DEX V3)",
+      "signature": "DecreaseLiquidity(uint256 indexed tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)",
+      "column_mapping": {
+        "amount1": "float64",
+        "amount0": "float64"
+      }
+    },
+    {
+      "name": "IncreaseLiquidity (DEX V3)",
+      "signature": "IncreaseLiquidity(uint256 indexed tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)",
+      "column_mapping": {
+        "amount1": "float64",
+        "amount0": "float64"
+      }
+    },
+    {
+      "name": "Mint (DEX v3)",
+      "signature": "Mint(address owner, int24 tickLower, int24 tickUpper, uint128 amount, uint256 amount0, uint256 amount1)",
+      "column_mapping": {
+        "amount1": "float64",
+        "amount0": "float64"
+      }
+    },
+    {
+      "name": "Burn (DEX v3)",
+      "signature": "Burn(address owner, int24 tickLower, int24 tickUpper, uint128 amount, uint256 amount0, uint256 amount1)",
+      "column_mapping": {
+        "amount1": "float64",
+        "amount0": "float64"
+      }
+    },
+    {
+      "name": "Swap (DEX v3)",
+      "signature": "Swap(address sender, address recipient, int256 amount0, int256 amount1, uint160 sqrtPriceX96, uint128 liquidity, int24 tick)",
+      "column_mapping": {
+        "amount1": "float64",
+        "amount0": "float64"
+      }
+    },
+    {
+      "name": "Initialize (DEX v3)",
+      "signature": "Initialize(uint160 sqrtPriceX96, int24 tick)",
+      "column_mapping": {
+        "sqrtPriceX96": "float64"
+      }
+    },
+    {
+      "name": "PairCreated (DEX v2)",
+      "signature": "PairCreated(address indexed token0, address indexed token1, address pair, uint256)",
+      "column_mapping": {}
+    },
+    {
+      "name": "Mint (DEX v2)",
+      "signature": "Mint(address indexed sender, uint256 amount0, uint256 amount1)",
+      "column_mapping": {
+        "amount0": "float64",
+        "amount1": "float64"
+      }
+    },
+    {
+      "name": "Burn (DEX v2)",
+      "signature": "Burn(address indexed sender, uint256 amount0, uint256 amount1, address indexed to)",
+      "column_mapping": {
+        "amount0": "float64",
+        "amount1": "float64"
+      }
+    },
+    {
+      "name": "Swap (DEX v2)",
+      "signature": "Swap(address indexed sender, uint256 amount0In, uint256 amount1In, uint256 amount0Out, uint256 amount1Out, address indexed to)",
+      "column_mapping": {
+        "amount0In": "float64",
+        "amount1In": "float64",
+        "amount0Out": "float64",
+        "amount1Out": "float64"
+      }
+    },
+    {
+      "name": "Sync (DEX v2)",
+      "signature": "Sync(uint112 reserve0, uint112 reserve1)",
+      "column_mapping": {}
+    }
+  ],
+  "contract_identifier_signatures": []
+}

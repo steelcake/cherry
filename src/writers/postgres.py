@@ -2,180 +2,144 @@ from sqlalchemy import Engine, text
 import logging
 import pyarrow as pa
 import psycopg2
+from psycopg2.extensions import connection as pg_connection
 from src.schemas.blockchain_schemas import BLOCKS, TRANSACTIONS, EVENTS
 from src.schemas.base import SchemaConverter
 from src.types.data import Data
 from src.writers.base import DataWriter
 import polars as pl
-from typing import Tuple, Optional, Dict
+from typing import Tuple, Optional, Dict, List, Any
 import asyncio
+from src.config.parser import Output
+from sqlalchemy import create_engine
+import pandas as pd
+from src.schemas.blockchain_schemas import BlockchainSchema
+import time
+from io import StringIO
+import csv
 
 logger = logging.getLogger(__name__)
 
 class PostgresWriter(DataWriter):
-    def __init__(self, engine: Engine):
-        self.engine = engine
-        # Extract connection parameters from SQLAlchemy engine
-        self.conn_params = {
-            'host': engine.url.host,
-            'port': engine.url.port,
-            'database': engine.url.database,
-            'user': engine.url.username,
-            'password': engine.url.password
-        }
-    
-    def create_tables(self):
-        """Create necessary tables if they don't exist"""
-        logger.info("Creating database tables if they don't exist")
+    BLOCKS_TABLE = BlockchainSchema.BLOCKS_TABLE_NAME
+
+    def __init__(self, config: Output):
+        self.host = config.host
+        self.port = config.port
+        self.database = config.database
+        self.username = config.username
+        self.password = config.password
+        self.conn = None
+        self.initialized = False
+        self._init_task = asyncio.create_task(self._initialize())
+
+    def _connect(self, database: str = None) -> pg_connection:
+        """Establish database connection"""
         try:
-            with self.engine.connect() as conn:
-                logger.debug("Creating blocks table")
-                conn.execute(text(SchemaConverter.to_sql(BLOCKS, "blocks")))
-                
-                logger.debug("Creating transactions table")
-                conn.execute(text(SchemaConverter.to_sql(TRANSACTIONS, "transactions")))
-                
-                logger.debug("Creating events table")
-                conn.execute(text(SchemaConverter.to_sql(EVENTS, "events")))
-                
-                conn.commit()
-                logger.info("Successfully created all database tables")
-        except Exception as e:
-            logger.error(f"Error creating tables: {e}")
-            logger.error(f"Error occurred at line {e.__traceback__.tb_lineno}")
-            raise
-
-    def _stream_arrow_to_postgresql(self, connection, table: pa.Table, table_name: str, batch_size: int = 10000):
-        """Stream Arrow table to PostgreSQL using record batches"""
-        try:
-            cursor = connection.cursor()
-            
-            # Get column names from schema
-            column_names = table.schema.names
-            
-            # Generate placeholders for SQL
-            placeholders = ','.join(['%s'] * len(column_names))
-            insert_sql = f"INSERT INTO {table_name} ({','.join(column_names)}) VALUES ({placeholders})"
-            
-            # Create record batch reader from table
-            reader = table.to_batches(max_chunksize=batch_size)
-            
-            batch_count = 0
-            for batch in reader:
-                try:
-                    # Convert batch to list of tuples for efficient insertion
-                    rows = zip(*[batch.column(i).to_pylist() for i in range(batch.num_columns)])
-                    
-                    # Execute batch insert
-                    cursor.executemany(insert_sql, rows)
-                    connection.commit()
-                    
-                    batch_count += 1
-                    
-                except Exception as e:
-                    logger.error(f"Error processing batch {batch_count}: {e}")
-                    logger.error(f"Error occurred at line {e.__traceback__.tb_lineno}")
-                    connection.rollback()
-                    raise
-                    
-            logger.info(f"Successfully streamed {batch_count} batches to {table_name} table")
-            
-        except Exception as e:
-            logger.error(f"Error streaming to {table_name}: {e}")
-            raise
-        finally:
-            cursor.close()
-
-    def _prepare_data_for_postgres(self, data: Data) -> Tuple[Optional[pl.DataFrame], Dict[str, pl.DataFrame]]:
-        """Prepare and validate data for PostgreSQL insertion"""
-        try:
-            # Prepare blocks data
-            blocks_df = None
-            if data.blocks and isinstance(data.blocks, dict):
-                all_blocks = []
-                for event_name, blocks_df in data.blocks.items():
-                    # Convert to arrow and back to get a fresh DataFrame
-                    blocks_arrow = blocks_df.to_arrow()
-                    fresh_blocks = pl.from_arrow(blocks_arrow)
-                    if fresh_blocks.height > 0:
-                        logger.debug(f"Processing {fresh_blocks.height} blocks from {event_name}")
-                        # Apply schema validation and casting
-                        fresh_blocks = fresh_blocks.cast(SchemaConverter.to_polars(BLOCKS))
-                        all_blocks.append(fresh_blocks)
-                
-                if all_blocks:
-                    blocks_df = pl.concat(all_blocks).unique(subset=["block_number"]).sort("block_number")
-                    logger.info(f"Prepared {blocks_df.height} unique blocks for insertion")
-                    logger.debug(f"Block range: {blocks_df['block_number'].min()} to {blocks_df['block_number'].max()}")
-
-            # Prepare events data
-            events_dict = {}
-            if data.events:
-                for event_name, event_df in data.events.items():
-                    # Convert to arrow and back to get a fresh DataFrame
-                    event_arrow = event_df.to_arrow()
-                    fresh_events = pl.from_arrow(event_arrow)
-                    if fresh_events.height > 0:
-                        logger.debug(f"Processing {fresh_events.height} events from {event_name}")
-                        # Apply schema validation and casting
-                        fresh_events = fresh_events.cast(SchemaConverter.to_polars(EVENTS))
-                        events_dict[event_name] = fresh_events.sort("block_number")
-                        logger.debug(f"Event block range: {fresh_events['block_number'].min()} to {fresh_events['block_number'].max()}")
-
-            return blocks_df, events_dict
-
-        except Exception as e:
-            logger.error(f"Error preparing data for PostgreSQL: {e}")
-            logger.error(f"Error occurred at line {e.__traceback__.tb_lineno}")
-            raise
-
-    async def write(self, data: Data) -> None:
-        """Write data into PostgreSQL database"""
-        try:
-            logger.info("Writing data to PostgreSQL")
-            # Create connection using extracted parameters
-            connection = await asyncio.to_thread(
-                psycopg2.connect,
-                **self.conn_params
+            conn = psycopg2.connect(
+                host=self.host,
+                port=self.port,
+                user=self.username,
+                password=self.password,
+                database=database or self.database,
+                connect_timeout=3
             )
-            
-            try:
-                # Prepare and validate data
-                blocks_df, events_dict = self._prepare_data_for_postgres(data)
-                
-                # Stream blocks to PostgreSQL
-                if blocks_df is not None:
-                    logger.info(f"Streaming {blocks_df.height} unique blocks to PostgreSQL")
-                    await asyncio.to_thread(
-                        self._stream_arrow_to_postgresql,
-                        connection, 
-                        blocks_df.to_arrow(), 
-                        "blocks"
-                    )
-                
-                # Stream events to PostgreSQL
-                total_events = 0
-                for event_name, event_df in events_dict.items():
-                    logger.info(f"Streaming {event_df.height} events for {event_name} to PostgreSQL")
-                    await asyncio.to_thread(
-                        self._stream_arrow_to_postgresql,
-                        connection, 
-                        event_df.to_arrow(), 
-                        "events"
-                    )
-                    total_events += event_df.height
-                
-                if total_events > 0:
-                    logger.info(f"Successfully streamed {total_events} total events to PostgreSQL")
-                
-                await asyncio.to_thread(connection.commit)
-                logger.info("Successfully committed all data to PostgreSQL")
-                    
-            finally:
-                await asyncio.to_thread(connection.close)
-                logger.debug("Closed PostgreSQL connection")
-                
+            conn.autocommit = True
+            return conn
         except Exception as e:
-            logger.error(f"Error writing to PostgreSQL: {e}")
-            logger.error(f"Error occurred at line {e.__traceback__.tb_lineno}")
-            raise 
+            raise ConnectionError(f"Failed to connect to PostgreSQL: {str(e)}")
+
+    async def _initialize(self) -> None:
+        """Initialize database and tables"""
+        try:
+            try:
+                self.conn = self._connect()
+            except Exception:
+                # Create database if it doesn't exist
+                sys_conn = self._connect('postgres')
+                with sys_conn.cursor() as cur:
+                    cur.execute(f'CREATE DATABASE {self.database}')
+                sys_conn.close()
+                self.conn = self._connect()
+
+            # Create tables
+            with self.conn.cursor() as cur:
+                cur.execute(BlockchainSchema.get_postgres_blocks_ddl())
+                cur.execute(BlockchainSchema.get_postgres_events_ddl('approval_events'))
+                cur.execute(BlockchainSchema.get_postgres_events_ddl('transfer_events'))
+            
+            self.initialized = True
+            logger.info(f"Initialized PostgreSQL connection to {self.host}:{self.port}")
+        except Exception as e:
+            logger.error(f"Failed to initialize PostgreSQL: {str(e)}")
+            raise
+
+    def _prepare_data(self, batch: pa.RecordBatch) -> pd.DataFrame:
+        """Convert Arrow batch to DataFrame with proper types"""
+        df = batch.to_pandas()
+        
+        # Convert timestamps
+        if 'block_timestamp' in df.columns:
+            df['block_timestamp'] = pd.to_datetime(
+                df['block_timestamp'].apply(lambda x: int(x[2:], 16) if isinstance(x, str) and x.startswith('0x') else x),
+                unit='s'
+            )
+        
+        # Convert numeric columns
+        for col in ['log_index', 'transaction_index', 'block_number']:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+        
+        return df
+
+    async def _insert_data(self, table_name: str, df: pd.DataFrame) -> None:
+        """Insert data using COPY command"""
+        if df.empty:
+            return
+
+        output = StringIO()
+        writer = csv.writer(output, delimiter='\t', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+        writer.writerows(df.values.tolist())
+        output.seek(0)
+
+        with self.conn.cursor() as cur:
+            if table_name == 'blocks':
+                # Use temp table for blocks to handle upserts
+                temp_table = f"temp_blocks_{int(time.time())}"
+                cur.execute(f"CREATE TEMP TABLE {temp_table} (LIKE blocks INCLUDING ALL)")
+                cur.copy_expert(f"COPY {temp_table} ({','.join(df.columns)}) FROM STDIN WITH CSV DELIMITER E'\\t' QUOTE '\"'", output)
+                
+                cur.execute(f"""
+                    INSERT INTO blocks 
+                    SELECT * FROM {temp_table}
+                    ON CONFLICT (block_number) 
+                    DO UPDATE SET 
+                        block_timestamp = EXCLUDED.block_timestamp,
+                        block_hash = EXCLUDED.block_hash,
+                        block_parent_hash = EXCLUDED.block_parent_hash,
+                        block_transaction_count = EXCLUDED.block_transaction_count,
+                        block_size = EXCLUDED.block_size
+                """)
+                cur.execute(f"DROP TABLE {temp_table}")
+            else:
+                cur.copy_expert(f"COPY {table_name} ({','.join(df.columns)}) FROM STDIN WITH CSV DELIMITER E'\\t' QUOTE '\"'", output)
+
+        output.close()
+        logger.info(f"Inserted {len(df)} rows into {table_name}")
+
+    async def push_data(self, data: dict[str, pa.RecordBatch]) -> None:
+        """Push data to PostgreSQL"""
+        if not self.initialized:
+            await self._init_task
+
+        # Process events
+        for table_name in [name for name in data if name.endswith('_events')]:
+            df = self._prepare_data(data[table_name])
+            await self._insert_data(table_name, df)
+
+        # Process blocks
+        blocks_tables = [name for name in data if name.startswith('blocks_')]
+        if blocks_tables:
+            blocks_dfs = [self._prepare_data(data[table]) for table in blocks_tables]
+            combined_blocks = pd.concat(blocks_dfs).drop_duplicates(subset=['block_number'])
+            await self._insert_data('blocks', combined_blocks) 

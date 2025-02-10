@@ -1,101 +1,75 @@
-import asyncio, logging
+import asyncio
+import logging
 from typing import Dict
 from src.types.data import Data
 from src.writers.base import DataWriter
-from src.writers.parquet import ParquetWriter
+from src.writers.local_parquet import ParquetWriter
 from src.writers.postgres import PostgresWriter
 from src.writers.s3 import S3Writer
 from src.writers.clickhouse import ClickHouseWriter
-from sqlalchemy import create_engine
-from src.config.parser import Output
+from src.writers.aws_wrangler_s3 import AWSWranglerWriter
+from src.config.parser import Config
+import pyarrow as pa
 
 logger = logging.getLogger(__name__)
 
 class Writer:
-    """Handles writing data to multiple targets"""
-    @staticmethod
-    def create_writer(kind: str, config: Output) -> DataWriter:
-        """Create a writer instance based on configuration"""
-        if kind == 'local_parquet':
-            if not config.path:
-                raise ValueError("path is required for local_parquet writer")
-            return ParquetWriter(config.path)
-        elif kind == 'postgres':
-            if not config.connection_string:
-                raise ValueError("connection_string is required for postgres writer")
-            engine = create_engine(config.connection_string)
-            return PostgresWriter(engine)
-        elif kind == 's3':
-            if not config.endpoint or not config.bucket:
-                raise ValueError("endpoint and bucket are required for s3 writer")
-            return S3Writer(
-                endpoint=config.endpoint,
-                bucket=config.bucket,
-                access_key=config.access_key,
-                secret_key=config.secret_key,
-                region=config.region,
-                secure=config.secure if config.secure is not None else True
-            )
-        elif kind == 'clickhouse':
-            if not config.host:
-                raise ValueError("host is required for clickhouse writer")
-            return ClickHouseWriter(
-                host=config.host,
-                port=config.port or 8123,
-                username=config.username or 'default',
-                password=config.password or '',
-                database=config.database or 'default',
-                secure=config.secure if config.secure is not None else False
-            )
-        else:
-            raise ValueError(f"Unknown writer kind: {kind}")
+    WRITER_CLASSES = {
+        'aws_wrangler_s3': AWSWranglerWriter,
+        'local_parquet': ParquetWriter,
+        'postgres': PostgresWriter,
+        's3': S3Writer,
+        'clickhouse': ClickHouseWriter
+    }
 
     def __init__(self, writers: Dict[str, DataWriter]):
         self._writers = writers
-        logger.info(f"Initialized Writer with {len(writers)} writers: {', '.join(writers.keys())}")
+        logger.info(f"Initialized {len(writers)} writers: {', '.join(writers.keys())}")
+
+    @classmethod
+    def initialize_writers(cls, config: Config) -> Dict[str, DataWriter]:
+        """Initialize configured writers"""
+        writers = {}
+        for output in config.output:
+            if output.kind in cls.WRITER_CLASSES:
+                logger.info(f"Initializing {output.kind} writer")
+                writers[output.kind] = cls.WRITER_CLASSES[output.kind](output)
+        return writers
 
     async def write(self, data: Data) -> None:
         """Write data to all configured targets"""
-        if not self._writers:
-            logger.error("No writers initialized")
-            return
-
-        if not data or not data.events:
-            logger.debug("No data to write")
+        if not self._writers or not data or not data.events:
             return
 
         try:
-            # Create separate copies for each writer
-            writer_data = {}
-            for writer_type in self._writers.keys():
-                writer_data[writer_type] = Data(
-                    events={name: df.clone() for name, df in data.events.items()} if data.events else None,
-                    blocks={name: df.clone() for name, df in data.blocks.items()} if data.blocks else None,
-                    transactions=data.transactions
-                )
-
-            # Write in parallel to all targets
-            write_tasks = {
-                writer_type: asyncio.create_task(
-                    writer.write(writer_data[writer_type]),
-                    name=f"write_{writer_type}"
-                )
-                for writer_type, writer in self._writers.items()
-            }
+            # Convert data to RecordBatch format
+            record_batches = {}
             
-            if write_tasks:
-                logger.info(f"Writing in parallel to {len(write_tasks)} targets ({', '.join(self._writers.keys())})")
-                
-                # Wait for all writes to complete concurrently
-                results = await asyncio.gather(*write_tasks.values(), return_exceptions=True)
-                
-                # Check for any errors
-                for writer_type, result in zip(write_tasks.keys(), results):
-                    if isinstance(result, Exception):
-                        logger.error(f"Error in {writer_type} writer: {result}")
-                        raise result
-
+            # Process events
+            for event_name, events_df in data.events.items():
+                table = events_df.to_arrow()
+                df = table.to_pandas().sort_values('block_number')
+                min_block = df['block_number'].min()
+                max_block = df['block_number'].max()
+                table_name = f"{event_name.lower()}_events"
+                logger.info(f"Processing {table_name}: {len(df)} events, blocks {min_block} to {max_block}")
+                record_batches[table_name] = pa.Table.from_pandas(df).to_batches()[0]
+            
+            # Process blocks
+            for event_name, blocks_df in data.blocks.items():
+                table = blocks_df.to_arrow()
+                df = table.to_pandas().sort_values('block_number')
+                table_name = f"blocks_{event_name.lower()}"
+                logger.info(f"Processing {table_name}: blocks {df['block_number'].min()} to {df['block_number'].max()}")
+                record_batches[table_name] = pa.Table.from_pandas(df).to_batches()[0]
+            
+            # Write in parallel to all targets
+            tasks = [
+                writer.push_data(record_batches)
+                for writer in self._writers.values()
+            ]
+            await asyncio.gather(*tasks)
+            
         except Exception as e:
-            logger.error(f"Error during parallel write: {e}")
-            logger.error(f"Error occurred at line {e.__traceback__.tb_lineno}")
-            raise 
+            logger.error(f"Error during write: {str(e)}")
+            raise

@@ -1,118 +1,93 @@
 import logging
 import asyncio
-from typing import Optional, Dict, List
+from typing import Dict, List
 import clickhouse_connect
-from clickhouse_connect.driver.client import Client
+import pyarrow as pa
+import pandas as pd
 from src.writers.base import DataWriter
-from src.types.data import Data
-from src.schemas.blockchain_schemas import BLOCKS, EVENTS, TRANSACTIONS
-from src.schemas.base import SchemaConverter
-import polars as pl
+from src.config.parser import Output
+from src.schemas.blockchain_schemas import BlockchainSchema
 
 logger = logging.getLogger(__name__)
 
 class ClickHouseWriter(DataWriter):
-    """Writer for writing data to ClickHouse"""
-    # Base event table definition template
-    EVENT_TABLE_TEMPLATE = """
-        CREATE TABLE IF NOT EXISTS {table_name} (
-            removed Bool,
-            log_index Int64,
-            transaction_index Int64,
-            transaction_hash String,
-            block_hash String,
-            block_number Int64,
-            address String,
-            data String,
-            topic0 String,
-            topic1 Nullable(String),
-            topic2 Nullable(String),
-            topic3 Nullable(String),
-            block_timestamp UInt64,
-            INDEX address_idx address TYPE bloom_filter GRANULARITY 1
-        ) ENGINE = MergeTree
-        PRIMARY KEY (block_number, log_index)
-        ORDER BY (block_number, log_index, address)
-    """
-
-    def __init__(self, host: str, port: int = 8123, username: str = 'default',
-                 password: str = '', database: str = 'default', secure: bool = False):
-        super().__init__()
-        self.host = host
-        self.port = port
-        self.username = username
-        self.password = password
-        self.database = database
-        self.secure = secure
-        
-        # Initialize client
-        self.client = clickhouse_connect.get_client(
-            host=self.host,
-            port=self.port,
-            username=self.username,
-            password=self.password,
-            database=self.database,
-            secure=self.secure
-        )
-        logger.info(f"Initialized ClickHouseWriter with host {host}:{port}, database {database}")
-        
-        # Create tables if they don't exist
-        self.create_tables()
+    """Writer for ClickHouse database"""
     
-    def create_tables(self):
-        """Create necessary tables if they don't exist"""
-        logger.info("Creating ClickHouse tables if they don't exist")
+    def __init__(self, config: Output):
+        self.client = clickhouse_connect.get_client(
+            host=config.host,
+            port=config.port,
+            username=config.username,
+            password=config.password,
+            database=config.database,
+            secure=config.secure
+        )
+        logger.info(f"Initialized ClickHouse connection to {config.host}:{config.port}")
+        self._create_tables()
+
+    def _create_tables(self) -> None:
+        """Create required tables"""
         try:
-            # Create blocks table
-            self.client.command("""
-                CREATE TABLE IF NOT EXISTS blocks (
-                    block_number Int64,
-                    block_timestamp UInt64,
-                    PRIMARY KEY (block_number)
-                ) ENGINE = ReplacingMergeTree
-            """)
-            
-            logger.info("Successfully created ClickHouse tables")
-            
+            self.client.command(BlockchainSchema.get_clickhouse_blocks_ddl())
+            logger.info("Created ClickHouse tables")
         except Exception as e:
-            logger.error(f"Error creating ClickHouse tables: {e}")
+            logger.error(f"Failed to create tables: {str(e)}")
             raise
 
-    async def write(self, data: Data) -> None:
+    def _prepare_data(self, df: pd.DataFrame) -> List[List[str]]:
+        """Prepare DataFrame for ClickHouse insert"""
+        df = df.copy()
+        
+        # Convert hex values to integers
+        for col in df.columns:
+            if col in BlockchainSchema.HEX_COLUMNS and df[col].dtype == 'object':
+                df[col] = df[col].apply(lambda x: 
+                    int(x[2:], 16) if pd.notnull(x) and str(x).startswith('0x') else 0
+                )
+        
+        # Convert timestamps
+        for col in BlockchainSchema.TIMESTAMP_COLUMNS:
+            if col in df.columns:
+                df[col] = pd.to_datetime(df[col].astype(int), unit='s')
+                df[col] = df[col].dt.strftime('%Y-%m-%d %H:%M:%S')
+        
+        # Convert all to strings
+        for col in df.columns:
+            df[col] = df[col].fillna('').astype(str)
+            
+        return df.values.tolist()
+
+    async def _insert_data(self, table_name: str, data: List[List[str]], columns: List[str]) -> None:
+        """Insert data into ClickHouse table"""
+        if not data:
+            return
+            
+        logger.info(f"Writing {len(data)} rows to {table_name}")
+        await asyncio.to_thread(
+            self.client.insert,
+            table_name,
+            data,
+            column_names=columns
+        )
+        logger.info(f"Wrote {len(data)} rows to {table_name}")
+
+    async def push_data(self, data: Dict[str, pa.RecordBatch]) -> None:
         """Write data to ClickHouse"""
         try:
-            # Prepare and validate data using base class method
-            blocks_df, events_dict = self.prepare_data(data)
-            
-            # Write blocks
-            if blocks_df is not None:
-                logger.info(f"Writing {blocks_df.height} blocks to ClickHouse")
-                await asyncio.to_thread(
-                    self.client.insert_df,
-                    'blocks',
-                    blocks_df.to_pandas()
-                )
-            
-            # Write events
-            total_events = 0
-            for event_name, event_df in events_dict.items():
-                if event_df.height > 0:
-                    # Create event-specific table if it doesn't exist
-                    table_name = f"{event_name.lower()}_events"
-                    self.client.command(self.EVENT_TABLE_TEMPLATE.format(table_name=table_name))
-                    
-                    logger.info(f"Writing {event_df.height} {event_name} events to ClickHouse")
-                    await asyncio.to_thread(
-                        self.client.insert_df,
-                        table_name,
-                        event_df.to_pandas()
-                    )
-                    total_events += event_df.height
-            
-            if total_events > 0:
-                logger.info(f"Successfully wrote {total_events} total events to ClickHouse")
+            # Process events
+            for table_name in [t for t in data if t.endswith('_events')]:
+                df = data[table_name].to_pandas()
+                prepared_data = self._prepare_data(df)
+                await self._insert_data(table_name, prepared_data, list(df.columns))
+
+            # Process blocks
+            blocks_data = self.combine_blocks(data)
+            if blocks_data:
+                df = blocks_data.to_pandas()
+                prepared_data = self._prepare_data(df)
+                await self._insert_data('blocks', prepared_data, list(df.columns))
                 
         except Exception as e:
-            logger.error(f"Error writing to ClickHouse: {e}")
-            logger.error(f"Error occurred at line {e.__traceback__.tb_lineno}")
-            raise 
+            logger.error(f"ClickHouse write failed: {str(e)}")
+            raise
+        

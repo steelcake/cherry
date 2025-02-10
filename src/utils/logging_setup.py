@@ -58,6 +58,7 @@ def setup_logging():
     logging.getLogger('s3transfer').setLevel(logging.WARNING)
     logging.getLogger('aiobotocore').setLevel(logging.WARNING)
     logging.getLogger('aioboto3').setLevel(logging.WARNING)
+    logging.getLogger("awswrangler").setLevel(logging.WARNING)
 
     _is_logging_configured = True
     return root_logger

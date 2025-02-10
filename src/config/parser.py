@@ -26,7 +26,9 @@ class OutputKind(str, Enum):
     DUCKDB = "Duckdb"
     PARQUET = "Parquet"
     S3 = "S3"
-
+    AWS_WRANGLER_S3 = "AWSWranglerS3Writer"
+    CLICKHOUSE = "Clickhouse"
+    
 class DataType(str, Enum):
     """Data type enum"""
     UINT64 = "uint64"
@@ -109,16 +111,20 @@ class Output:
     region: Optional[str] = None
     secure: Optional[bool] = None
     # Parquet fields
-    path: Optional[str] = None
+    output_path: Optional[str] = None
     # Common fields
     batch_size: Optional[int] = None
     compression: Optional[str] = None
-    # ClickHouse fields
+    # Database fields
     host: Optional[str] = None
     port: Optional[int] = None
     database: Optional[str] = None
     username: Optional[str] = None
     password: Optional[str] = None
+    # AWS Wrangler S3 fields
+    s3_path: Optional[str] = None
+    partition_cols: Optional[Dict[str, List[str]]] = None
+    default_partition_cols: Optional[List[str]] = None
 
 class ProcessingConfig(BaseModel):
     """Processing configuration"""
