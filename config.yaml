@@ -92,12 +92,16 @@ output:
     secure: false
 
   - kind: aws_wrangler_s3
-    endpoint: localhost:9000
-    access_key: "minioadmin"
-    secret_key: "minioadmin"
+    endpoint: http://localhost:9000
+    database: blockchain
+    use_boto3: true
     s3_path: blockchain-data/aws-wrangler-s3
     region: "us-east-1"
-    secure: false
+    anchor_table: blocks
+    partition_cols:
+      - blocks: [block_timestamp]
+    default_partition_cols: [block_time]
+
 
 # Contracts configuration
 contracts:

@@ -105,11 +105,7 @@ class Output:
     kind: str
     # S3 fields
     endpoint: Optional[str] = None
-    bucket: Optional[str] = None
-    access_key: Optional[str] = None
-    secret_key: Optional[str] = None
     region: Optional[str] = None
-    secure: Optional[bool] = None
     # Parquet fields
     output_path: Optional[str] = None
     # Common fields
@@ -125,6 +121,9 @@ class Output:
     s3_path: Optional[str] = None
     partition_cols: Optional[Dict[str, List[str]]] = None
     default_partition_cols: Optional[List[str]] = None
+    anchor_table: Optional[str] = None
+    database: Optional[str] = None
+    use_boto3: Optional[bool] = None
 
 class ProcessingConfig(BaseModel):
     """Processing configuration"""

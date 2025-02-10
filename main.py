@@ -7,6 +7,9 @@ from src.ingesters.factory import Ingester
 from src.writers.writer import Writer
 from typing import Dict
 import sys
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Set up logging
 setup_logging()
