@@ -2,170 +2,115 @@ from typing import List, Dict, Optional, Union, Any
 from pathlib import Path
 from pydantic import BaseModel, Field, model_validator
 from enum import Enum
-import yaml, logging, json
+import yaml, logging
 from src.utils.logging_setup import setup_logging
-import hypersync
 import os
-from hypersync import DataType
-from dataclasses import dataclass
+from cherry_core.ingest import EvmQuery
 
-# Set up logging
-setup_logging()
 logger = logging.getLogger(__name__)
 
-class DataSourceKind(str, Enum):
-    ETH_RPC = "eth_rpc"
-    HYPERSYNC = "hypersync"
+class ProviderKind(str, Enum):
+    SQD = "sqd"
 
-class TransformKind(str, Enum):
-    POLARS = "Polars"
-    PANDAS = "Pandas"
+class WriterKind(str, Enum):
+    LOCAL_PARQUET = "local_parquet"
+    AWS_WRANGLER_S3 = "aws_wrangler_s3"
+    POSTGRES = "postgres"
+    CLICKHOUSE = "clickhouse"
 
-class OutputKind(str, Enum):
-    POSTGRES = "Postgres"
-    DUCKDB = "Duckdb"
-    PARQUET = "Parquet"
-    S3 = "S3"
-    AWS_WRANGLER_S3 = "AWSWranglerS3Writer"
-    CLICKHOUSE = "Clickhouse"
-    
-class DataType(str, Enum):
-    """Data type enum"""
-    UINT64 = "uint64"
-    UINT32 = "uint32"
-    INT64 = "int64"
-    INT32 = "int32"
-    FLOAT32 = "float32"
-    FLOAT64 = "float64"
-    INTSTR = "intstr"
-    STRING = "String"
+class StepKind(str, Enum):
+    EVM_VALIDATE_BLOCK = "evm_validate_block_data"
+    EVM_DECODE_EVENTS = "evm_decode_events"
 
-class StreamState(BaseModel):
-    """Stream state configuration"""
-    path: str
-    resume: bool = True
-    last_block: Optional[int] = None
+class Format(str, Enum):
+    EVM = "evm"
 
-class ColumnCastField(BaseModel):
-    """Column casting field configuration"""
-    value: Optional[str] = None
-    block_number: Optional[str] = None
+class ProviderConfig(BaseModel):
+    """Provider-specific configuration"""
+    url: Optional[str] = None
+    format: Optional[Format] = None
+    query: Optional[Dict] = None
 
-class ColumnCast(BaseModel):
-    """Column casting configuration"""
-    transaction: Optional[Dict[str, str]] = None
-    amount: Optional[str] = None
+class Provider(BaseModel):
+    """Data provider configuration"""
+    name: Optional[str] = None
+    kind: Optional[ProviderKind] = None
+    config: Optional[ProviderConfig] = None
 
-class HexEncode(BaseModel):
-    """Hex encoding configuration"""
-    transaction: Optional[str] = None
-    block: Optional[str] = None
-    log: Optional[str] = None
-
-class BlockRange(BaseModel):
-    """Block range configuration"""
-    from_block: int
-    to_block: Optional[int] = None
-
-@dataclass
-class DataSource:
-    """Data source configuration"""
-    url: str
-    token: str
-
-@dataclass
-class Stream:
-    """Stream configuration"""
-    kind: str  # 'block' or 'event'
-    name: Optional[str] = None  # Required for events
-    signature: Optional[str] = None  # Required for events
-    from_block: int = 0
-    to_block: Optional[int] = None
-    batch_size: int = 10000
-    addresses: List[str] = None
-    include_blocks: bool = True
-    state_path: Optional[str] = None
-    resume: bool = False
-
-@dataclass
-class Output:
-    """Output configuration"""
-    kind: str
-    # Common settings
-    output_path: Optional[str] = None
-    compression: Optional[str] = None
-    batch_size: int = 10000
-    
-    # S3 settings
+class WriterConfig(BaseModel):
+    """Writer-specific configuration"""
+    path: Optional[str] = ""
     endpoint: Optional[str] = None
-    access_key: Optional[str] = None
-    secret_key: Optional[str] = None
-    bucket: Optional[str] = None
+    database: Optional[str] = None
+    use_boto3: Optional[bool] = None
     s3_path: Optional[str] = None
     region: Optional[str] = None
-    secure: bool = True
-    
-    # Database settings
-    host: Optional[str] = None
-    port: Optional[int] = None
-    database: Optional[str] = None
-    username: Optional[str] = None
-    password: Optional[str] = None
+    anchor_table: Optional[str] = None
+    partition_cols: Optional[Dict[str, List[str]]] = None
+    default_partition_cols: Optional[List[str]] = None
 
-@dataclass
-class Config:
+class Writer(BaseModel):
+    """Data writer configuration"""
+    name: Optional[str] = None
+    kind: Optional[WriterKind] = None
+    config: Optional[WriterConfig] = None
+
+class StepConfig(BaseModel):
+    """Step-specific configuration"""
+    event_signature: Optional[str] = None
+    input_table: Optional[str] = None
+    output_table: Optional[str] = None
+    allow_decode_fail: Optional[bool] = None
+
+class Step(BaseModel):
+    """Pipeline step configuration"""
+    name: str
+    kind: Optional[StepKind] = None
+    config: Optional[StepConfig] = None
+
+class Pipeline(BaseModel):
+    """Data pipeline configuration"""
+    name: Optional[str] = None
+    provider: Provider
+    steps: List[Step]
+    writer: Writer
+
+class Config(BaseModel):
     """Main configuration"""
-    data_source: List[DataSource]
-    streams: List[Stream]
-    output: List[Output]
+    project_name: str
+    description: str
+    providers: Dict[str, Provider]
+    writers: Dict[str, Writer]
+    pipelines: Dict[str, Pipeline]
 
-def _parse_stream(data: Dict[str, Any]) -> Stream:
-    """Parse stream configuration"""
-    if data['kind'] == 'block':
-        return Stream(
-            kind='block',
-            from_block=data.get('from_block', 0),
-            to_block=data.get('to_block'),
-            batch_size=data.get('batch_size', 10000),
-            state_path=data.get('state', {}).get('path'),
-            resume=data.get('state', {}).get('resume', False)
-        )
-    else:
-        return Stream(
-            kind='event',
-            name=data['name'],
-            signature=data['signature'],
-            from_block=data.get('from_block', 0),
-            to_block=data.get('to_block'),
-            batch_size=data.get('batch_size', 10000),
-            addresses=data.get('address', []),
-            include_blocks=data.get('include_blocks', True),
-            state_path=data.get('state', {}).get('path'),
-            resume=data.get('state', {}).get('resume', False)
-        )
+def parse_config(config_path: str) -> Config:
+    """Parse configuration from YAML file"""
+    try:
+        with open(config_path, 'r') as f:
+            raw_config = yaml.safe_load(f)
+            
+            # Parse configuration
+            config = Config(**raw_config)
+            
+            logger.info(f"Loaded configuration for project: {config.project_name}")
+            logger.info(f"Found {len(config.providers)} providers")
+            logger.info(f"Found {len(config.writers)} writers")
+            logger.info(f"Found {len(config.pipelines)} pipelines")
+            
+            return config
+            
+    except Exception as e:
+        logger.error(f"Error parsing config file {config_path}: {e}")
+        raise
 
-def _parse_output(data: Dict[str, Any]) -> Output:
-    """Parse output configuration"""
-    # Replace environment variables in sensitive fields
-    for key in ['access_key', 'secret_key', 'password']:
-        if key in data and data[key] and isinstance(data[key], str):
-            data[key] = os.path.expandvars(data[key])
-    
-    return Output(**data)
+def get_provider_config(config: Config, provider_name: str) -> Optional[Provider]:
+    """Get provider configuration by name"""
+    return next((p for p in config.providers if p.name == provider_name), None)
 
-def parse_config(path: str) -> Config:
-    """Parse configuration file"""
-    with open(path) as f:
-        data = yaml.safe_load(f)
-    
-    return Config(
-        data_source=[
-            DataSource(
-                url=src['url'],
-                token=os.path.expandvars(src['token'])
-            )
-            for src in data['data_source']
-        ],
-        streams=[_parse_stream(s) for s in data['streams']],
-        output=[_parse_output(o) for o in data['output']]
-    )
+def get_writer_config(config: Config, writer_name: str) -> Optional[Writer]:
+    """Get writer configuration by name"""
+    return next((w for w in config.writers if w.name == writer_name), None)
+
+def get_pipeline_config(config: Config, pipeline_name: str) -> Optional[Pipeline]:
+    """Get pipeline configuration by name"""
+    return next((p for p in config.pipelines if p.name == pipeline_name), None)

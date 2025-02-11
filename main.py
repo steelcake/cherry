@@ -3,9 +3,8 @@ import logging
 from pathlib import Path
 from src.config.parser import parse_config
 from src.utils.logging_setup import setup_logging
-from src.writers.writer import Writer
-from src.processors.hypersync import EventProcessor
-from src.ingesters.streams import StreamManager
+from typing import Dict
+import sys
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -22,8 +21,11 @@ async def main():
         
         # Load configuration
         config = parse_config("config.yaml")
-        logger.info("Parsed configuration from config.yaml")
-        
+        logger.info(f"Parsed configuration from config.yaml, config: {config}")
+        logger.info(f"Query: {config.pipelines['my_pipeline'].provider.config.query}")
+
+        sys.exit()
+
         # Initialize components
         processor = EventProcessor(config)
         stream_manager = StreamManager(config.streams, processor)
