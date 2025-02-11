@@ -67,110 +67,105 @@ class BlockRange(BaseModel):
     from_block: int
     to_block: Optional[int] = None
 
-class Stream(BaseModel):
-    """Stream configuration"""
-    kind: str
-    name: Optional[str] = None
-    signature: Optional[str] = None
-    from_block: Optional[int] = None
-    to_block: Optional[int] = None
-    batch_size: Optional[int] = None
-    include_transactions: Optional[bool] = False
-    include_logs: Optional[bool] = False
-    include_blocks: Optional[bool] = False
-    include_traces: Optional[bool] = False
-    topics: Optional[List[Optional[Union[str, List[str]]]]] = None
-    address: Optional[List[str]] = None
-    column_cast: Optional[Dict[str, Union[str, ColumnCastField]]] = None
-    hex_encode: Optional[HexEncode] = None
-    hash: Optional[List[str]] = []
-    mapping: Optional[str] = None
-    state: Optional[StreamState] = None
-
-    @model_validator(mode='before')
-    def convert_state_dict(cls, values):
-        """Convert state dict to StreamState if needed"""
-        if isinstance(values.get('state'), dict):
-            values['state'] = StreamState(**values['state'])
-        return values
-
-class DataSource(BaseModel):
+@dataclass
+class DataSource:
     """Data source configuration"""
-    kind: str
     url: str
     token: str
 
 @dataclass
+class Stream:
+    """Stream configuration"""
+    kind: str  # 'block' or 'event'
+    name: Optional[str] = None  # Required for events
+    signature: Optional[str] = None  # Required for events
+    from_block: int = 0
+    to_block: Optional[int] = None
+    batch_size: int = 10000
+    addresses: List[str] = None
+    include_blocks: bool = True
+    state_path: Optional[str] = None
+    resume: bool = False
+
+@dataclass
 class Output:
+    """Output configuration"""
     kind: str
-    # S3 fields
-    endpoint: Optional[str] = None
-    region: Optional[str] = None
-    # Parquet fields
+    # Common settings
     output_path: Optional[str] = None
-    # Common fields
-    batch_size: Optional[int] = None
     compression: Optional[str] = None
-    # Database fields
+    batch_size: int = 10000
+    
+    # S3 settings
+    endpoint: Optional[str] = None
+    access_key: Optional[str] = None
+    secret_key: Optional[str] = None
+    bucket: Optional[str] = None
+    s3_path: Optional[str] = None
+    region: Optional[str] = None
+    secure: bool = True
+    
+    # Database settings
     host: Optional[str] = None
     port: Optional[int] = None
     database: Optional[str] = None
     username: Optional[str] = None
     password: Optional[str] = None
-    # AWS Wrangler S3 fields
-    s3_path: Optional[str] = None
-    partition_cols: Optional[Dict[str, List[str]]] = None
-    default_partition_cols: Optional[List[str]] = None
-    anchor_table: Optional[str] = None
-    database: Optional[str] = None
-    use_boto3: Optional[bool] = None
-
-class ProcessingConfig(BaseModel):
-    """Processing configuration"""
-    default_batch_size: int = 100000
-    parallel_streams: bool = True
-    max_retries: int = 3
-    retry_delay: int = 5
-
-class ContractIdentifier(BaseModel):
-    """Contract identifier configuration"""
-    name: str
-    signature: str
-
-class ContractConfig(BaseModel):
-    """Contract configuration"""
-    identifier_signatures: List[ContractIdentifier] = []
 
 @dataclass
 class Config:
-    project_name: str
-    description: str
+    """Main configuration"""
     data_source: List[DataSource]
     streams: List[Stream]
     output: List[Output]
-    contracts: Optional[dict] = None
 
-def parse_config(config_path: str) -> Config:
-    """Parse configuration from YAML file"""
-    with open(config_path, 'r') as f:
-        raw_config = yaml.safe_load(f)
-        
-        # Convert project-name to project_name if needed
-        if 'project-name' in raw_config:
-            raw_config['project_name'] = raw_config.pop('project-name')
-            
-        # Convert blocks.range to blocks if needed
-        if 'blocks' in raw_config and 'range' in raw_config['blocks']:
-            raw_config['blocks'] = raw_config['blocks']['range']
-        
-        # Convert raw dicts to proper objects
-        if 'data_source' in raw_config:
-            raw_config['data_source'] = [DataSource(**ds) for ds in raw_config['data_source']]
-        
-        if 'streams' in raw_config:
-            raw_config['streams'] = [Stream(**s) for s in raw_config['streams']]
-        
-        if 'output' in raw_config:
-            raw_config['output'] = [Output(**o) for o in raw_config['output']]
+def _parse_stream(data: Dict[str, Any]) -> Stream:
+    """Parse stream configuration"""
+    if data['kind'] == 'block':
+        return Stream(
+            kind='block',
+            from_block=data.get('from_block', 0),
+            to_block=data.get('to_block'),
+            batch_size=data.get('batch_size', 10000),
+            state_path=data.get('state', {}).get('path'),
+            resume=data.get('state', {}).get('resume', False)
+        )
+    else:
+        return Stream(
+            kind='event',
+            name=data['name'],
+            signature=data['signature'],
+            from_block=data.get('from_block', 0),
+            to_block=data.get('to_block'),
+            batch_size=data.get('batch_size', 10000),
+            addresses=data.get('address', []),
+            include_blocks=data.get('include_blocks', True),
+            state_path=data.get('state', {}).get('path'),
+            resume=data.get('state', {}).get('resume', False)
+        )
+
+def _parse_output(data: Dict[str, Any]) -> Output:
+    """Parse output configuration"""
+    # Replace environment variables in sensitive fields
+    for key in ['access_key', 'secret_key', 'password']:
+        if key in data and data[key] and isinstance(data[key], str):
+            data[key] = os.path.expandvars(data[key])
     
-    return Config(**raw_config)
+    return Output(**data)
+
+def parse_config(path: str) -> Config:
+    """Parse configuration file"""
+    with open(path) as f:
+        data = yaml.safe_load(f)
+    
+    return Config(
+        data_source=[
+            DataSource(
+                url=src['url'],
+                token=os.path.expandvars(src['token'])
+            )
+            for src in data['data_source']
+        ],
+        streams=[_parse_stream(s) for s in data['streams']],
+        output=[_parse_output(o) for o in data['output']]
+    )

@@ -1,236 +1,232 @@
 import logging
-from datetime import datetime
-from pathlib import Path
-from typing import Optional, Tuple, Dict, List
-import polars as pl
-from hypersync import ArrowResponse, DataType
-from src.types.hypersync import StreamParams
-from src.schemas.blockchain_schemas import BLOCKS, EVENTS, EVENT_SCHEMAS
-from src.schemas.base import SchemaConverter
 import time
-import asyncio
+from typing import AsyncGenerator, Tuple, Optional, List, Dict
+import pandas as pd
+import polars as pl
+from hypersync import HypersyncClient, ClientConfig, ArrowResponse
+from src.utils.generate_hypersync_query import generate_event_query, generate_block_query
 from src.types.data import Data
+from src.config.parser import Config, Stream
+import aiohttp
 
 logger = logging.getLogger(__name__)
 
-class EventData:
-    """Handles event data processing and storage"""
-    def __init__(self, params: StreamParams):
-        self.event_name = params.event_name
-        self.signature = params.signature
-        self.from_block = params.from_block
-        self.to_block = params.to_block
-        self.current_block = params.from_block
-        self.logs_df_list = []
-        self.blocks_df_list = []
-        self.items_per_section = params.items_per_section
-        self.column_mapping = params.column_mapping if params.column_mapping else {}
-        self.last_process_time = time.time()
-        self.last_event_count = 0
-        self.total_events = 0
-        logger.info(f"Initialized EventData processor for {self.event_name} from block {self.from_block} to {self.to_block or 'latest'}")
-
-    def append_data(self, res: ArrowResponse) -> bool:
-        """Process and append new data"""
-        try:
-            if res is None:
-                return False
-
-            # Update current block from response
-            self.current_block = res.next_block
-            
-            # Convert Arrow data to Polars with column mapping
-            logs_df = pl.from_arrow(res.data.logs)
-            if logs_df.height == 0:
-                return False
-
-            decoded_logs_df = pl.from_arrow(res.data.decoded_logs).rename(lambda n: f"decoded_{n}")
-            blocks_df = pl.from_arrow(res.data.blocks).rename(lambda n: f"block_{n}")
-
-            # Join dataframes
-            combined_df = logs_df.hstack(decoded_logs_df).join(blocks_df, on="block_number")
-
-            # Apply column mappings if they exist
-            if isinstance(self.column_mapping, dict) and self.column_mapping:
-                for col, dtype_str in self.column_mapping.items():
-                    decoded_col = f"decoded_{col}"
-                    if decoded_col in combined_df.columns:
-                        try:
-                            polars_type = self._convert_hypersync_type(dtype_str)
-                            combined_df = combined_df.with_columns(pl.col(decoded_col).cast(polars_type))
-                        except Exception as e:
-                            logger.warning(f"Failed to cast column {decoded_col} to {dtype_str}: {e}")
-
-            if combined_df.height > 0:
-                self.total_events += combined_df.height
-                self.logs_df_list.append(combined_df)
-                
-                # Calculate and log processing speed every 2 seconds
-                current_time = time.time()
-                time_diff = current_time - self.last_process_time
-                if time_diff >= 2:
-                    events_diff = self.total_events - self.last_event_count
-                    speed = events_diff / time_diff
-                    blocks_processed = self.current_block - self.from_block
-                    blocks_per_second = blocks_processed / time_diff
-                    logger.info(f"Event: {self.event_name} - Processed {combined_df.height} events "
-                              f"(Total: {self.total_events}/{self.items_per_section}), "
-                              f"Speed: {speed:.0f} events/s, {blocks_per_second:.0f} blocks/s")
-                    self.last_process_time = current_time
-                    self.last_event_count = self.total_events
-
-            # Check if we should write based on block progress
-            should_write = (
-                self.total_events >= self.items_per_section or 
-                (self.to_block and self.current_block >= self.to_block)
+class EventProcessor:
+    """Processes blockchain events and blocks from Hypersync"""
+    
+    def __init__(self, config: Config):
+        self.client = HypersyncClient(
+            ClientConfig(
+                url=config.data_source[0].url,
+                auth_header=f"Bearer {config.data_source[0].token}"
             )
+        )
+        self.batch_size = config.streams[0].batch_size
+        self._current_block = 0
+        self.config = config
 
-            return should_write
-
-        except Exception as e:
-            logger.error(f"Error processing data chunk: {e}")
-            logger.error(f"Error occurred at line {e.__traceback__.tb_lineno}")
-            raise
-
-    def _convert_hypersync_type(self, dtype: str) -> pl.DataType:
-        """Convert Hypersync DataType string to Polars DataType"""
-        type_mapping = {
-            "float64": pl.Float64,
-            "int64": pl.Int64,
-            "string": pl.Utf8,
-            "bool": pl.Boolean,
-            "bytes": pl.Binary
-        }
-        return type_mapping.get(str(dtype).lower(), pl.Utf8)
-
-    def get_combined_data(self) -> Tuple[Optional[pl.DataFrame], Optional[pl.DataFrame]]:
-        """Combine and return all collected data"""
-        try:
-            events_df = pl.concat(self.logs_df_list) if self.logs_df_list else None
-            
-            # Extract unique blocks data from events
-            if events_df is not None:
-                blocks_df = (events_df
-                    .select([
-                        "block_number",
-                        "block_timestamp"
-                    ])
-                    .unique(subset=["block_number"])
-                    .sort("block_number")
-                )
-            else:
-                blocks_df = None
-            
-            if events_df is not None:
-                logger.info(f"Combined {len(self.logs_df_list)} event dataframes, total rows: {events_df.height}")
-            if blocks_df is not None:
-                logger.info(f"Combined block data, total unique blocks: {blocks_df.height}")
-                
-            self.logs_df_list = []
-            self.blocks_df_list = []
-            self.total_events = 0
-            
-            return events_df, blocks_df
-            
-        except Exception as e:
-            logger.error(f"Error combining data: {e}")
-            raise
-
-class ParallelEventProcessor:
-    """Handles parallel processing of multiple event streams"""
-    def __init__(self, stream_params: List[StreamParams]):
-        self.stream_params = stream_params
-        self.processors: Dict[str, EventData] = {}
-        self.current_block = min(p.from_block for p in stream_params)
-        self._pending_tasks = {}
+    async def process_blocks(self, from_block: int) -> AsyncGenerator[pd.DataFrame, None]:
+        """Process block data"""
+        current_block = from_block
+        last_log_time = time.time()
+        total_blocks = 0
         
-    async def process_events(self) -> Optional[Data]:
-        """Process all event streams in parallel"""
-        try:
-            logger.info(f"Processing {len(self.processors)} streams in parallel")
-            
-            # Initialize processors for each event stream
-            for params in self.stream_params:
-                if params.event_name not in self.processors:
-                    self.processors[params.event_name] = EventData(params)
-
-            # Create or reuse tasks for active streams
-            for event_name, processor in self.processors.items():
-                if event_name not in self._pending_tasks:
-                    logger.info(f"Creating new task for stream {event_name}")
-                    self._pending_tasks[event_name] = asyncio.create_task(
-                        self._process_stream(processor),
-                        name=f"process_{event_name}"
-                    )
-
-            if not self._pending_tasks:
-                logger.info("No active tasks remaining")
-                return None
-
-            # Wait for any stream to complete with timeout
-            done, pending = await asyncio.wait(
-                list(self._pending_tasks.values()),
-                timeout=1.0,
-                return_when=asyncio.FIRST_COMPLETED
-            )
-
-            # Process completed tasks
-            combined_data = Data()
-            completed_events = []
-
-            for task in done:
-                event_name = next(name for name, t in self._pending_tasks.items() if t == task)
-                logger.info(f"Processing completed task for {event_name}")
-                try:
-                    result = await task
-                    if result:
-                        if result.events:
-                            if not combined_data.events:
-                                combined_data.events = {}
-                            combined_data.events.update(result.events)
-                            logger.info(f"Added {len(result.events[event_name])} events for {event_name}")
-                        if result.blocks:
-                            if not combined_data.blocks:
-                                combined_data.blocks = {}
-                            combined_data.blocks.update(result.blocks)
-                        
-                        # Create new task for this stream
-                        self._pending_tasks[event_name] = asyncio.create_task(
-                            self._process_stream(self.processors[event_name]),
-                            name=f"process_{event_name}"
-                        )
-                        logger.info(f"Created new task for {event_name}")
-                    else:
-                        # Stream completed
-                        completed_events.append(event_name)
-                        logger.info(f"Stream {event_name} completed with no data")
-                except Exception as e:
-                    logger.error(f"Error processing stream {event_name}: {e}")
-                    raise
-
-            # Update pending tasks
-            self._pending_tasks = {
-                name: task for name, task in self._pending_tasks.items()
-                if not task.done() and name not in completed_events
-            }
-
-            return combined_data if combined_data.events or combined_data.blocks else None
-
-        except Exception as e:
-            logger.error(f"Error in parallel event processing: {e}")
-            raise
-
-    async def _process_stream(self, processor: EventData) -> Optional[Data]:
-        """Process individual event stream"""
-        try:
-            should_write = await processor.process_batch()
-            if should_write:
-                events_df, blocks_df = processor.get_combined_data()
-                return Data(
-                    events={processor.event_name: events_df} if events_df is not None else None,
-                    blocks={processor.event_name: blocks_df} if blocks_df is not None else None
+        while True:
+            try:
+                # Get block stream configuration from config
+                block_stream = next((s for s in self.config.streams if s.kind == 'block'), None)
+                column_mapping = block_stream.column_cast if block_stream else None
+                
+                query, stream_config = generate_block_query(
+                    from_block=current_block,
+                    to_block=current_block + self.batch_size,
+                    include_transactions=block_stream.include_transactions if block_stream else True,
+                    include_logs=block_stream.include_logs if block_stream else False,
+                    column_mapping=column_mapping
                 )
-            return None
-        except Exception as e:
-            logger.error(f"Error processing stream {processor.event_name}: {e}")
-            raise
+                
+                receiver = await self.client.stream_arrow(query, stream_config)
+                
+                while True:
+                    res = await receiver.recv()
+                    if res is None:
+                        break
+                        
+                    # Process blocks data
+                    blocks_df = self._process_block_response(res)
+                    if blocks_df.empty:
+                        break
+                        
+                    # Update progress
+                    current_block = blocks_df['number'].max() + 1
+                    self._current_block = current_block
+                    total_blocks += len(blocks_df)
+                    
+                    # Log progress every 2 seconds
+                    current_time = time.time()
+                    if current_time - last_log_time >= 2:
+                        blocks_processed = current_block - from_block
+                        blocks_per_second = blocks_processed / (current_time - last_log_time)
+                        logger.info(
+                            f"Processed {total_blocks} blocks "
+                            f"({blocks_per_second:.0f} blocks/s)"
+                        )
+                        last_log_time = current_time
+                    
+                    yield blocks_df
+                    
+            except Exception as e:
+                logger.error(f"Error processing blocks: {e}")
+                raise
+
+    def _process_block_response(self, res: ArrowResponse) -> pd.DataFrame:
+        """Process block response data"""
+        blocks_df = pl.from_arrow(res.data.blocks)
+        transactions_df = pl.from_arrow(res.data.transactions)
+        
+        if blocks_df.is_empty():
+            return pd.DataFrame()
+            
+        # Add transaction data if available
+        if not transactions_df.is_empty():
+            # Prefix transaction columns
+            transactions_df = transactions_df.rename(lambda n: f"transaction_{n}")
+            blocks_df = blocks_df.join(
+                transactions_df,
+                left_on="number",
+                right_on="transaction_block_number"
+            )
+            
+        return blocks_df.to_pandas()
+
+    async def process_events(
+        self, 
+        event_name: str,
+        signature: str,
+        from_block: int,
+        addresses: Optional[List[str]] = None
+    ) -> AsyncGenerator[Tuple[pd.DataFrame, pd.DataFrame], None]:
+        """Process event data and associated blocks"""
+        current_block = from_block
+        last_log_time = time.time()
+        total_events = 0
+        
+        # Get event stream configuration
+        event_stream = next(
+            (s for s in self.config.streams 
+             if s.kind == 'event' and s.name == event_name),
+            None
+        )
+        
+        while True:
+            try:
+                query, stream_config = generate_event_query(
+                    signature=signature,
+                    from_block=current_block,
+                    to_block=current_block + self.batch_size,
+                    addresses=addresses,
+                    include_transactions=event_stream.include_transactions if event_stream else False,
+                    column_mapping=event_stream.column_cast if event_stream else None
+                )
+                
+                receiver = await self.client.stream_arrow(query, stream_config)
+                
+                while True:
+                    res = await receiver.recv()
+                    if res is None:
+                        break
+                        
+                    # Process events data
+                    events_df = self._process_event_response(res, event_name)
+                    if events_df.empty:
+                        break
+                        
+                    # Get associated blocks if needed
+                    blocks_df = None
+                    if event_stream and event_stream.include_blocks:
+                        blocks_query, blocks_config = generate_block_query(
+                            from_block=events_df['block_number'].min(),
+                            to_block=events_df['block_number'].max()
+                        )
+                        blocks_receiver = await self.client.stream_arrow(blocks_query, blocks_config)
+                        blocks_df = await self._get_blocks_data(blocks_receiver)
+                    
+                    # Update progress
+                    current_block = events_df['block_number'].max() + 1
+                    self._current_block = current_block
+                    total_events += len(events_df)
+                    
+                    # Log progress every 2 seconds
+                    current_time = time.time()
+                    if current_time - last_log_time >= 2:
+                        blocks_processed = current_block - from_block
+                        speed = total_events / (current_time - last_log_time)
+                        blocks_per_second = blocks_processed / (current_time - last_log_time)
+                        logger.info(
+                            f"Event: {event_name} - Processed {len(events_df)} events "
+                            f"(Total: {total_events}), Speed: {speed:.0f} events/s, "
+                            f"{blocks_per_second:.0f} blocks/s"
+                        )
+                        last_log_time = current_time
+                    
+                    yield events_df, blocks_df
+                    
+            except Exception as e:
+                logger.error(f"Error processing {event_name} events: {e}")
+                raise
+
+    def _process_event_response(self, res: ArrowResponse, event_name: str) -> pd.DataFrame:
+        """Process event response data"""
+        logs_df = pl.from_arrow(res.data.logs)
+        decoded_logs_df = pl.from_arrow(res.data.decoded_logs)
+        blocks_df = pl.from_arrow(res.data.blocks)
+        transactions_df = pl.from_arrow(res.data.transactions)
+        
+        if decoded_logs_df.is_empty():
+            return pd.DataFrame()
+            
+        # Combine data
+        prefixed_decoded_logs = decoded_logs_df.rename(lambda n: f"decoded_{n}")
+        prefixed_blocks = blocks_df.rename(lambda n: f"block_{n}")
+        
+        combined_df = (
+            logs_df
+            .join(prefixed_decoded_logs)
+            .join(prefixed_blocks, on="block_number")
+        )
+        
+        # Add transaction data if available
+        if not transactions_df.is_empty():
+            prefixed_transactions = transactions_df.rename(lambda n: f"transaction_{n}")
+            combined_df = combined_df.join(
+                prefixed_transactions,
+                left_on="transaction_hash",
+                right_on="transaction_hash"
+            )
+        
+        return combined_df.to_pandas()
+
+    async def _get_blocks_data(self, receiver) -> pd.DataFrame:
+        """Get blocks data from receiver"""
+        blocks_dfs = []
+        while True:
+            res = await receiver.recv()
+            if res is None:
+                break
+            blocks_df = pl.from_arrow(res.data.blocks)
+            if not blocks_df.is_empty():
+                blocks_dfs.append(blocks_df)
+                
+        if not blocks_dfs:
+            return pd.DataFrame()
+            
+        return pl.concat(blocks_dfs).to_pandas()
+
+    @property
+    def current_block(self) -> int:
+        """Get current block number"""
+        return self._current_block
+
+    async def close(self):
+        """Clean up resources"""
+        pass

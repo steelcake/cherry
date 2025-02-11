@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, Optional, List, Callable
 import polars as pl
 import logging
 from src.types.data import Data
@@ -14,6 +14,13 @@ logger = logging.getLogger(__name__)
 
 class DataWriter(ABC):
     """Base class for data writers"""
+
+    def __init__(self):
+        self.combine_blocks: Optional[Callable] = None
+
+    def set_combine_blocks(self, combine_blocks_fn: Callable) -> None:
+        """Set the combine_blocks function"""
+        self.combine_blocks = combine_blocks_fn
 
     @abstractmethod
     async def push_data(self, data: Dict[str, pa.RecordBatch]) -> None:

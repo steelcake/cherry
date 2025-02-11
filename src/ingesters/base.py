@@ -1,24 +1,21 @@
 from abc import ABC, abstractmethod
-from typing import Dict, AsyncGenerator
+from typing import AsyncGenerator
 import logging
 from src.types.data import Data
-from src.writers.base import DataWriter
-from src.utils.logging_setup import setup_logging
 
-# Set up logging
-setup_logging()
 logger = logging.getLogger(__name__)
 
 class DataIngester(ABC):
     """Abstract base class for data ingesters"""
+    
     @abstractmethod
-    async def get_data(self, from_block: int) -> AsyncGenerator[Data, None]:
-        """Stream data from the specified block"""
-        pass 
+    async def process_data(self) -> AsyncGenerator[Data, None]:
+        """Process and yield data"""
+        pass
 
     @abstractmethod
-    async def initialize_writers(self, writers: Dict[str, DataWriter]) -> None:
-        """Initialize data writers"""
+    async def close(self) -> None:
+        """Clean up resources"""
         pass
 
     @property
@@ -26,3 +23,12 @@ class DataIngester(ABC):
     def current_block(self) -> int:
         """Get current block number"""
         pass
+
+    async def __aiter__(self) -> AsyncGenerator[Data, None]:
+        """Make ingester iterable"""
+        try:
+            async for data in self.process_data():
+                if not data.is_empty():
+                    yield data
+        finally:
+            await self.close()

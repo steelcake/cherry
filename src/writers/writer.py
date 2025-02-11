@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import Dict
+from typing import Dict, Optional
 from src.types.data import Data
 from src.writers.base import DataWriter
 from src.writers.local_parquet import ParquetWriter
@@ -10,6 +10,7 @@ from src.writers.clickhouse import ClickHouseWriter
 from src.writers.aws_wrangler_s3 import AWSWranglerWriter
 from src.config.parser import Config
 import pyarrow as pa
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +25,9 @@ class Writer:
 
     def __init__(self, writers: Dict[str, DataWriter]):
         self._writers = writers
+        # Set combine_blocks method for each writer
+        for writer in self._writers.values():
+            writer.set_combine_blocks(self.combine_blocks)
         logger.info(f"Initialized {len(writers)} writers: {', '.join(writers.keys())}")
 
     @classmethod
@@ -35,6 +39,50 @@ class Writer:
                 logger.info(f"Initializing {output.kind} writer")
                 writers[output.kind] = cls.WRITER_CLASSES[output.kind](output)
         return writers
+
+    @staticmethod
+    def combine_blocks(data: Dict[str, pa.RecordBatch]) -> Optional[pa.Table]:
+        """Combine and deduplicate block tables"""
+        blocks_tables = [name for name in data if name.startswith('blocks_')]
+        if not blocks_tables:
+            return None
+        
+        # Combine all blocks into one table
+        blocks_data = pa.concat_tables([
+            pa.Table.from_batches([data[name]]) 
+            for name in blocks_tables
+        ])
+        
+        # Convert to pandas for easier manipulation
+        blocks_df = blocks_data.to_pandas()
+        
+        # Get block range from events
+        event_tables = [name for name in data if name.endswith('_events')]
+        if event_tables:
+            # Find min/max blocks across all event tables
+            event_blocks = pd.concat([
+                data[table].to_pandas()['block_number'] 
+                for table in event_tables
+            ])
+            min_block = event_blocks.min()
+            max_block = event_blocks.max()
+            
+            # Filter blocks to event range
+            blocks_df = blocks_df[
+                (blocks_df['block_number'] >= min_block) & 
+                (blocks_df['block_number'] <= max_block)
+            ]
+            logger.info(f"Filtered blocks to event range {min_block} to {max_block}")
+        
+        # Sort and deduplicate
+        blocks_df = (blocks_df
+                    .sort_values('block_number')
+                    .drop_duplicates(subset=['block_number'], keep='last'))
+        
+        logger.info(f"Combined {len(blocks_df)} unique blocks from "
+                   f"{blocks_df['block_number'].min()} to {blocks_df['block_number'].max()}")
+        
+        return pa.Table.from_pandas(blocks_df)
 
     async def write(self, data: Data) -> None:
         """Write data to all configured targets"""

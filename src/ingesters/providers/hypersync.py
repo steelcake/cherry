@@ -21,6 +21,10 @@ from src.utils.generate_hypersync_query import generate_event_query
 from src.writers.base import DataWriter
 import asyncio
 from src.processors.hypersync import ParallelEventProcessor
+from src.processors.hypersync import EventProcessor
+from src.ingesters.streams import StreamManager
+import json
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -131,48 +135,95 @@ class AsyncEventProcessor:
             raise
 
 class HypersyncIngester(DataIngester):
-    """Ingests data from Hypersync"""
+    """Hypersync-specific data ingester"""
+    
     def __init__(self, config: Config):
-        self.config = config
-        self.hypersyncapi_token = config.data_source[0].token
-        self.client = HypersyncClient(ClientConfig(
-            url=self.config.data_source[0].url,
-            bearer_token=self.hypersyncapi_token,
-        ))
-        self._event_processors = {}
-        self._completed_events = set()
-        self._writers = None
-        self._stream_states = {}  # Track block state per stream
+        # Initialize Hypersync client
+        self.client = HypersyncClient(
+            ClientConfig(
+                url=config.data_source[0].url,
+                auth_header=f"Bearer {config.data_source[0].token}"
+            )
+        )
+        
+        # Initialize processor and stream manager
+        self.processor = EventProcessor(config)
+        self.stream_manager = StreamManager(config.streams, self.processor)
+        self._current_block: Optional[int] = None
+        
+        # Track stream states
+        self._stream_states: Dict[str, int] = {}
+        for stream in config.streams:
+            # Load existing state if available
+            state_path = getattr(stream, 'state_path', None)
+            if state_path and os.path.exists(state_path):
+                try:
+                    with open(state_path) as f:
+                        state = json.load(f)
+                    last_block = state.get('last_block')
+                    if last_block and getattr(stream, 'resume', False):
+                        self._stream_states[stream.name] = last_block
+                        continue
+                except Exception as e:
+                    logger.warning(f"Could not load state for {stream.name}: {e}")
+            
+            # Use default from_block if no state
+            self._stream_states[stream.name] = stream.from_block
+            
+            # Ensure state directory exists
+            if state_path:
+                Path(state_path).parent.mkdir(parents=True, exist_ok=True)
+        
         logger.info("Initialized HypersyncIngester")
+
+    async def process_data(self) -> AsyncGenerator[Data, None]:
+        """Process data from all streams"""
+        try:
+            async for data in self.stream_manager.process_all():
+                if not data.is_empty():
+                    block_range = data.get_block_range()
+                    self._current_block = block_range[1]
+                    
+                    # Update stream states
+                    if data.events:
+                        for name, df in data.events.items():
+                            if not df.empty:
+                                self._stream_states[name] = df['block_number'].max() + 1
+                    
+                    logger.info(f"Processed blocks {block_range[0]} to {block_range[1]}")
+                    yield data
+                    
+        except Exception as e:
+            logger.error(f"Error processing data: {e}")
+            raise
+
+    async def close(self) -> None:
+        """Clean up resources"""
+        try:
+            await self.processor.close()
+            # Save stream states
+            for stream in self.stream_manager.streams.values():
+                if stream.state_path and stream.resume:
+                    state = {
+                        'last_block': self._stream_states.get(stream.name, stream.from_block)
+                    }
+                    with open(stream.state_path, 'w') as f:
+                        json.dump(state, f)
+                        logger.info(f"Saved state for {stream.name} at block {state['last_block']}")
+        except Exception as e:
+            logger.error(f"Error during cleanup: {e}")
+            raise
 
     @property
     def current_block(self) -> int:
         """Get current block number"""
-        # This is only used for compatibility, not for actual block tracking
-        return self.config.blocks.from_block
-
-    @current_block.setter
-    def current_block(self, value: int):
-        """Set current block number"""
-        # This is now a no-op since we manage blocks per stream
-        pass
+        return self._current_block or 0
 
     def get_stream_block(self, stream_name: str) -> int:
-        """Get current block for stream"""
-        stream = next(s for s in self.config.streams if s.name == stream_name)
-        
-        # Convert dict to StreamState if needed
-        if stream.state and isinstance(stream.state, dict):
-            stream_state = StreamState(**stream.state)
-        else:
-            stream_state = None
-            
-        return (
-            stream_state.last_block if stream_state and stream_state.resume 
-            else stream.from_block
-        )
+        """Get current block for a stream"""
+        return self._stream_states.get(stream_name, 0)
 
-    def set_stream_block(self, stream_name: str, block: int):
+    def set_stream_block(self, stream_name: str, block: int) -> None:
         """Set current block for a stream"""
         self._stream_states[stream_name] = block
 

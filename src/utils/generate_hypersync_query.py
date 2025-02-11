@@ -1,145 +1,188 @@
-from hypersync import (
-    HypersyncClient,
-    Query,
-    LogSelection,
-    TransactionSelection,
-    FieldSelection,
-    LogField,
-    BlockField,
-    signature_to_topic0,
-    StreamConfig,
-    HexOutput,
-    ColumnMapping,
-    DataType
-)
-import polars as pl
-from src.config.parser import Config, Stream
-from src.types.hypersync import StreamParams
-from typing import List, Union, Optional, Tuple, Dict
 import logging
+from typing import Optional, List, Dict, Any, Tuple
+from hypersync import (
+    Query, StreamConfig, LogSelection, BlockSelection,
+    HexOutput, ColumnMapping, DataType,
+    BlockField, TransactionField, LogField,
+    signature_to_topic0, FieldSelection, JoinMode
+)
 
 logger = logging.getLogger(__name__)
 
-def convert_column_cast_to_dict(column_cast) -> Dict[str, str]:
-    """Convert ColumnCast model to dictionary"""
-    if not column_cast:
-        return {}
+def _convert_type(type_str: str) -> DataType:
+    """Convert string type to Hypersync DataType"""
+    type_map = {
+        'int64': DataType.INT64,
+        'int32': DataType.INT32,
+        'uint64': DataType.UINT64,
+        'uint32': DataType.UINT32,
+        'float64': DataType.FLOAT64,
+        'float32': DataType.FLOAT32,
+        'string': DataType.STRING,
+        'intstr': DataType.INTSTR
+    }
+    return type_map.get(type_str.lower(), DataType.INTSTR)
+
+def _get_block_column_mapping(column_mapping: Optional[Dict[str, str]] = None) -> Dict[BlockField, DataType]:
+    """Get block column mapping with custom overrides"""
+    default_mapping = {
+        BlockField.DIFFICULTY: DataType.INTSTR,
+        BlockField.TOTAL_DIFFICULTY: DataType.INTSTR,
+        BlockField.SIZE: DataType.INTSTR,
+        BlockField.GAS_LIMIT: DataType.INTSTR,
+        BlockField.GAS_USED: DataType.INTSTR,
+        BlockField.TIMESTAMP: DataType.INT64,
+        BlockField.BASE_FEE_PER_GAS: DataType.INTSTR,
+        BlockField.BLOB_GAS_USED: DataType.INTSTR,
+        BlockField.EXCESS_BLOB_GAS: DataType.INTSTR,
+        BlockField.SEND_COUNT: DataType.INTSTR,
+    }
     
-    result = {}
-    if column_cast.transaction:
-        result.update(column_cast.transaction)
-    if column_cast.value:
-        result['value'] = column_cast.value
-    if column_cast.amount:
-        result['amount'] = column_cast.amount
-    return result
+    if column_mapping:
+        for field, type_str in column_mapping.items():
+            try:
+                block_field = BlockField(field)
+                default_mapping[block_field] = _convert_type(type_str)
+            except ValueError:
+                logger.warning(f"Invalid block field: {field}")
+                
+    return default_mapping
 
-def convert_event_to_hypersync(stream: Stream) -> LogSelection:
-    """Convert event config to Hypersync LogSelection"""
-    if not stream or not stream.signature:
-        raise ValueError("Stream or signature is missing")
-
-    # Convert signature to topic0
-    topic0 = signature_to_topic0(stream.signature)
+def _get_transaction_column_mapping(column_mapping: Optional[Dict[str, str]] = None) -> Dict[TransactionField, DataType]:
+    """Get transaction column mapping with custom overrides"""
+    default_mapping = {
+        TransactionField.GAS: DataType.INTSTR,
+        TransactionField.GAS_PRICE: DataType.INTSTR,
+        TransactionField.NONCE: DataType.INTSTR,
+        TransactionField.VALUE: DataType.INTSTR,
+        TransactionField.MAX_PRIORITY_FEE_PER_GAS: DataType.INTSTR,
+        TransactionField.MAX_FEE_PER_GAS: DataType.INTSTR,
+        TransactionField.CHAIN_ID: DataType.INT64,
+        TransactionField.EFFECTIVE_GAS_PRICE: DataType.INTSTR,
+        TransactionField.GAS_USED: DataType.INTSTR,
+        TransactionField.CUMULATIVE_GAS_USED: DataType.INTSTR,
+        TransactionField.MAX_FEE_PER_BLOB_GAS: DataType.INTSTR,
+    }
     
-    return LogSelection(
-        topics=[[topic0]]  # First topic is the event signature
-    )
+    if column_mapping:
+        for field, type_str in column_mapping.items():
+            try:
+                tx_field = TransactionField(field)
+                default_mapping[tx_field] = _convert_type(type_str)
+            except ValueError:
+                logger.warning(f"Invalid transaction field: {field}")
+                
+    return default_mapping
 
-def generate_event_stream_config(stream: Stream) -> StreamConfig:
-    """Generate StreamConfig for event data queries"""
-    return StreamConfig(
-        hex_output=HexOutput.PREFIXED,
-        event_signature=stream.signature,
-        column_mapping=ColumnMapping(
-            decoded_log=stream.column_cast,
-            block={BlockField.TIMESTAMP: DataType.INT64}
-        )
-    )
-
-def generate_event_stream_params(client: HypersyncClient, stream: Stream,
-                               contract_addr_list: Optional[List[pl.Series]], 
-                               from_block: int, items_per_section: int) -> StreamParams:
-    """Generate StreamParams for event data queries"""
-    return StreamParams(
-        client=client,
-        event_name=stream.name,
-        signature=stream.signature,
-        contract_addr_list=contract_addr_list,
-        from_block=from_block,
-        items_per_section=items_per_section,
-        column_mapping=stream.column_cast
-    )
-
-def pad_address(address: str) -> str:
-    """Pad address to 32 bytes (64 characters)"""
-    if address.startswith('0x'):
-        address = address[2:]  # Remove 0x prefix
-    return '0x' + '0' * 24 + address  # Pad with 24 zeros (12 bytes) to make it 32 bytes total
-
-def generate_event_query(
-    stream: Stream,
-    client: HypersyncClient,
+def generate_block_query(
     from_block: int,
-    items_per_section: int
+    to_block: Optional[int] = None,
+    include_transactions: bool = True,
+    include_logs: bool = False,
+    column_mapping: Optional[Dict[str, Dict[str, str]]] = None
 ) -> Tuple[Query, StreamConfig]:
-    """Generate query for event data"""
-    logger.info(f"Generating event data query for blocks {from_block} onwards")
-
-    # Convert signature to topic0 if not provided in config
-    topic0 = stream.topics[0] if stream.topics else signature_to_topic0(stream.signature)
-    
-    # Build topics list for query
-    topics = []
-    if stream.topics:
-        # First topic is always the event signature
-        topics.append([topic0])
-        
-        # Handle indexed parameters (topics[1:])
-        for topic in stream.topics[1:]:
-            if topic is None:
-                topics.append([])  # Empty list for wildcard match
-            elif isinstance(topic, list):
-                # Pad each address in the list
-                padded_topics = [pad_address(t) for t in topic]
-                topics.append(padded_topics)
-            else:
-                # Pad single address
-                topics.append([pad_address(topic)])
-    else:
-        topics = [[topic0]]  # Default to just the event signature
+    """Generate Hypersync query for block data"""
+    # Build field selection
+    field_selection = FieldSelection(
+        block=[field.value for field in BlockField],
+        transaction=[field.value for field in TransactionField] if include_transactions else None,
+        log=[field.value for field in LogField] if include_logs else None
+    )
     
     # Create query
     query = Query(
         from_block=from_block,
-        to_block=stream.to_block,
-        logs=[LogSelection(
-            topics=topics,
-            address=stream.address
-        )],
-        field_selection=FieldSelection(
-            log=[
-                LogField.ADDRESS,
-                LogField.TOPIC0,
-                LogField.TOPIC1,
-                LogField.TOPIC2,
-                LogField.TOPIC3,
-                LogField.DATA,
-                LogField.BLOCK_NUMBER,
-                LogField.TRANSACTION_INDEX,
-                LogField.LOG_INDEX
-            ],
-            block=[BlockField.NUMBER, BlockField.TIMESTAMP]
+        to_block=None if to_block is None else to_block + 1,
+        join_mode=JoinMode.JOIN_ALL if include_transactions else None,
+        blocks=[BlockSelection()],
+        field_selection=field_selection
+    )
+    
+    # Build column mappings
+    block_mapping = _get_block_column_mapping(
+        column_mapping.get('block') if column_mapping else None
+    )
+    
+    transaction_mapping = None
+    if include_transactions:
+        transaction_mapping = _get_transaction_column_mapping(
+            column_mapping.get('transaction') if column_mapping else None
+        )
+    
+    # Create stream config
+    stream_config = StreamConfig(
+        hex_output=HexOutput.PREFIXED,
+        column_mapping=ColumnMapping(
+            block=block_mapping,
+            transaction=transaction_mapping
         )
     )
     
-    # Log the generated query for debugging
-    logger.info(f"Generated Hypersync query for {stream.name}:")
-    logger.info(f"  From block: {from_block}")
-    logger.info(f"  To block: {stream.to_block}")
-    logger.info(f"  Topics: {topics}")
-    logger.info(f"  Addresses: {stream.address}")
+    logger.info(
+        f"Generated block query:\n"
+        f"  From block: {from_block}\n"
+        f"  To block: {to_block}\n"
+        f"  Include transactions: {include_transactions}\n"
+        f"  Include logs: {include_logs}\n"
+        f"  Column mappings: {column_mapping}"
+    )
     
-    stream_config = StreamConfig(hex_output=HexOutput.PREFIXED)
+    return query, stream_config
+
+def generate_event_query(
+    signature: str,
+    from_block: int,
+    to_block: Optional[int] = None,
+    addresses: Optional[List[str]] = None,
+    include_transactions: bool = False,
+    column_mapping: Optional[Dict[str, str]] = None
+) -> Tuple[Query, StreamConfig]:
+    """Generate Hypersync query for event data"""
+    # Get event signature hash
+    topic0 = signature_to_topic0(signature)
+    
+    # Build field selection
+    field_selection = FieldSelection(
+        log=[field.value for field in LogField],
+        block=[BlockField.NUMBER.value, BlockField.TIMESTAMP.value],
+        transaction=[TransactionField.HASH.value, TransactionField.FROM.value] if include_transactions else None
+    )
+    
+    # Create query
+    query = Query(
+        from_block=from_block,
+        to_block=None if to_block is None else to_block + 1,
+        logs=[LogSelection(
+            address=addresses,
+            topics=[[topic0]]
+        )],
+        field_selection=field_selection
+    )
+    
+    # Build decoded log mapping
+    decoded_mapping = {}
+    if column_mapping:
+        for field, type_str in column_mapping.items():
+            decoded_mapping[field] = _convert_type(type_str)
+    
+    # Create stream config
+    stream_config = StreamConfig(
+        hex_output=HexOutput.PREFIXED,
+        event_signature=signature,
+        column_mapping=ColumnMapping(
+            decoded_log=decoded_mapping,
+            block={BlockField.TIMESTAMP: DataType.INT64}
+        )
+    )
+    
+    logger.info(
+        f"Generated event query for {signature}:\n"
+        f"  From block: {from_block}\n"
+        f"  To block: {to_block}\n"
+        f"  Topics: [[{topic0}]]\n"
+        f"  Addresses: {addresses or []}\n"
+        f"  Include transactions: {include_transactions}\n"
+        f"  Column mapping: {decoded_mapping}"
+    )
     
     return query, stream_config

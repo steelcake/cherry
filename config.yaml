@@ -74,37 +74,3 @@ output:
     # compression: snappy
     # Optionally configure batch size (default: 10000)
     # batch_size: 10000
-
-  - kind: s3
-    endpoint: "localhost:9000"
-    access_key: "minioadmin"
-    secret_key: "minioadmin"
-    bucket: "blockchain-data"
-    secure: false
-    region: null
-
-  - kind: clickhouse
-    host: localhost
-    port: 8123
-    database: blockchain
-    username: default
-    password: clickhouse
-    secure: false
-
-  - kind: aws_wrangler_s3
-    endpoint: http://localhost:9000
-    database: blockchain
-    use_boto3: true
-    s3_path: blockchain-data/aws-wrangler-s3
-    region: "us-east-1"
-    anchor_table: blocks
-    partition_cols:
-      - blocks: [block_timestamp]
-    default_partition_cols: [block_time]
-
-
-# Contracts configuration
-contracts:
-  identifier_signatures:
-    - name: "ERC20_Approval"
-      signature: "Approval(address indexed _owner, address indexed _spender, uint256 _value)"
