@@ -1,12 +1,9 @@
 import asyncio
 import logging
-from pathlib import Path
-from sqlalchemy import create_engine
 from src.config.parser import parse_config, Config
 from src.utils.logging_setup import setup_logging
 from src.ingesters.factory import Ingester
 from src.writers.writer import Writer
-from src.writers.postgres import PostgresWriter
 from src.writers.parquet import ParquetWriter
 from src.writers.s3 import S3Writer
 from src.writers.base import DataWriter
