@@ -3,108 +3,66 @@ project_name: "cherry_event_indexer"
 description: "Cherry event indexing and data processing pipeline"
 
 # Data source configuration
-data_source:
-  - kind: hypersync
-    url: "https://eth.hypersync.xyz"
-    token: ${HYPERSYNC_API_TOKEN}
+providers:
+  my_sqd_provider:
+    kind: sqd
+    config:
+      url: https://portal.sqd.dev/datasets/ethereum-mainnet
 
-# Streams configuration
-streams:
-  - kind: block
-    include_transactions: true
-    include_logs: false
-    column_cast:
-      transaction:
-        value: "String"
-        block_number: "Int64"
-      block:
-        timestamp: "Int64"
-    hex_encode:
-      transaction: "Prefixed"
-      block: null
-      log: "HexEncode"
-    hash: []  # process all blocks regardless of hash
-    mapping: "polars"
-    state:
-      path: "state/block_stream.json"
-      resume: true
+writers:
+  my_local_writer:
+    kind: local_parquet
+    config:
+      path: ""
+  aws_wrangler_s3:
+    kind: aws_wrangler_s3
+    config:
+      endpoint: http://localhost:9000
+      database: blockchain
+      use_boto3: true
+      s3_path: blockchain-data/aws-wrangler-s3
+      region: "us-east-1"
+      anchor_table: blocks
+      partition_cols:
+        blocks: [block_timestamp]
+      default_partition_cols: [block_time]
 
-  - kind: event
-    name: "Approval"
-    signature: "Approval(address indexed _owner, address indexed _spender, uint256 _value)"
-    from_block: 21673123
-    to_block: null
-    batch_size: 500000
-    topics: []
-    address: []
-    include_blocks: true
-    include_transactions: false
-    include_traces: false
-    column_cast:
-      value: "float64"  # Simple string value for single field
-    mapping: "polars"
-    state:
-      path: "state/approval_stream.json"
-      resume: true
+pipelines:
+  my_pipeline:
+    provider:
+      name: my_sqd_provider
+      config:
+        format: evm
+        query:
+          from_block: 0 
+          logs: 
+            - address: ["0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"]
+              event_signatures: ["Transfer(address,address,uint256)"]
+          fields:
+            block:
+              number: true
+            log:
+              data: true
+              topic0: true
+              topic1: true
+              topic2: true
+              topic3: true
+    
+    steps:
+      - name: my_validate_evm_event
+        kind: evm_validate_block_data
+      
+      - name: my_decode_transfers
+        kind: evm_decode_events
+        config:
+          event_signature: "Transfer(address,address,uint256)"
+          input_table: "logs"
+          output_table: "transfer_events"
+          allow_decode_fail: true
 
-  - kind: event
-    name: "Transfer"
-    signature: "Transfer(address indexed from, address indexed to, uint256 amount)"
-    from_block: 21673123
-    to_block: null
-    batch_size: 2000000
-    topics: []
-    address: []
-    include_blocks: true
-    include_transactions: false
-    include_traces: false
-    column_cast:
-      amount: "float64"
-    mapping: "polars"
-    state:
-      path: "state/transfer_stream.json"
-      resume: true
-
-# Output configuration
-output:
-  # Local Parquet configuration
-  - kind: local_parquet
-    output_path: data
-    # Optionally configure compression (default: none)
-    # compression: snappy
-    # Optionally configure batch size (default: 10000)
-    # batch_size: 10000
-
-  - kind: s3
-    endpoint: "localhost:9000"
-    access_key: "minioadmin"
-    secret_key: "minioadmin"
-    bucket: "blockchain-data"
-    secure: false
-    region: null
-
-  - kind: clickhouse
-    host: localhost
-    port: 8123
-    database: blockchain
-    username: default
-    password: clickhouse
-    secure: false
-
-  - kind: aws_wrangler_s3
-    endpoint: http://localhost:9000
-    database: blockchain
-    use_boto3: true
-    s3_path: blockchain-data/aws-wrangler-s3
-    region: "us-east-1"
-    anchor_table: blocks
-    partition_cols:
-      - blocks: [block_timestamp]
-    default_partition_cols: [block_time]
-
-
-# Contracts configuration
-contracts:
-  identifier_signatures:
-    - name: "ERC20_Approval"
-      signature: "Approval(address indexed _owner, address indexed _spender, uint256 _value)"
+            
+    writer:
+      name: my_local_writer
+      kind: local_parquet
+      config:
+        path: data
