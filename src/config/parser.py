@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import List, Dict, Optional, Union, Any
 from pathlib import Path
 from pydantic import BaseModel, Field, model_validator
@@ -6,38 +7,42 @@ import yaml, logging
 from src.utils.logging_setup import setup_logging
 import os
 from cherry_core.ingest import EvmQuery
+import copy, dacite
+from cherry_core.ingest import ProviderKind, Format
 
 logger = logging.getLogger(__name__)
 
-class ProviderKind(str, Enum):
-    SQD = "sqd"
-
-class WriterKind(str, Enum):
+class WriterKind(Enum):
     LOCAL_PARQUET = "local_parquet"
     AWS_WRANGLER_S3 = "aws_wrangler_s3"
     POSTGRES = "postgres"
     CLICKHOUSE = "clickhouse"
 
-class StepKind(str, Enum):
+class StepKind(Enum):
     EVM_VALIDATE_BLOCK = "evm_validate_block_data"
     EVM_DECODE_EVENTS = "evm_decode_events"
 
-class Format(str, Enum):
-    EVM = "evm"
-
-class ProviderConfig(BaseModel):
+@dataclass
+class ProviderConfig:
     """Provider-specific configuration"""
     url: Optional[str] = None
+    max_num_retries: Optional[int] = None
+    retry_backoff_ms: Optional[int] = None
+    retry_base_ms: Optional[int] = None
+    retry_ceiling_ms: Optional[int] = None
+    http_req_timeout_millis: Optional[int] = None
     format: Optional[Format] = None
     query: Optional[Dict] = None
 
-class Provider(BaseModel):
+@dataclass
+class Provider:
     """Data provider configuration"""
     name: Optional[str] = None
     kind: Optional[ProviderKind] = None
     config: Optional[ProviderConfig] = None
 
-class WriterConfig(BaseModel):
+@dataclass
+class WriterConfig:
     """Writer-specific configuration"""
     path: Optional[str] = ""
     endpoint: Optional[str] = None
@@ -49,33 +54,39 @@ class WriterConfig(BaseModel):
     partition_cols: Optional[Dict[str, List[str]]] = None
     default_partition_cols: Optional[List[str]] = None
 
-class Writer(BaseModel):
+@dataclass
+class Writer:
     """Data writer configuration"""
     name: Optional[str] = None
     kind: Optional[WriterKind] = None
     config: Optional[WriterConfig] = None
 
-class StepConfig(BaseModel):
+@dataclass
+class StepConfig:
     """Step-specific configuration"""
     event_signature: Optional[str] = None
     input_table: Optional[str] = None
     output_table: Optional[str] = None
     allow_decode_fail: Optional[bool] = None
 
-class Step(BaseModel):
+@dataclass
+class Step:
     """Pipeline step configuration"""
     name: str
     kind: Optional[StepKind] = None
     config: Optional[StepConfig] = None
 
-class Pipeline(BaseModel):
+@dataclass
+class Pipeline:
     """Data pipeline configuration"""
-    name: Optional[str] = None
     provider: Provider
-    steps: List[Step]
     writer: Writer
+    steps: List[Step]
+    name: Optional[str] = None
+    
 
-class Config(BaseModel):
+@dataclass
+class Config:
     """Main configuration"""
     project_name: str
     description: str
@@ -83,19 +94,65 @@ class Config(BaseModel):
     writers: Dict[str, Writer]
     pipelines: Dict[str, Pipeline]
 
+def prepare_config(config: Dict) -> Dict:
+    """Prepare configuration for use"""
+
+    config = copy.deepcopy(config)
+
+    pipelines = {}
+
+    for pipeline_name, pipeline in config['pipelines'].items():
+        pipelines[pipeline_name] = copy.deepcopy(pipeline)
+
+        provider =  config['providers'][pipeline['provider']['name']]
+
+        if provider is not None:
+            pipelines[pipeline_name]['provider']['config'] |= copy.deepcopy(provider['config'])
+            pipelines[pipeline_name]['provider']['kind'] = pipelines[pipeline_name]['provider'].get('kind', None) or copy.deepcopy(provider['kind'])
+        
+        writer = config['writers'][pipeline['writer']['name']]
+
+        if writer is not None:
+            pipelines[pipeline_name]['writer']['config'] |= copy.deepcopy(writer['config'])
+            pipelines[pipeline_name]['writer']['kind'] = pipelines[pipeline_name]['writer'].get('kind', None) or copy.deepcopy(writer['kind'])
+
+
+    config['pipelines'] = pipelines
+
+    return config
+
+def parse_provider_kind(provider_kind: str) -> ProviderKind:
+    
+    match provider_kind:
+        case "sqd":
+            return ProviderKind.SQD
+        case _:
+            raise ValueError(f"Invalid provider kind: {provider_kind}")
+
+def parse_format(format: str) -> Format:
+
+    match format:
+        case "evm":
+            return Format.EVM
+        case _:
+            raise ValueError(f"Invalid format: {format}")
+
+
 def parse_config(config_path: str) -> Config:
     """Parse configuration from YAML file"""
+
     try:
         with open(config_path, 'r') as f:
             raw_config = yaml.safe_load(f)
+
+            logger.info(f"Raw config: {type(raw_config['providers'])}")
             
+            prepared_config = prepare_config(raw_config)
+
+            logger.info(f"Prepared config: {type(prepared_config)}")
             # Parse configuration
-            config = Config(**raw_config)
+            config = dacite.from_dict(data_class=Config, data=prepared_config, config=dacite.Config(cast=[Enum]))
             
-            logger.info(f"Loaded configuration for project: {config.project_name}")
-            logger.info(f"Found {len(config.providers)} providers")
-            logger.info(f"Found {len(config.writers)} writers")
-            logger.info(f"Found {len(config.pipelines)} pipelines")
             
             return config
             

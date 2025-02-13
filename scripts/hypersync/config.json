@@ -1,0 +1,20 @@
+{
+    "hypersync_url": "https://eth.hypersync.xyz",
+    "hypersync_api_key": "fc85f54b-8c9c-448e-a39f-fcd3056b2914",
+    "items_per_section": 1000000,
+    "parquet_output_path": "data",
+    "from_block": 21123123,
+    "to_block": null,
+    "events": [
+      {
+        "name": "Transfer",
+        "signature": "Transfer(address indexed from, address indexed to, uint256 amount)",
+        "column_mapping": {
+          "amount": "float64"
+        }
+      }
+    ],
+    "contract_identifier_signatures": [
+      "Approval(address indexed _owner, address indexed _spender, uint256 _value)"
+    ]
+  }

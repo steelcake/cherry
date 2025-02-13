@@ -35,9 +35,6 @@ pipelines:
         format: evm
         query:
           from_block: 0 
-          logs: 
-            - address: ["0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"]
-              event_signatures: ["Transfer(address,address,uint256)"]
           fields:
             block:
               number: true
@@ -66,3 +63,4 @@ pipelines:
       kind: local_parquet
       config:
         path: data
+        database: xyz
