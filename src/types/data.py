@@ -1,82 +1,109 @@
-from dataclasses import dataclass
-from typing import Dict, Optional
-import pandas as pd
+import logging
+from typing import Dict, Optional, Tuple
+import pyarrow as pa
 
-@dataclass
+logger = logging.getLogger(__name__)
+
 class Data:
-    """Container for blockchain data"""
-    events: Optional[Dict[str, pd.DataFrame]] = None
-    blocks: Optional[Dict[str, pd.DataFrame]] = None
-    transactions: Optional[Dict[str, pd.DataFrame]] = None
+    """Generic container for multiple Arrow RecordBatch collections"""
+    
+    def __init__(self, **kwargs: Dict[str, pa.RecordBatch]):
+        self.collections = kwargs
+        logger.info(f"Created Data with collections: {list(self.collections.keys())}")
 
-    def __bool__(self) -> bool:
-        """Return True if there is any data"""
-        return bool(self.events or self.blocks or self.transactions)
+    @property
+    def blocks(self):
+        """Get blocks collection"""
+        return self.collections.get('blocks', {}).get('blocks', None)
 
-    def get_latest_block(self) -> int:
-        """Get the latest block number from any data"""
-        latest_block = 0
-        
-        if self.events:
-            for df in self.events.values():
-                if 'block_number' in df.columns:
-                    latest_block = max(latest_block, df['block_number'].max())
-                    
-        if self.blocks:
-            for df in self.blocks.values():
-                if 'number' in df.columns:
-                    latest_block = max(latest_block, df['number'].max())
-                    
-        if self.transactions:
-            for df in self.transactions.values():
-                if 'block_number' in df.columns:
-                    latest_block = max(latest_block, df['block_number'].max())
-                    
-        return latest_block
+    @property
+    def events(self):
+        """Get events collection"""
+        return self.collections.get('events', {})
 
-    def get_block_range(self) -> tuple[int, int]:
-        """Get the block range (min, max) across all data"""
-        min_block = float('inf')
-        max_block = 0
-        
-        for data_dict in [self.events, self.blocks, self.transactions]:
-            if data_dict:
-                for df in data_dict.values():
-                    block_col = 'block_number' if 'block_number' in df.columns else 'number'
-                    if block_col in df.columns:
-                        min_block = min(min_block, df[block_col].min())
-                        max_block = max(max_block, df[block_col].max())
-        
-        return (int(min_block), int(max_block)) if max_block > 0 else (0, 0)
+    @property
+    def transactions(self):
+        """Get transactions collection"""
+        return self.collections.get('transactions', {}).get('transactions', None)
+
+    @property
+    def traces(self):
+        """Get traces collection"""
+        return self.collections.get('traces', {}).get('traces', None)
 
     def is_empty(self) -> bool:
-        """Check if all data is empty"""
-        if not self:
-            return True
-            
-        if self.events and any(not df.empty for df in self.events.values()):
-            return False
-            
-        if self.blocks and any(not df.empty for df in self.blocks.values()):
-            return False
-            
-        if self.transactions and any(not df.empty for df in self.transactions.values()):
-            return False
-            
-        return True
+        """Check if all collections are empty"""
+        return all(
+            batch is None or (isinstance(batch, dict) and all(
+                inner_batch is None or inner_batch.num_rows == 0
+                for inner_batch in batch.values()
+            )) or (hasattr(batch, 'num_rows') and batch.num_rows == 0)
+            for collection in self.collections.values()
+            for batch in collection.values()
+        )
 
     def __str__(self) -> str:
         """Return human-readable string representation"""
         parts = []
-        if self.events:
-            parts.append(f"{len(self.events)} event types ({sum(df.height for df in self.events.values()) if self.events else 0} total events)")
-        if self.blocks:
-            parts.append(f"{len(self.blocks)} unique blocks")
-        if self.transactions:
-            parts.append(f"{sum(df.height for df in self.transactions.values())} transactions")
-        
-        block_range = self.get_block_range()
-        if block_range != (0, 0):
-            parts.append(f"block range: {block_range[0]} to {block_range[1]}")
+        for name, collection in self.collections.items():
+            total_rows = sum(
+                batch.num_rows for batch in collection.values()
+                if batch is not None and batch.num_rows > 0
+            )
+            parts.append(f"{len(collection)} {name} batches ({total_rows} total rows)")
             
         return f"Data({', '.join(parts) if parts else 'empty'})"
+
+    def __getattr__(self, name):
+        """Allow access to collections as attributes"""
+        if name in self.collections:
+            return self.collections[name]
+        raise AttributeError(f"'Data' object has no attribute '{name}'")
+
+    def __getitem__(self, name):
+        """Allow dictionary-style access to collections"""
+        return self.collections[name]
+
+    def __contains__(self, name):
+        """Check if collection exists"""
+        return name in self.collections
+
+    def get_latest_block(self) -> int:
+        """Get the latest block number across all collections"""
+        max_block = 0
+        
+        for collection in self.collections.values():
+            for batch in collection.values():
+                if isinstance(batch, dict):
+                    # Handle nested dictionary structure
+                    for inner_batch in batch.values():
+                        if inner_batch and inner_batch.num_rows > 0:
+                            # Look for block number column in the schema
+                            block_col = next((col for col in ['blockNumber', 'block_number', 'number'] if col in inner_batch.schema.names), None)
+                            if block_col:
+                                # Get the maximum block number in this batch
+                                batch_max = pa.compute.max(inner_batch.column(block_col)).as_py()
+                                max_block = max(max_block, batch_max)
+                elif batch and batch.num_rows > 0:
+                    # Handle direct RecordBatch
+                    # Look for block number column in the schema
+                    block_col = next((col for col in ['blockNumber', 'block_number', 'number'] if col in batch.schema.names), None)
+                    if block_col:
+                        # Get the maximum block number in this batch
+                        batch_max = pa.compute.max(batch.column(block_col)).as_py()
+                        max_block = max(max_block, batch_max)
+        
+        logger.info(f"Latest block: {max_block}")
+        return max_block
+
+    def items(self):
+        """Return items from all collections"""
+        return self.collections.items()
+
+    def keys(self):
+        """Return keys from all collections"""
+        return self.collections.keys()
+
+    def __len__(self):
+        """Return total number of collections"""
+        return len(self.collections)

@@ -34,10 +34,10 @@ pipelines:
       config:
         format: evm
         query:
-          from_block: 0 
+          from_block: 21753389
           logs: 
             - address: ["0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"]
-              event_signatures: ["Transfer(address,address,uint256)"]
+              event_signatures: ["Transfer(address indexed from, address indexed to, uint256 amount)"]
           fields:
             block:
               number: true
@@ -55,7 +55,7 @@ pipelines:
       - name: my_decode_transfers
         kind: evm_decode_events
         config:
-          event_signature: "Transfer(address,address,uint256)"
+          event_signature: "Transfer(address indexed from, address indexed to, uint256 amount)"
           input_table: "logs"
           output_table: "transfer_events"
           allow_decode_fail: true

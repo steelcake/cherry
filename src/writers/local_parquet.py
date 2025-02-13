@@ -1,125 +1,85 @@
-import asyncio, logging
-from typing import Dict
-from src.writers.base import DataWriter
-from src.config.parser import Output
-import pyarrow as pa, pandas as pd
-from concurrent.futures import ThreadPoolExecutor
-from src.utils.writer import get_output_path
-import os
-from datetime import datetime
-import pyarrow.parquet as pq
+import logging
 from pathlib import Path
+from typing import Dict, Optional
+import pyarrow as pa
+import pyarrow.parquet as pq
+from src.writers.base import DataWriter
+from datetime import datetime
+from src.types.data import Data
 
 logger = logging.getLogger(__name__)
 
 class ParquetWriter(DataWriter):
-    def __init__(self, config: Output):
-        logger.info("Initializing Parquet writer...")
-        self._init_config(config)
-        logger.info(f"Initialized ParquetWriter with output path {self.path}")
-
-    def _init_config(self, config: Output) -> None:
-        """Initialize Parquet configuration"""
-        self.path = Path(config.output_path)
-        if not self.path:
-            raise ValueError("output_path is required")
-            
-        # Create output directory if it doesn't exist
+    """Generic writer for Arrow RecordBatches to local Parquet files"""
+    
+    def __init__(self, config: Dict):
+        super().__init__()
+        # Get path from config, use 'data' if empty or not provided
+        config_path = getattr(config, 'path', 'data')
+        self.path = Path(config_path if config_path else 'data').resolve()
+        
+        # Create base data directory
         self.path.mkdir(parents=True, exist_ok=True)
+        logger.info(f"Initialized ParquetWriter at {self.path}")
 
-    def _convert_to_table(self, df: pa.RecordBatch | pa.Table) -> pa.Table:
-        """Convert input to PyArrow Table"""
-        if isinstance(df, pa.RecordBatch):
-            return pa.Table.from_batches([df])
-        elif isinstance(df, pa.Table):
-            return df
-        raise TypeError(f"Expected RecordBatch or Table, got {type(df)}")
-
-    async def write_parquet(self, table: str, data: pa.Table) -> None:
-        """Write data to parquet file"""
+    async def push_data(self, data: Data):
+        """Push data to parquet files"""
         try:
-            df = data.to_pandas()
-            
-            # Sort by block number to ensure sequential order
-            df = df.sort_values('block_number')
-            min_block = df['block_number'].min()
-            max_block = df['block_number'].max()
-
-            logger.info(f"Writing {len(df)} rows to {table} with Min block: {min_block}, Max block: {max_block}")
-
-            
-            # Create output directory if needed
-            if table.endswith('_events'):
-                event_type = table.replace('_events', '')
-                output_dir = self.path / 'events' / event_type
-            else:
-                output_dir = self.path / table
-            output_dir.mkdir(parents=True, exist_ok=True)
-            
-            # Generate filename with timestamp and block range
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            filename = f"{timestamp}_{min_block}_{max_block}.parquet"
-            output_path = output_dir / filename
-            
-            logger.info(f"Writing batch chunk with {len(df)} rows to {output_path} (blocks {min_block} to {max_block})")
-            
-            # Ensure data is sorted before writing
-            df = df.sort_values('block_number')
-            pq.write_table(
-                pa.Table.from_pandas(df),
-                str(output_path),  # Convert Path to string for pyarrow
-                compression='snappy'
-            )
-            logger.info(f"Successfully wrote batch chunk with {len(df)} rows (blocks {min_block} to {max_block})")
-            
+            # Process each collection
+            for collection_name, collection in data.items():
+                logger.debug(f"Writing collection: {collection_name}")
+                if isinstance(collection, dict):
+                    # Handle nested dictionary structure
+                    for inner_name, batch in collection.items():
+                        if batch and hasattr(batch, 'num_rows') and batch.num_rows > 0:
+                            # Create file path
+                            file_path = self._get_file_path(
+                                collection_name,
+                                inner_name,
+                            )
+                            
+                            # Ensure directory exists
+                            file_path.parent.mkdir(parents=True, exist_ok=True)
+                            
+                            # Write batch to parquet
+                            logger.info(f"Writing {batch.num_rows} rows to {file_path}")
+                            self._write_batch(batch, file_path)
+                elif hasattr(collection, 'num_rows') and collection.num_rows > 0:
+                    # Handle direct RecordBatch
+                    # Create file path
+                    file_path = self._get_file_path(
+                        collection_name,
+                        None,
+                    )
+                    
+                    # Ensure directory exists
+                    file_path.parent.mkdir(parents=True, exist_ok=True)
+                    
+                    # Write batch to parquet
+                    logger.info(f"Writing {collection.num_rows} rows to {file_path}")
+                    self._write_batch(collection, file_path)
         except Exception as e:
-            logger.error(f"Error writing parquet file: {e}")
+            logger.error(f"Error writing parquet files: {e}", exc_info=True)
             raise
 
-    async def _write_to_parquet(self, df: pd.DataFrame, path: str) -> None:
-        """Write DataFrame to Parquet using thread pool"""
-        def write():
-            logger.info(f"Writing {len(df)} rows to {path}")
-            df.to_parquet(
-                path,
-                index=False,
-                compression=None
-            )
-            logger.info(f"Successfully wrote {len(df)} rows to {path}")
+    def _get_file_path(self, collection_name: str, inner_name: Optional[str]) -> Path:
+        """Generate file path for a collection"""
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        if inner_name and inner_name != collection_name:
+            return (self.path / collection_name / inner_name / f"{timestamp}.parquet").resolve()
+        return (self.path / collection_name / f"{timestamp}.parquet").resolve()
 
-        loop = asyncio.get_event_loop()
-        with ThreadPoolExecutor() as pool:
-            await loop.run_in_executor(pool, write)
+    def _write_batch(self, batch, path: Path):
+        """Write a RecordBatch to parquet"""
+        try:
+            table = pa.Table.from_batches([batch])
+            pq.write_table(table, str(path))
+            logger.info(f"Successfully wrote {batch.num_rows} rows to {path}")
+        except Exception as e:
+            logger.error(f"Error writing batch to {path}: {e}", exc_info=True)
+            raise
 
-    async def push_data(self, data: Dict[str, pa.RecordBatch]) -> None:
-        """Push data to Parquet files"""
-        logger.info(f"Starting push_data for {len(data)} tables: {', '.join(data.keys())}")
-        
-        await self._write_events(data)
-        await self._write_blocks(data)
-
-    async def _write_events(self, data: Dict[str, pa.RecordBatch]) -> None:
-        """Write event data to Parquet files"""
-        event_tasks = {
-            name: asyncio.create_task(self.write_parquet(name, df), name=f"write_{name}")
-            for name, df in data.items() 
-            if name.endswith('_events')
-        }
-        
-        for name, task in event_tasks.items():
-            try:
-                await task
-            except Exception as e:
-                logger.error(f"Failed to write {name}: {str(e)}")
-                raise Exception(f"Error writing parquet table into {name}: {e}")
-
-    async def _write_blocks(self, data: Dict[str, pa.RecordBatch]) -> None:
-        """Write combined blocks data to Parquet"""
-        blocks_tables = [name for name in data if name.startswith('blocks_')]
-        if blocks_tables:
-            try:
-                blocks_data = self.combine_blocks(data)
-                await self.write_parquet('blocks', blocks_data)
-            except Exception as e:
-                logger.error(f"Error writing blocks anchor table: {e}")
-                raise 
+    async def write(self, data) -> None:
+        """Write data from Data format"""
+        # Convert Data object to RecordBatches dictionary
+        await self.push_data(data)

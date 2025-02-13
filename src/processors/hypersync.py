@@ -1,190 +1,189 @@
 import logging
 import time
-from typing import AsyncGenerator, Tuple, Optional, List, Dict
-import pandas as pd
+from typing import AsyncGenerator, Dict, Optional, List
 import polars as pl
-from hypersync import HypersyncClient, ClientConfig, ArrowResponse
-from src.utils.generate_hypersync_query import generate_event_query, generate_block_query
+from hypersync import (
+    HypersyncClient, ClientConfig, ArrowResponse,
+    BlockField, TransactionField, LogField, TraceField,
+    Query, StreamConfig, BlockSelection, LogSelection,
+    FieldSelection, ColumnMapping, DataType, HexOutput,
+    JoinMode, signature_to_topic0
+)
 from src.types.data import Data
-from src.config.parser import Config, Stream
-import aiohttp
 
 logger = logging.getLogger(__name__)
 
-class EventProcessor:
-    """Processes blockchain events and blocks from Hypersync"""
+class HypersyncProcessor:
+    """Processes blockchain data from Hypersync"""
     
-    def __init__(self, config: Config):
+    def __init__(self, url: str, token: str):
         self.client = HypersyncClient(
-            ClientConfig(
-                url=config.data_source[0].url,
-                auth_header=f"Bearer {config.data_source[0].token}"
-            )
+            ClientConfig(url=url, auth_header=f"Bearer {token}")
         )
-        self.batch_size = config.streams[0].batch_size
         self._current_block = 0
-        self.config = config
 
-    async def process_blocks(self, from_block: int) -> AsyncGenerator[pd.DataFrame, None]:
-        """Process block data"""
-        current_block = from_block
-        last_log_time = time.time()
-        total_blocks = 0
-        
-        while True:
-            try:
-                # Get block stream configuration from config
-                block_stream = next((s for s in self.config.streams if s.kind == 'block'), None)
-                column_mapping = block_stream.column_cast if block_stream else None
-                
-                query, stream_config = generate_block_query(
-                    from_block=current_block,
-                    to_block=current_block + self.batch_size,
-                    include_transactions=block_stream.include_transactions if block_stream else True,
-                    include_logs=block_stream.include_logs if block_stream else False,
-                    column_mapping=column_mapping
+    async def process_blocks(
+        self,
+        from_block: int,
+        to_block: Optional[int] = None,
+        batch_size: int = 10000,
+        include_logs: bool = True,
+        include_traces: bool = True
+    ) -> AsyncGenerator[Data, None]:
+        """Process block data with transactions"""
+        try:
+            query = Query(
+                from_block=from_block,
+                to_block=None if to_block is None else to_block + 1,
+                join_mode=JoinMode.JOIN_ALL,
+                blocks=[BlockSelection()],
+                field_selection=FieldSelection(
+                    block=[field.value for field in BlockField],
+                    transaction=[field.value for field in TransactionField],
+                    log=[field.value for field in LogField] if include_logs else None,
+                    trace=[field.value for field in TraceField] if include_traces else None
                 )
-                
-                receiver = await self.client.stream_arrow(query, stream_config)
-                
-                while True:
-                    res = await receiver.recv()
-                    if res is None:
-                        break
-                        
-                    # Process blocks data
-                    blocks_df = self._process_block_response(res)
-                    if blocks_df.empty:
-                        break
-                        
-                    # Update progress
-                    current_block = blocks_df['number'].max() + 1
-                    self._current_block = current_block
-                    total_blocks += len(blocks_df)
-                    
-                    # Log progress every 2 seconds
-                    current_time = time.time()
-                    if current_time - last_log_time >= 2:
-                        blocks_processed = current_block - from_block
-                        blocks_per_second = blocks_processed / (current_time - last_log_time)
-                        logger.info(
-                            f"Processed {total_blocks} blocks "
-                            f"({blocks_per_second:.0f} blocks/s)"
-                        )
-                        last_log_time = current_time
-                    
-                    yield blocks_df
-                    
-            except Exception as e:
-                logger.error(f"Error processing blocks: {e}")
-                raise
+            )
 
-    def _process_block_response(self, res: ArrowResponse) -> pd.DataFrame:
+            stream_config = StreamConfig(
+                hex_output=HexOutput.PREFIXED,
+                column_mapping=ColumnMapping(
+                    block=self._get_block_mapping(),
+                    transaction=self._get_transaction_mapping()
+                )
+            )
+
+            receiver = await self.client.stream_arrow(query, stream_config)
+            
+            while True:
+                start_time = time.time()
+                res = await receiver.recv()
+                if res is None:
+                    break
+
+                data = self._process_block_response(res)
+                if not data.is_empty():
+                    self._current_block = data.get_latest_block()
+                    logger.info(
+                        f"Processed blocks {data.get_block_range()} in "
+                        f"{time.time() - start_time:.2f}s"
+                    )
+                    yield data
+
+        except Exception as e:
+            logger.error(f"Error processing blocks: {e}")
+            raise
+
+    async def process_events(
+        self,
+        signature: str,
+        from_block: int,
+        to_block: Optional[int] = None,
+        addresses: Optional[List[str]] = None,
+        include_transactions: bool = False,
+        column_mapping: Optional[Dict[str, str]] = None,
+        batch_size: int = 10000
+    ) -> AsyncGenerator[Data, None]:
+        """Process event data"""
+        try:
+            topic0 = signature_to_topic0(signature)
+            
+            query = Query(
+                from_block=from_block,
+                to_block=None if to_block is None else to_block + 1,
+                logs=[LogSelection(
+                    address=addresses,
+                    topics=[[topic0]]
+                )],
+                field_selection=FieldSelection(
+                    log=[field.value for field in LogField],
+                    block=[BlockField.NUMBER.value, BlockField.TIMESTAMP.value],
+                    transaction=[TransactionField.HASH.value, TransactionField.FROM.value] 
+                    if include_transactions else None
+                )
+            )
+
+            stream_config = StreamConfig(
+                hex_output=HexOutput.PREFIXED,
+                event_signature=signature,
+                column_mapping=ColumnMapping(
+                    decoded_log=self._get_event_mapping(column_mapping),
+                    block={BlockField.TIMESTAMP: DataType.INT64}
+                )
+            )
+
+            receiver = await self.client.stream_arrow(query, stream_config)
+            
+            while True:
+                start_time = time.time()
+                res = await receiver.recv()
+                if res is None:
+                    break
+
+                data = self._process_event_response(res)
+                if not data.is_empty():
+                    self._current_block = data.get_latest_block()
+                    logger.info(
+                        f"Processed events {data.get_block_range()} in "
+                        f"{time.time() - start_time:.2f}s"
+                    )
+                    yield data
+
+        except Exception as e:
+            logger.error(f"Error processing events: {e}")
+            raise
+
+    def _process_block_response(self, res: ArrowResponse) -> Data:
         """Process block response data"""
         blocks_df = pl.from_arrow(res.data.blocks)
         transactions_df = pl.from_arrow(res.data.transactions)
-        
+        logs_df = pl.from_arrow(res.data.logs)
+        traces_df = pl.from_arrow(res.data.traces)
+
         if blocks_df.is_empty():
-            return pd.DataFrame()
-            
-        # Add transaction data if available
+            return Data()
+
+        # Add block timestamp to all dataframes
+        block_timestamp_df = blocks_df.select([
+            pl.col("number").alias("block_number"),
+            pl.col("timestamp").alias("block_timestamp"),
+        ])
+
+        result = {}
+        
+        if not blocks_df.is_empty():
+            blocks_df = blocks_df.with_columns([
+                blocks_df.get_column("number").alias("block_number"),
+                blocks_df.get_column("timestamp").alias("block_timestamp"),
+            ])
+            result['blocks'] = blocks_df.to_pandas()
+
         if not transactions_df.is_empty():
-            # Prefix transaction columns
-            transactions_df = transactions_df.rename(lambda n: f"transaction_{n}")
-            blocks_df = blocks_df.join(
-                transactions_df,
-                left_on="number",
-                right_on="transaction_block_number"
+            transactions_df = transactions_df.join(
+                block_timestamp_df, on="block_number"
             )
-            
-        return blocks_df.to_pandas()
+            result['transactions'] = transactions_df.to_pandas()
 
-    async def process_events(
-        self, 
-        event_name: str,
-        signature: str,
-        from_block: int,
-        addresses: Optional[List[str]] = None
-    ) -> AsyncGenerator[Tuple[pd.DataFrame, pd.DataFrame], None]:
-        """Process event data and associated blocks"""
-        current_block = from_block
-        last_log_time = time.time()
-        total_events = 0
-        
-        # Get event stream configuration
-        event_stream = next(
-            (s for s in self.config.streams 
-             if s.kind == 'event' and s.name == event_name),
-            None
-        )
-        
-        while True:
-            try:
-                query, stream_config = generate_event_query(
-                    signature=signature,
-                    from_block=current_block,
-                    to_block=current_block + self.batch_size,
-                    addresses=addresses,
-                    include_transactions=event_stream.include_transactions if event_stream else False,
-                    column_mapping=event_stream.column_cast if event_stream else None
-                )
-                
-                receiver = await self.client.stream_arrow(query, stream_config)
-                
-                while True:
-                    res = await receiver.recv()
-                    if res is None:
-                        break
-                        
-                    # Process events data
-                    events_df = self._process_event_response(res, event_name)
-                    if events_df.empty:
-                        break
-                        
-                    # Get associated blocks if needed
-                    blocks_df = None
-                    if event_stream and event_stream.include_blocks:
-                        blocks_query, blocks_config = generate_block_query(
-                            from_block=events_df['block_number'].min(),
-                            to_block=events_df['block_number'].max()
-                        )
-                        blocks_receiver = await self.client.stream_arrow(blocks_query, blocks_config)
-                        blocks_df = await self._get_blocks_data(blocks_receiver)
-                    
-                    # Update progress
-                    current_block = events_df['block_number'].max() + 1
-                    self._current_block = current_block
-                    total_events += len(events_df)
-                    
-                    # Log progress every 2 seconds
-                    current_time = time.time()
-                    if current_time - last_log_time >= 2:
-                        blocks_processed = current_block - from_block
-                        speed = total_events / (current_time - last_log_time)
-                        blocks_per_second = blocks_processed / (current_time - last_log_time)
-                        logger.info(
-                            f"Event: {event_name} - Processed {len(events_df)} events "
-                            f"(Total: {total_events}), Speed: {speed:.0f} events/s, "
-                            f"{blocks_per_second:.0f} blocks/s"
-                        )
-                        last_log_time = current_time
-                    
-                    yield events_df, blocks_df
-                    
-            except Exception as e:
-                logger.error(f"Error processing {event_name} events: {e}")
-                raise
+        if not logs_df.is_empty():
+            logs_df = logs_df.join(block_timestamp_df, on="block_number")
+            result['logs'] = logs_df.to_pandas()
 
-    def _process_event_response(self, res: ArrowResponse, event_name: str) -> pd.DataFrame:
+        if not traces_df.is_empty():
+            traces_df = traces_df.join(block_timestamp_df, on="block_number")
+            result['traces'] = traces_df.to_pandas()
+
+        return Data(**result)
+
+    def _process_event_response(self, res: ArrowResponse) -> Data:
         """Process event response data"""
         logs_df = pl.from_arrow(res.data.logs)
         decoded_logs_df = pl.from_arrow(res.data.decoded_logs)
         blocks_df = pl.from_arrow(res.data.blocks)
         transactions_df = pl.from_arrow(res.data.transactions)
-        
+
         if decoded_logs_df.is_empty():
-            return pd.DataFrame()
-            
+            return Data()
+
         # Combine data
         prefixed_decoded_logs = decoded_logs_df.rename(lambda n: f"decoded_{n}")
         prefixed_blocks = blocks_df.rename(lambda n: f"block_{n}")
@@ -203,30 +202,65 @@ class EventProcessor:
                 left_on="transaction_hash",
                 right_on="transaction_hash"
             )
-        
-        return combined_df.to_pandas()
 
-    async def _get_blocks_data(self, receiver) -> pd.DataFrame:
-        """Get blocks data from receiver"""
-        blocks_dfs = []
-        while True:
-            res = await receiver.recv()
-            if res is None:
-                break
-            blocks_df = pl.from_arrow(res.data.blocks)
-            if not blocks_df.is_empty():
-                blocks_dfs.append(blocks_df)
-                
-        if not blocks_dfs:
-            return pd.DataFrame()
+        return Data(events={'events': combined_df.to_pandas()})
+
+    @staticmethod
+    def _get_block_mapping() -> Dict[BlockField, DataType]:
+        """Get block column mapping"""
+        return {
+            BlockField.DIFFICULTY: DataType.INTSTR,
+            BlockField.TOTAL_DIFFICULTY: DataType.INTSTR,
+            BlockField.SIZE: DataType.INTSTR,
+            BlockField.GAS_LIMIT: DataType.INTSTR,
+            BlockField.GAS_USED: DataType.INTSTR,
+            BlockField.TIMESTAMP: DataType.INT64,
+            BlockField.BASE_FEE_PER_GAS: DataType.INTSTR,
+            BlockField.BLOB_GAS_USED: DataType.INTSTR,
+            BlockField.EXCESS_BLOB_GAS: DataType.INTSTR,
+            BlockField.SEND_COUNT: DataType.INTSTR,
+        }
+
+    @staticmethod
+    def _get_transaction_mapping() -> Dict[TransactionField, DataType]:
+        """Get transaction column mapping"""
+        return {
+            TransactionField.GAS: DataType.INTSTR,
+            TransactionField.GAS_PRICE: DataType.INTSTR,
+            TransactionField.NONCE: DataType.INTSTR,
+            TransactionField.VALUE: DataType.INTSTR,
+            TransactionField.MAX_PRIORITY_FEE_PER_GAS: DataType.INTSTR,
+            TransactionField.MAX_FEE_PER_GAS: DataType.INTSTR,
+            TransactionField.CHAIN_ID: DataType.INT64,
+            TransactionField.EFFECTIVE_GAS_PRICE: DataType.INTSTR,
+            TransactionField.GAS_USED: DataType.INTSTR,
+            TransactionField.CUMULATIVE_GAS_USED: DataType.INTSTR,
+            TransactionField.MAX_FEE_PER_BLOB_GAS: DataType.INTSTR,
+        }
+
+    @staticmethod
+    def _get_event_mapping(mapping: Optional[Dict[str, str]] = None) -> Dict[str, DataType]:
+        """Convert string type mapping to DataType mapping"""
+        if not mapping:
+            return {}
             
-        return pl.concat(blocks_dfs).to_pandas()
+        type_map = {
+            'int64': DataType.INT64,
+            'int32': DataType.INT32,
+            'uint64': DataType.UINT64,
+            'uint32': DataType.UINT32,
+            'float64': DataType.FLOAT64,
+            'float32': DataType.FLOAT32,
+            'string': DataType.STRING,
+            'intstr': DataType.INTSTR
+        }
+        
+        return {
+            field: type_map.get(type_str.lower(), DataType.INTSTR)
+            for field, type_str in mapping.items()
+        }
 
     @property
     def current_block(self) -> int:
         """Get current block number"""
         return self._current_block
-
-    async def close(self):
-        """Clean up resources"""
-        pass

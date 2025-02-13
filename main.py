@@ -1,49 +1,44 @@
 import asyncio
 import logging
-from pathlib import Path
 from src.config.parser import parse_config
 from src.utils.logging_setup import setup_logging
-from typing import Dict
-import sys
+from src.writers.writer import Writer
+from src.ingesters.factory import Ingester
 from dotenv import load_dotenv
+import sys
 
-# Load environment variables
+# Load environment variables and setup logging
 load_dotenv()
-
-# Set up logging
 setup_logging()
 logger = logging.getLogger(__name__)
+
+async def process_data(ingester: Ingester, writer: Writer):
+    """Process blockchain data from ingester and write to writer"""
+    try:
+        async for data in ingester.process_all():
+            if not data.is_empty():
+                logger.info(f"Processing blocks")
+                await writer.write(data)
+    except Exception as e:
+        logger.error(f"Error processing data: {e}", exc_info=True)
+        raise
 
 async def main():
     """Main entry point"""
     try:
         logger.info("Starting blockchain data ingestion")
         
-        # Load configuration
         config = parse_config("config.yaml")
-        logger.info(f"Parsed configuration from config.yaml, config: {config}")
-        logger.info(f"Query: {config.pipelines['my_pipeline'].provider.config.query}")
+        logger.info("Parsed configuration from config.yaml")
 
-        sys.exit()
-
-        # Initialize components
-        processor = EventProcessor(config)
-        stream_manager = StreamManager(config.streams, processor)
+        ingester = Ingester(config)
         writer = Writer(Writer.initialize_writers(config))
         
-        # Process streams
-        async for data in stream_manager.process_all():
-            try:
-                await writer.write(data)
-            except Exception as e:
-                logger.error(f"Error writing data: {e}")
-                raise
-                
+        await process_data(ingester, writer)
+        
     except Exception as e:
-        logger.error(f"Fatal error: {str(e)}")
+        logger.error(f"Fatal error: {e}", exc_info=True)
         raise
-    finally:
-        await processor.close()
 
 if __name__ == "__main__":
     try:
@@ -51,7 +46,5 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         logger.info("Shutting down...")
     except Exception as e:
-        logger.error(f"Fatal error: {str(e)}")
-        import sys
-        logger.error(f"Error occurred at line {sys.exc_info()[2].tb_lineno}")
+        logger.error(f"Fatal error: {e}", exc_info=True)
         sys.exit(1)
