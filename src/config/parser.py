@@ -107,35 +107,35 @@ def prepare_config(config: Dict) -> Dict:
         provider =  config['providers'][pipeline['provider']['name']]
 
         if provider is not None:
-            pipelines[pipeline_name]['provider']['config'] |= copy.deepcopy(provider['config'])
-            pipelines[pipeline_name]['provider']['kind'] = pipelines[pipeline_name]['provider'].get('kind', None) or copy.deepcopy(provider['kind'])
+
+            provider_config = copy.deepcopy(provider['config'])
+            # Overwrite with pipeline provider config
+            provider_config.update(copy.deepcopy(pipeline['provider']['config']))
+            pipelines[pipeline_name]['provider']['config'] = provider_config
+            
+            # Use pipeline provider kind if specified, otherwise use provider kind
+            pipelines[pipeline_name]['provider']['kind'] = copy.deepcopy(pipeline['provider'].get('kind', provider['kind']))
+
         
         writer = config['writers'][pipeline['writer']['name']]
 
         if writer is not None:
-            pipelines[pipeline_name]['writer']['config'] |= copy.deepcopy(writer['config'])
-            pipelines[pipeline_name]['writer']['kind'] = pipelines[pipeline_name]['writer'].get('kind', None) or copy.deepcopy(writer['kind'])
+
+            # Start with writer config as base
+            writer_config = copy.deepcopy(writer['config'])
+            # Overwrite with pipeline writer config
+            writer_config.update(copy.deepcopy(pipeline['writer']['config']))
+            pipelines[pipeline_name]['writer']['config'] = writer_config
+            
+            # Use pipeline writer kind if specified, otherwise use writer kind
+            pipelines[pipeline_name]['writer']['kind'] = copy.deepcopy(pipeline['writer'].get('kind', writer['kind']))
+        
+
 
 
     config['pipelines'] = pipelines
 
     return config
-
-def parse_provider_kind(provider_kind: str) -> ProviderKind:
-    
-    match provider_kind:
-        case "sqd":
-            return ProviderKind.SQD
-        case _:
-            raise ValueError(f"Invalid provider kind: {provider_kind}")
-
-def parse_format(format: str) -> Format:
-
-    match format:
-        case "evm":
-            return Format.EVM
-        case _:
-            raise ValueError(f"Invalid format: {format}")
 
 
 def parse_config(config_path: str) -> Config:

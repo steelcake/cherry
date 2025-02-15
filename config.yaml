@@ -7,7 +7,7 @@ providers:
   my_sqd_provider:
     kind: sqd
     config:
-      url: https://portal.sqd.dev/datasets/ethereum-mainnet
+      url: "asdfsdf"
 
 writers:
   my_local_writer:
@@ -32,9 +32,13 @@ pipelines:
     provider:
       name: my_sqd_provider
       config:
+        url: "https://portal.sqd.dev/datasets/ethereum-mainnet"
         format: evm
         query:
-          from_block: 0 
+          from_block: 20123123
+          logs:
+            - address: ["0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"]
+              event_signatures: ["Transfer(address indexed from, address indexed to, uint256 amount)"]           
           fields:
             block:
               number: true
@@ -64,3 +68,4 @@ pipelines:
       config:
         path: data
         database: xyz
+        anchor_table: blocks
