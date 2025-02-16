@@ -1,0 +1,70 @@
+[
+    {
+        "name": "ReserveInitialized (Lending Aave)",
+        "signature": "ReserveInitialized(address indexed asset, address indexed aToken, address stableDebtToken, address variableDebtToken, address interestRateStrategyAddress)"
+    },
+    {
+        "name": "Transfer (ERC20) (generic)",
+        "signature": "Transfer(address indexed from, address indexed to, uint256 value)"
+    },
+    {
+        "name": "Transfer (ERC721) (generic)",
+        "signature": "Transfer(address indexed from, address indexed to, uint256 indexed tokenId)"
+    },
+    {
+        "name": "ReserveFactorChanged (Lending Aave)",
+        "signature": "ReserveFactorChanged(address indexed asset, uint256 oldReserveFactor, uint256 newReserveFactor)"
+    },
+    {
+        "name": "ReserveDataUpdated (Lending Aave)",
+        "signature": "ReserveDataUpdated(address indexed reserve, uint256 liquidityRate, uint256 stableBorrowRate, uint256 variableBorrowRate, uint256 liquidityIndex, uint256 variableBorrowIndex)"
+    },
+    {
+        "name": "ReserveFactorChanged (Lending Aave)",
+        "signature": "ReserveFactorChanged(address indexed asset, uint256 oldReserveFactor, uint256 newReserveFactor)"
+    },
+    {
+        "name": "DecreaseLiquidity (DEX V3)",
+        "signature": "DecreaseLiquidity(uint256 indexed tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)"
+    },
+    {
+        "name": "IncreaseLiquidity (DEX V3)",
+        "signature": "IncreaseLiquidity(uint256 indexed tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)"
+    },
+    {
+        "name": "Mint (DEX v3)",
+        "signature": "Mint(address owner, int24 tickLower, int24 tickUpper, uint128 amount, uint256 amount0, uint256 amount1)"
+    },
+    {
+        "name": "Burn (DEX v3)",
+        "signature": "Burn(address owner, int24 tickLower, int24 tickUpper, uint128 amount, uint256 amount0, uint256 amount1)"
+    },
+    {
+        "name": "Swap (DEX v3)",
+        "signature": "Swap(address sender, address recipient, int256 amount0, int256 amount1, uint160 sqrtPriceX96, uint128 liquidity, int24 tick)"
+    },
+    {
+        "name": "Initialize (DEX v3)",
+        "signature": "Initialize(uint160 sqrtPriceX96, int24 tick)"
+    },
+    {
+        "name": "PairCreated (DEX v2)",
+        "signature": "PairCreated(address indexed token0, address indexed token1, address pair, uint256)"
+    },
+    {
+        "name": "Mint (DEX v2)",
+        "signature": "Mint(address indexed sender, uint256 amount0, uint256 amount1)"
+    },
+    {
+        "name": "Burn (DEX v2)",
+        "signature": "Burn(address indexed sender, uint256 amount0, uint256 amount1, address indexed to)"
+    },
+    {
+        "name": "Swap (DEX v2)",
+        "signature": "Swap(address indexed sender, uint256 amount0In, uint256 amount1In, uint256 amount0Out, uint256 amount1Out, address indexed to)"
+    },
+    {
+        "name": "Sync (DEX v2)",
+        "signature": "Sync(uint112 reserve0, uint112 reserve1)"
+    }
+]
