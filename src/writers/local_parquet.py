@@ -4,10 +4,7 @@ from src.writers.base import DataWriter
 from src.config.parser import WriterConfig
 import pyarrow as pa, pandas as pd
 from concurrent.futures import ThreadPoolExecutor
-from src.utils.writer import get_output_path
-import os
 from datetime import datetime
-import pyarrow.parquet as pq
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -59,11 +56,21 @@ class ParquetWriter(DataWriter):
             raise
 
     async def _write_tables(self, data: Dict[str, pa.RecordBatch]) -> None:
-        """Write event data to S3"""
-        event_tasks = {
-            table_name: asyncio.create_task(self.write_parquet(df=df.to_pandas(), path=self.path / table_name), name=f"write_{table_name}")
-            for table_name, df in data.items()
-        }
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        event_tasks = {}
+        for table_name, df in data.items():
+            # Create table directory if it doesn't exist
+            table_dir = self.path / table_name
+            table_dir.mkdir(parents=True, exist_ok=True)
+            
+            event_tasks[table_name] = asyncio.create_task(
+                self.write_parquet(
+                    df=df.to_pandas(), 
+                    path=table_dir / f"{table_name}_{timestamp}.parquet"
+                ),
+                name=f"write_{table_name}"
+            )
         
         for name, task in event_tasks.items():
             try:
@@ -72,32 +79,3 @@ class ParquetWriter(DataWriter):
                 logger.error(f"Failed to write {name}: {str(e)}")
                 raise Exception(f"Error writing parquet table into {name}: {e}")
             
-
-    """async def push_data(combined_data: Dict[str, pa.RecordBatch], writer: Writer) -> bool:
-    
-    logger.info(f"Writer: {writer}")
-
-    logger.info(f"Writing data to {base_path}")
-    
-    # Create base data directory if it doesn't exist
-    os.makedirs(base_path, exist_ok=True)
-    
-    # Get current timestamp for filename
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    
-    # Write each table to a parquet file in its own subdirectory
-    for table_name, data in combined_data.items():
-        # Create table-specific subdirectory
-        table_dir = os.path.join(base_path, table_name)
-        os.makedirs(table_dir, exist_ok=True)
-        
-        # Create filename with timestamp
-        output_path = os.path.join(table_dir, f"{table_name}_{timestamp}.parquet")
-        
-        # Convert RecordBatch to Table before writing
-        table = pa.Table.from_batches([data])
-        pq.write_table(table, output_path)
-
-        logger.info(f"Wrote table {table_name} to {output_path}")
-
-    return True"""

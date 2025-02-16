@@ -15,8 +15,8 @@ def setup_logging():
     if _is_logging_configured:
         return logging.getLogger(__name__)
 
-    # Create logs directory if it doesn't exist
-    log_dir = Path("logs")
+    # Create logs directory with absolute path if it doesn't exist
+    log_dir = Path(__file__).parent.parent.parent / "logs"
     log_dir.mkdir(exist_ok=True)
 
     # Create a timestamp for the log file

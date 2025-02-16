@@ -12,15 +12,15 @@ from cherry_core.ingest import ProviderKind, Format
 
 logger = logging.getLogger(__name__)
 
-class WriterKind(Enum):
+class WriterKind(str, Enum):
     LOCAL_PARQUET = "local_parquet"
     AWS_WRANGLER_S3 = "aws_wrangler_s3"
     POSTGRES = "postgres"
     CLICKHOUSE = "clickhouse"
 
-class StepKind(Enum):
-    EVM_VALIDATE_BLOCK = "evm_validate_block_data"
-    EVM_DECODE_EVENTS = "evm_decode_events"
+class StepKind(str, Enum):
+    EVM_VALIDATE_BLOCK = 'evm_validate_block_data'
+    EVM_DECODE_EVENTS = 'evm_decode_events'
 
 @dataclass
 class ProviderConfig:
@@ -62,19 +62,11 @@ class Writer:
     config: Optional[WriterConfig] = None
 
 @dataclass
-class StepConfig:
-    """Step-specific configuration"""
-    event_signature: Optional[str] = None
-    input_table: Optional[str] = None
-    output_table: Optional[str] = None
-    allow_decode_fail: Optional[bool] = None
-
-@dataclass
 class Step:
     """Pipeline step configuration"""
     name: str
-    kind: Optional[StepKind] = None
-    config: Optional[StepConfig] = None
+    kind: Optional[str] = None
+    config: Optional[Dict] = None
 
 @dataclass
 class Pipeline:

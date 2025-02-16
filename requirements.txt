@@ -17,9 +17,11 @@ botocore==1.36.1
 certifi==2025.1.31
 cffi==1.17.1
 charset-normalizer==3.4.1
+cherry-core==0.0.6
 click==8.1.8
 clickhouse-connect==0.8.15
 colorama==0.4.6
+dacite==1.9.2
 frozenlist==1.5.0
 greenlet==3.1.1
 hypersync==0.8.5
@@ -34,7 +36,7 @@ pandas==2.2.3
 polars==1.19.0
 propcache==0.2.1
 psycopg2-binary==2.9.10
-pyarrow==18.1.0
+pyarrow==19.0.0
 pycparser==2.22
 pycryptodome==3.21.0
 pydantic==2.10.4
