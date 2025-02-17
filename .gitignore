@@ -15,9 +15,6 @@ test_cryo.py
 # Ignore arrow flight py file
 test_arrow_flight.py
 
-# Ignore examples folder
-examples/
-
 # Ignore utils folder
 #src/utils/
 
