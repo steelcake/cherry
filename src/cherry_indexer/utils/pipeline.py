@@ -22,16 +22,20 @@ logger = logging.getLogger(__name__)
 class Context:
     def __init__(self):
         self.steps = {}
+        self.from_block = {}
     
     def add_step(self, kind: str, step: callable):
         self.steps[kind] = step
+    
+    def set_from_block(self, pipeline_name: str, block_number: int):
+        self.from_block[pipeline_name] = block_number
 
 async def run_pipelines(path: str, context: Context):
     config = parse_config(path)
 
     tasks = {
         name: asyncio.create_task(
-            run_pipeline(pipeline, context)
+            run_pipeline(pipeline, context, name)
         )
         for name, pipeline in config.pipelines.items()
     }
@@ -43,7 +47,10 @@ async def run_pipelines(path: str, context: Context):
             logger.error(f"Failed to run pipeline {name}: {str(e)}")
             raise Exception(f"Error running pipeline {name}: {e}")
         
-def provider_to_stream_config(provider: Provider) -> StreamConfig:
+def provider_to_stream_config(provider: Provider, from_block: int) -> StreamConfig:
+    
+    if provider.config.query is not None:
+        provider.config.query['from_block'] = from_block
 
     provider_config = CoreProviderConfig(
         url=provider.config.url,
@@ -83,11 +90,11 @@ async def process_steps(res: Dict[str, pa.RecordBatch], steps: List[Step], conte
 
     return res
 
-async def run_pipeline(pipeline: Pipeline, context: Context):
+async def run_pipeline(pipeline: Pipeline, context: Context, pipeline_name: str):
     """Run a pipeline"""
     logger.info(f"Running pipeline: {pipeline.name}")
 
-    stream_config = provider_to_stream_config(pipeline.provider)
+    stream_config = provider_to_stream_config(pipeline.provider, context.from_block.get(pipeline_name, 0))
     logger.info(stream_config)
 
     stream = start_stream(stream_config)
