@@ -6,7 +6,7 @@ concurrency:
 
 on:
   release:
-    types: [created]
+    types: [published]
   workflow_dispatch: null
 
 permissions:
@@ -96,10 +96,10 @@ jobs:
     - name: Install twine
       run: pip install twine
     
-    - name: Publish to Test PyPI
+    - name: Publish to PyPI
       env:
         TWINE_USERNAME: __token__
-        TWINE_PASSWORD: ${{ secrets.TEST_PYPI_API_TOKEN }}
+        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
       run: |
         twine upload --repository pypi dist/* --skip-existing
     
