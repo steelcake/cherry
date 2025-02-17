@@ -24,5 +24,8 @@ test_arrow_flight.py
 #Ignore data folder
 data/
 
+#Ignore scripts
+scripts/
+
 # Ignore main.py
 main.py
