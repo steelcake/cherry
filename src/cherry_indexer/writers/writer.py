@@ -1,6 +1,6 @@
-from src.writers.base import DataWriter
-from src.config.parser import Writer, WriterKind
-from src.writers.local_parquet import ParquetWriter
+from ..writers.base import DataWriter
+from ..config.parser import Writer, WriterKind
+from ..writers.local_parquet import ParquetWriter
 
 def create_writer(writer: Writer) -> DataWriter:
     match writer.kind:

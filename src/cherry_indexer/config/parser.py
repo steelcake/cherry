@@ -4,7 +4,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field, model_validator
 from enum import Enum
 import yaml, logging
-from src.utils.logging_setup import setup_logging
+from ..utils.logging_setup import setup_logging
 import os
 from cherry_core.ingest import EvmQuery
 import copy, dacite

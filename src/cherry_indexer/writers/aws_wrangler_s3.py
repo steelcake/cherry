@@ -1,11 +1,10 @@
 import asyncio, boto3, logging, os
 from typing import Optional, Dict, List
-from src.writers.base import DataWriter
-from src.config.parser import Output
+from writers.base import DataWriter
+from config.parser import Output
 import pyarrow as pa, pandas as pd
-import awswrangler as wr
 from concurrent.futures import ThreadPoolExecutor
-from src.utils.writer import get_output_path
+from writers.writer import get_output_path
 from datetime import datetime
 
 logger = logging.getLogger(__name__)

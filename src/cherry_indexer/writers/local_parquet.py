@@ -1,7 +1,7 @@
 import asyncio, logging
 from typing import Dict
-from src.writers.base import DataWriter
-from src.config.parser import WriterConfig
+from ..writers.base import DataWriter
+from ..config.parser import WriterConfig
 import pyarrow as pa, pandas as pd
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime

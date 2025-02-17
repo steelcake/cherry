@@ -1,7 +1,7 @@
 import asyncio
 import logging
-from src.config.parser import parse_config, Pipeline, Provider, Step, StepKind
-from src.utils.logging_setup import setup_logging
+from ..config.parser import parse_config, Pipeline, Provider, Step, StepKind
+from ..utils.logging_setup import setup_logging
 from typing import Dict, List
 import copy
 from dotenv import load_dotenv
@@ -15,7 +15,7 @@ from cherry_core.ingest import (
 from cherry_core import evm_validate_block_data, evm_decode_events
 import dacite
 import pyarrow as pa
-from src.writers.writer import create_writer
+from ..writers.writer import create_writer
 
 logger = logging.getLogger(__name__)
 

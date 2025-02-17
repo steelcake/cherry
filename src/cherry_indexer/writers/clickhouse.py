@@ -4,9 +4,8 @@ from typing import Dict, List
 import clickhouse_connect
 import pyarrow as pa
 import pandas as pd
-from src.writers.base import DataWriter
-from src.config.parser import Output
-from src.schemas.blockchain_schemas import BlockchainSchema
+from ..writers.base import DataWriter
+from ..config.parser import Output
 
 logger = logging.getLogger(__name__)
 
