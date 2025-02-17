@@ -23,3 +23,6 @@ test_arrow_flight.py
 
 #Ignore data folder
 data/
+
+# Ignore main.py
+main.py

@@ -1,14 +1,10 @@
 import asyncio, logging, sys
 from pathlib import Path
 from typing import Dict, Any
-# Add project root to Python path
-root_dir = str(Path(__file__).parent.parent.parent)
-sys.path.insert(0, root_dir)
-
 import pyarrow as pa
 from typing import Dict
-from src.utils.logging_setup import setup_logging
-from src.utils.pipeline import run_pipelines, Context
+from cherry_indexer.utils.logging_setup import setup_logging
+from cherry_indexer.utils.pipeline import run_pipelines, Context
 
 # Set up logging
 setup_logging()
@@ -54,7 +50,7 @@ async def main():
         context.add_step('get_block_number_stats', get_block_number_stats)
 
         # Run pipelines with custom context
-        await run_pipelines(path="./examples/get_block_number_stats/config.yaml", context=context)
+        await run_pipelines(path="./config.yaml", context=context)
 
     except Exception as e:
         logger.error(f"Error in main: {e}", exc_info=True)
