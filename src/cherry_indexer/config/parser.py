@@ -135,12 +135,11 @@ def parse_config(config_path: str) -> Config:
             
             prepared_config = prepare_config(raw_config)
             
-            logger.info(f"Prepared config: {prepared_config}")
-
             # Parse configuration
             config = dacite.from_dict(data_class=Config, data=prepared_config, config=dacite.Config(cast=[Enum]))
             
-            
+            logger.info(f"Parsed Config: {config}")
+
             return config
             
     except Exception as e:

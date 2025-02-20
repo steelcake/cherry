@@ -92,6 +92,17 @@ class AWSWranglerWriter(DataWriter):
                 full_path = f"{self.s3_path}/{table_name}"
                 logger.info(f"Writing to path: {full_path}")
                 
+                # Handle non-UTF-8 columns by converting to safe string representation
+                for col in df.columns:
+                    if df[col].dtype == 'object':
+                        try:
+                            # Try to decode as UTF-8, replace errors
+                            df[col] = df[col].apply(lambda x: str(x).encode('utf-8', errors='replace').decode('utf-8') if pd.notna(x) else x)
+                        except Exception as e:
+                            logger.warning(f"Could not safely encode column {col}: {e}")
+                            # Fallback to string representation if encoding fails
+                            df[col] = df[col].apply(lambda x: str(x) if pd.notna(x) else x)
+                
                 wr.s3.to_parquet(
                     df=df,
                     boto3_session=self.session if self.session else None,
