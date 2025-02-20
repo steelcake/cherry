@@ -1,12 +1,7 @@
 from dataclasses import dataclass
-from typing import List, Dict, Optional, Union, Any
-from pathlib import Path
-from pydantic import BaseModel, Field, model_validator
+from typing import List, Dict, Optional
 from enum import Enum
 import yaml, logging
-from ..utils.logging_setup import setup_logging
-import os
-from cherry_core.ingest import EvmQuery
 import copy, dacite
 from cherry_core.ingest import ProviderKind, Format
 
@@ -22,23 +17,31 @@ class StepKind(str, Enum):
     EVM_VALIDATE_BLOCK = 'evm_validate_block_data'
     EVM_DECODE_EVENTS = 'evm_decode_events'
 
+class StepPhase(str, Enum):
+    PRE_STREAM = 'pre_stream'
+    STREAM = 'stream'
+    POST_STREAM = 'post_stream'
+
+class Format(str, Enum):
+    EVM = "evm"
+
 @dataclass
 class ProviderConfig:
     """Provider-specific configuration"""
+    kind: Optional[ProviderKind] = None
+    format: Optional[Format] = None
     url: Optional[str] = None
     max_num_retries: Optional[int] = None
     retry_backoff_ms: Optional[int] = None
     retry_base_ms: Optional[int] = None
     retry_ceiling_ms: Optional[int] = None
     http_req_timeout_millis: Optional[int] = None
-    format: Optional[Format] = None
     query: Optional[Dict] = None
 
 @dataclass
 class Provider:
     """Data provider configuration"""
     name: Optional[str] = None
-    kind: Optional[ProviderKind] = None
     config: Optional[ProviderConfig] = None
 
 @dataclass
@@ -67,6 +70,7 @@ class Step:
     name: str
     kind: Optional[str] = None
     config: Optional[Dict] = None
+    phase: Optional[StepPhase] = StepPhase.STREAM
 
 @dataclass
 class Pipeline:
@@ -106,7 +110,7 @@ def prepare_config(config: Dict) -> Dict:
             pipelines[pipeline_name]['provider']['config'] = provider_config
             
             # Use pipeline provider kind if specified, otherwise use provider kind
-            pipelines[pipeline_name]['provider']['kind'] = copy.deepcopy(pipeline['provider'].get('kind', provider['kind']))
+            pipelines[pipeline_name]['provider']['config']['kind'] = copy.deepcopy(pipeline['provider']['config'].get('kind', provider['config']['kind']))
 
         
         writer = config['writers'][pipeline['writer']['name']]
@@ -121,9 +125,6 @@ def prepare_config(config: Dict) -> Dict:
             
             # Use pipeline writer kind if specified, otherwise use writer kind
             pipelines[pipeline_name]['writer']['kind'] = copy.deepcopy(pipeline['writer'].get('kind', writer['kind']))
-        
-
-
 
     config['pipelines'] = pipelines
 
@@ -136,12 +137,11 @@ def parse_config(config_path: str) -> Config:
     try:
         with open(config_path, 'r') as f:
             raw_config = yaml.safe_load(f)
-
-            logger.info(f"Raw config: {type(raw_config['providers'])}")
             
             prepared_config = prepare_config(raw_config)
+            
+            logger.info(f"Prepared config: {prepared_config}")
 
-            logger.info(f"Prepared config: {type(prepared_config)}")
             # Parse configuration
             config = dacite.from_dict(data_class=Config, data=prepared_config, config=dacite.Config(cast=[Enum]))
             

@@ -1,43 +1,58 @@
-import asyncio, logging, sys
-from pathlib import Path
-from typing import Dict, Any
+import asyncio, logging
 import pyarrow as pa
 from typing import Dict
+from cherry_indexer.config.parser import Step
 from cherry_indexer.utils.logging_setup import setup_logging
 from cherry_indexer.utils.pipeline import run_pipelines, Context
+import numpy as np
 
 # Set up logging
 setup_logging()
 logger = logging.getLogger(__name__)
 
-def get_block_number_stats(data: Dict[str, pa.RecordBatch], step_config: Dict[str, Any]) -> Dict[str, pa.RecordBatch]:
-    """Custom processing step for transfer events"""
+def get_block_number_stats(data: Dict[str, pa.RecordBatch], step: Step) -> Dict[str, pa.RecordBatch]:
+    """Custom processing step for block number statistics"""
     try:
-        # Get the logs
-        logs = data.get(step_config['input_table'])
-
-        # Get block number column as numpy array
-        block_number_array = logs.column('block_number').to_numpy()
-
-        # Create a new RecordBatch for block number stats
-        stats_schema = pa.schema([
-            ('min_block', pa.int64()),
-            ('max_block', pa.int64()),
-            ('mean_block', pa.float64())
-        ])
+        input_table = step.config.get("input_table", "logs")
+        output_table = step.config.get("output_table", "block_number_stats")
         
-        stats_data = [
-            pa.array([int(block_number_array.min())]),
-            pa.array([int(block_number_array.max())]),
-            pa.array([float(block_number_array.mean())])
-        ]
+        if input_table not in data:
+            logger.warning(f"Input table {input_table} not found in data")
+            return data
+            
+        # Get block numbers
+        block_number_array = data[input_table].column("block_number").to_numpy()
         
-        data[step_config['output_table']] = pa.RecordBatch.from_arrays(stats_data, schema=stats_schema)
+        if len(block_number_array) == 0:
+            logger.warning("No block numbers found in data")
+            # Create empty stats with default values
+            stats_batch = pa.RecordBatch.from_arrays(
+                [
+                    pa.array([0]),  # min_block
+                    pa.array([0]),  # max_block
+                    pa.array([0]),  # num_blocks
+                    pa.array([0.0])  # avg_block
+                ],
+                ["min_block", "max_block", "num_blocks", "avg_block"]
+            )
+        else:
+            # Calculate statistics
+            stats_batch = pa.RecordBatch.from_arrays(
+                [
+                    pa.array([int(block_number_array.min())]),
+                    pa.array([int(block_number_array.max())]),
+                    pa.array([len(block_number_array)]),
+                    pa.array([float(block_number_array.mean())])
+                ],
+                ["min_block", "max_block", "num_blocks", "avg_block"]
+            )
         
+        # Add stats to output
+        data[output_table] = stats_batch
         return data
-
+        
     except Exception as e:
-        logger.error(f"Error processing logs: {e}", exc_info=True)
+        logger.error(f"Error processing logs: {e}")
         raise
 
 async def main():

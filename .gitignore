@@ -6,15 +6,6 @@ logs/
 # Ignore .env file
 .env
 
-# Ignore hypersync test py file
-test_hypersync.py
-
-# Ignore cryo test py file
-test_cryo.py
-
-# Ignore arrow flight py file
-test_arrow_flight.py
-
 # Ignore utils folder
 #src/utils/
 
@@ -26,6 +17,3 @@ data/
 
 #Ignore scripts
 scripts/
-
-# Ignore main.py
-main.py

@@ -5,8 +5,8 @@ description: "Cherry event indexing and data processing pipeline"
 # Data source configuration
 providers:
   my_sqd_provider:
-    kind: sqd
     config:
+      kind: sqd
       url: "asdfsdf"
 
 writers:
@@ -14,13 +14,13 @@ writers:
     kind: local_parquet
     config:
       path: ""
-  aws_wrangler_s3:
+  my_aws_wrangler_s3_writer:
     kind: aws_wrangler_s3
     config:
       endpoint: http://localhost:9000
       database: blockchain
       use_boto3: true
-      s3_path: blockchain-data/aws-wrangler-s3
+      s3_path: s3://blockchain-data/aws-wrangler-s3
       region: "us-east-1"
       anchor_table: blocks
       partition_cols:
@@ -50,11 +50,17 @@ pipelines:
               topic3: true
     
     steps:
+      - name: get_last_block
+        kind: get_last_block_number
+        phase: pre_stream
+        config:
+        
       #- name: my_validate_evm_event
       #  kind: evm_validate_block_data (This part will fail)
       
-      - name: my_decode_transfers
+      - name: decode_transfers
         kind: evm_decode_events
+        phase: stream
         config:
           event_signature: "Transfer(address,address,uint256)"
           input_table: "logs"
@@ -62,9 +68,11 @@ pipelines:
           allow_decode_fail: true
 
     writer:
-      name: my_local_writer
-      kind: local_parquet
+      name: my_aws_wrangler_s3_writer
+      kind: aws_wrangler_s3
       config:
-        path: data
-        database: xyz
-        anchor_table: blocks
+        endpoint: http://localhost:9000
+        database: blockchain
+        use_boto3: true
+        s3_path: s3://blockchain-data/aws-wrangler-s3
+

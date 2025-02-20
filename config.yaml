@@ -50,10 +50,8 @@ pipelines:
               topic3: true
     
     steps:
-      #- name: my_validate_evm_event
-      #  kind: evm_validate_block_data (This part will fail)
-      
-      - name: my_decode_transfers
+      my_decode_transfers:
+        name: my_decode_transfers
         kind: evm_decode_events
         config:
           event_signature: "Transfer(address,address,uint256)"
@@ -61,7 +59,8 @@ pipelines:
           output_table: "transfer_events"
           allow_decode_fail: true
       
-      - name: my_get_block_number_stats
+      my_get_block_number_stats:
+        name: my_get_block_number_stats
         kind: get_block_number_stats
         config:
           input_table: logs
