@@ -1,23 +1,40 @@
-import asyncio, boto3, logging, os
-from typing import Optional, Dict, List
-from writers.base import DataWriter
-from config.parser import Output
+import asyncio, boto3, logging
+from typing import Dict
+from ..writers.base import DataWriter
+from ..config.parser import Writer
 import pyarrow as pa, pandas as pd
 from concurrent.futures import ThreadPoolExecutor
-from writers.writer import get_output_path
 from datetime import datetime
+import awswrangler as wr
 
 logger = logging.getLogger(__name__)
 
 def _get_athena_schema(record_batch: pa.RecordBatch) -> Dict[str, str]:
-        """Convert PyArrow schema to Athena compatible types"""
-        return {
-            field.name: wr._data_types.pyarrow2athena(field.type)
-            for field in record_batch.schema
-        }
+    """Convert PyArrow schema to Athena compatible types"""
+    schema = {}
+    for field in record_batch.schema:
+        try:
+            # Handle special cases
+            field_type = str(field.type)
+            if field_type == 'uint64':
+                schema[field.name] = 'bigint'
+            elif field_type.startswith('decimal'):
+                # Set a safe default precision for decimal types
+                schema[field.name] = 'decimal(38,6)'
+            else:
+                try:
+                    schema[field.name] = wr._data_types.pyarrow2athena(field.type)
+                except Exception:
+                    # Default to string for unsupported types
+                    schema[field.name] = 'string'
+        except Exception as e:
+            logger.warning(f"Could not convert field {field.name} of type {field.type}: {e}")
+            # Default to string type for unsupported types
+            schema[field.name] = 'string'
+    return schema
 
 class AWSWranglerWriter(DataWriter):
-    def __init__(self, config: Output):
+    def __init__(self, config: Writer):
         logger.info("Initializing AWS Wrangler S3 writer...")
         self._init_s3_config(config)
         
@@ -26,21 +43,30 @@ class AWSWranglerWriter(DataWriter):
         
         logger.info(f"Initialized AWSWranglerWriter with endpoint {self.endpoint_url}")
 
-    def _init_session(self, config: Output) -> None:
+    def _init_session(self, config: Writer) -> None:
         """Initialize AWS session"""
         
         self.session = boto3.Session(
-            region_name=config.region or 'us-east-1'
+            region_name=config.region or 'us-east-1',
+            aws_access_key_id='minioadmin',
+            aws_secret_access_key='minioadmin'
         )
+        self.anchor_table = config.anchor_table or 'blocks'
+        self.database = config.database
         
         # Configure AWS Wrangler
         wr.config.s3_endpoint_url = self.endpoint_url
 
-    def _init_s3_config(self, config: Output) -> None:
+    def _init_s3_config(self, config: Writer) -> None:
         """Initialize S3 configuration"""
         # Format endpoint URL
         self.endpoint_url = config.endpoint
-        self.s3_path = config.s3_path
+        
+        # Ensure s3_path starts with s3://
+        if not config.s3_path.startswith('s3://'):
+            self.s3_path = f"s3://{config.s3_path}"
+        else:
+            self.s3_path = config.s3_path
             
         logger.info(f"Using S3 path: {self.s3_path}")
         
@@ -61,20 +87,26 @@ class AWSWranglerWriter(DataWriter):
         """Write DataFrame to S3 using thread pool"""
         def write():
             logger.info(f"Writing {len(df)} rows to {table_name}")
-            wr.s3.to_parquet(
-                df=df,
-                boto3_session=self.session if self.session else None,
-                path=self.s3_path,
-                dataset=True,
-                use_threads=True,
-                mode="append",
-                database=self.database,
-                table=table_name,
-                dtype=schema,
-                partition_cols=self.partition_cols.get(table_name, self.default_partition_cols),
-                schema_evolution=False,
-            )
-            logger.info(f"Successfully wrote {len(df)} rows to {self.s3_path}")
+            try:
+                # Construct full path including table name
+                full_path = f"{self.s3_path}/{table_name}"
+                logger.info(f"Writing to path: {full_path}")
+                
+                wr.s3.to_parquet(
+                    df=df,
+                    boto3_session=self.session if self.session else None,
+                    path=full_path,
+                    dataset=True,
+                    use_threads=True,
+                    mode="append",
+                    dtype=schema,
+                    partition_cols=None, #self.partition_cols.get(table_name, self.default_partition_cols),
+                    schema_evolution=False,
+                )
+                logger.info(f"Successfully wrote {len(df)} rows to {full_path}")
+            except Exception as e:
+                logger.error(f"Failed to write to S3: {e}")
+                raise
 
         loop = asyncio.get_event_loop()
         with ThreadPoolExecutor() as pool:
@@ -88,8 +120,17 @@ class AWSWranglerWriter(DataWriter):
             if self.anchor_table is None:
                 await self._write_tables(data)
             else:
-                await self._write_tables(filter(lambda x, _: x != self.anchor_table, data))
-                await self._write_tables(filter(lambda x, _: x == self.anchor_table, data))
+                # Split data into non-anchor and anchor tables
+                non_anchor_data = {k: v for k, v in data.items() if k != self.anchor_table}
+                anchor_data = {k: v for k, v in data.items() if k == self.anchor_table}
+                
+                # Write non-anchor tables first
+                if non_anchor_data:
+                    await self._write_tables(non_anchor_data)
+                
+                # Write anchor table last
+                if anchor_data:
+                    await self._write_tables(anchor_data)
             
         except Exception as e:
             logger.error(f"Error writing to S3: {e}")
