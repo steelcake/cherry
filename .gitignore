@@ -12,8 +12,12 @@ logs/
 # Ignore hypersync query generation .py file
 ./generate_hypersync_query.py
 
-#Ignore data folder
+# Ignore data folder
 data/
 
-#Ignore scripts
+# Ignore scripts
 scripts/
+
+# Ignore package related folders
+dist/
+src/cherry*.egg-info/

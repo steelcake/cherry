@@ -22,9 +22,6 @@ class StepPhase(str, Enum):
     STREAM = 'stream'
     POST_STREAM = 'post_stream'
 
-class Format(str, Enum):
-    EVM = "evm"
-
 @dataclass
 class ProviderConfig:
     """Provider-specific configuration"""
@@ -79,7 +76,6 @@ class Pipeline:
     writer: Writer
     steps: List[Step]
     name: Optional[str] = None
-    
 
 @dataclass
 class Config:
@@ -89,7 +85,6 @@ class Config:
     providers: Dict[str, Provider]
     writers: Dict[str, Writer]
     pipelines: Dict[str, Pipeline]
-
 def prepare_config(config: Dict) -> Dict:
     """Prepare configuration for use"""
 
@@ -152,14 +147,3 @@ def parse_config(config_path: str) -> Config:
         logger.error(f"Error parsing config file {config_path}: {e}")
         raise
 
-def get_provider_config(config: Config, provider_name: str) -> Optional[Provider]:
-    """Get provider configuration by name"""
-    return next((p for p in config.providers if p.name == provider_name), None)
-
-def get_writer_config(config: Config, writer_name: str) -> Optional[Writer]:
-    """Get writer configuration by name"""
-    return next((w for w in config.writers if w.name == writer_name), None)
-
-def get_pipeline_config(config: Config, pipeline_name: str) -> Optional[Pipeline]:
-    """Get pipeline configuration by name"""
-    return next((p for p in config.pipelines if p.name == pipeline_name), None)
