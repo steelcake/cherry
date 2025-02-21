@@ -12,9 +12,6 @@ import awswrangler as wr
 setup_logging()
 logger = logging.getLogger(__name__)
 
-def get_block_number_stats(data: Dict[str, pa.RecordBatch], step_config: Dict[str, Any]) -> Dict[str, pa.RecordBatch]:
-    return data
-
 async def block_number_fn(pipeline_name: str, pipeline: Pipeline) -> int:
     table = pipeline.writer.config.anchor_table
     database = pipeline.writer.config.database
@@ -38,7 +35,7 @@ async def main():
         context = Context()
 
         # Add custom processing step using the enum value
-        context.add_step('get_block_number_stats', get_block_number_stats)
+        context.add_step('block_number_fn', block_number_fn)
 
         # Run pipelines with custom context
         await run_pipelines(path="./config.yaml", context=context)
