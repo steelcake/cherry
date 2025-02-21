@@ -31,7 +31,7 @@ multidict==6.1.0
 numpy==2.2.1
 packaging==24.2
 pandas==2.2.3
-polars==1.19.0
+polars>=1.19.0,<2.0.0
 propcache==0.2.1
 psycopg2-binary==2.9.10
 pyarrow==19.0.0
