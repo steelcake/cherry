@@ -5,9 +5,13 @@ description: "Cherry event indexing and data processing pipeline"
 # Data source configuration
 providers:
   my_sqd_provider:
-    kind: sqd
     config:
-      url: "asdfsdf"
+      kind: sqd
+      url: "test"
+  my_hypersync_provider:
+    config:
+      kind: hypersync
+      url: "test"
 
 writers:
   my_local_writer:
@@ -30,9 +34,9 @@ writers:
 pipelines:
   my_pipeline:
     provider:
-      name: my_sqd_provider
+      name: my_hypersync_provider
       config:
-        url: "https://portal.sqd.dev/datasets/ethereum-mainnet"
+        url: "https://eth.hypersync.xyz"
         format: evm
         query:
           from_block: 20123123

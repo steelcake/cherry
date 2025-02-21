@@ -1,7 +1,7 @@
 import asyncio, boto3, logging
 from typing import Dict
 from ..writers.base import DataWriter
-from ..config.parser import Writer
+from ..config.parser import WriterConfig
 import pyarrow as pa, pandas as pd
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
@@ -34,7 +34,7 @@ def _get_athena_schema(record_batch: pa.RecordBatch) -> Dict[str, str]:
     return schema
 
 class AWSWranglerWriter(DataWriter):
-    def __init__(self, config: Writer):
+    def __init__(self, config: WriterConfig):
         logger.info("Initializing AWS Wrangler S3 writer...")
         self._init_s3_config(config)
         
@@ -43,7 +43,7 @@ class AWSWranglerWriter(DataWriter):
         
         logger.info(f"Initialized AWSWranglerWriter with endpoint {self.endpoint_url}")
 
-    def _init_session(self, config: Writer) -> None:
+    def _init_session(self, config: WriterConfig) -> None:
         """Initialize AWS session"""
         
         self.session = boto3.Session(
@@ -57,7 +57,7 @@ class AWSWranglerWriter(DataWriter):
         # Configure AWS Wrangler
         wr.config.s3_endpoint_url = self.endpoint_url
 
-    def _init_s3_config(self, config: Writer) -> None:
+    def _init_s3_config(self, config: WriterConfig) -> None:
         """Initialize S3 configuration"""
         # Format endpoint URL
         self.endpoint_url = config.endpoint
@@ -91,6 +91,17 @@ class AWSWranglerWriter(DataWriter):
                 # Construct full path including table name
                 full_path = f"{self.s3_path}/{table_name}"
                 logger.info(f"Writing to path: {full_path}")
+                
+                # Handle non-UTF-8 columns by converting to safe string representation
+                for col in df.columns:
+                    if df[col].dtype == 'object':
+                        try:
+                            # Try to decode as UTF-8, replace errors
+                            df[col] = df[col].apply(lambda x: str(x).encode('utf-8', errors='replace').decode('utf-8') if pd.notna(x) else x)
+                        except Exception as e:
+                            logger.warning(f"Could not safely encode column {col}: {e}")
+                            # Fallback to string representation if encoding fails
+                            df[col] = df[col].apply(lambda x: str(x) if pd.notna(x) else x)
                 
                 wr.s3.to_parquet(
                     df=df,

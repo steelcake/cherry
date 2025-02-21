@@ -1,7 +1,7 @@
 import asyncio
 import logging
-from ..config.parser import parse_config, Pipeline, Provider, Step, StepKind, StepPhase
-from typing import Dict
+from ..config.parser import parse_config, Pipeline, Provider, Step, StepKind, StepPhase, Config
+from typing import Dict, Union
 import copy
 from cherry_core.ingest import (
     start_stream,
@@ -24,8 +24,9 @@ class Context:
     def add_step(self, kind: str, step: callable):
         self.steps[kind] = step
 
-async def run_pipelines(path: str, context: Context):
-    config = parse_config(path)
+async def run_pipelines(config: Union[str, Config], context: Context):
+    if isinstance(config, str):
+        config = parse_config(config)
 
     tasks = {
         name: asyncio.create_task(

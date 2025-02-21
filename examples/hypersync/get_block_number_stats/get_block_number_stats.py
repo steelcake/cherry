@@ -20,11 +20,12 @@ def get_block_number_stats(data: Dict[str, pa.RecordBatch], step: Step) -> Dict[
             logger.warning(f"Input table {input_table} not found in data")
             return data
             
-        # Get block numbers
-        block_number_array = data[input_table].column("block_number").to_numpy()
+        # Get block numbers, filtering out null values
+        block_number_column = data[input_table].column("block_number")
+        block_number_array = block_number_column.filter(block_number_column.is_valid()).to_numpy()
         
         if len(block_number_array) == 0:
-            logger.warning("No block numbers found in data")
+            logger.warning("No valid block numbers found in data")
             # Create empty stats with default values
             stats_batch = pa.RecordBatch.from_arrays(
                 [
@@ -65,7 +66,7 @@ async def main():
         context.add_step('get_block_number_stats', get_block_number_stats)
 
         # Run pipelines with custom context
-        await run_pipelines(path="./config.yaml", context=context)
+        await run_pipelines(config="./config.yaml", context=context)
 
     except Exception as e:
         logger.error(f"Error in main: {e}", exc_info=True)
