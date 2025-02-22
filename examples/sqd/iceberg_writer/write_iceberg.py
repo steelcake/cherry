@@ -10,6 +10,7 @@ from cherry_indexer.utils.logging_setup import setup_logging
 from cherry_indexer.utils.pipeline import run_pipelines, Context
 from cherry_core.ingest import EvmQuery, LogRequest
 import numpy as np
+from pyiceberg.catalog import Catalog, Properties
 
 # Set up logging
 setup_logging()
@@ -93,14 +94,16 @@ async def main():
         config.providers["my_provider"] = provider
 
         # Add writer
+        # Modify writer configuration
         writer = Writer(
             name="my_writer",
             kind=WriterKind.ICEBERG_S3,
             config=WriterConfig(
                 endpoint="http://localhost:9000",
-                s3_path="s3://blockchain-data/iceberg-s3",
+                s3_path="blockchain-data/iceberg-s3",
                 anchor_table="blocks",
-                use_boto3=True
+                use_boto3=True,
+                database="blockchain"
             )
         )
         config.writers["my_writer"] = writer
