@@ -1,110 +1,83 @@
 import asyncio
 import logging
-import boto3
-import pyarrow as pa
-import pandas as pd
-from typing import Dict, Optional, Type
-
-from pyiceberg.catalog import Catalog
-from pyiceberg.catalog.rest import RestCatalog
-from pyiceberg.io import FileIO
-from pyiceberg.io.pyarrow import PyArrowFileIO
-from pyiceberg.table import Table
-from pyiceberg.schema import Schema
-from pyiceberg.types import (
-    NestedField, StringType, IntegerType, LongType,
-    FloatType, DoubleType, BooleanType, DateType, TimestampType,
-    DecimalType, BinaryType, ListType, StructType
-)
-
-from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
-
+from typing import Dict
 from ..writers.base import DataWriter
 from ..config.parser import WriterConfig
+import pyarrow as pa
+import pandas as pd
+from concurrent.futures import ThreadPoolExecutor
+from pyiceberg.catalog import load_catalog
+from pyiceberg.schema import Schema
+from pyiceberg.types import (
+    BooleanType, StringType, LongType, DoubleType, TimestampType
+)
+from pyiceberg.schema import NestedField
+from pyiceberg.catalog import Catalog
+from pyiceberg.io.pyarrow import PyArrowFileIO
+from pyiceberg.catalog.sql import SqlCatalog
+from pyiceberg.table import TableProperties
+from pyiceberg.exceptions import NoSuchNamespaceError
+import os
+from pyarrow.fs import S3FileSystem
+import time
+import boto3
 
 logger = logging.getLogger(__name__)
 
-def _convert_pyarrow_to_iceberg_schema(record_batch: pa.RecordBatch) -> Schema:
+def _get_iceberg_schema(record_batch: pa.RecordBatch) -> Schema:
     """Convert PyArrow schema to Iceberg schema"""
-    field_id_counter = [1]  # Use list to allow mutation in nested functions
-    
-    def get_iceberg_type(pa_type: pa.DataType) -> Type:
-        # Map PyArrow types to Iceberg types
-        type_map = {
-            pa.int8(): IntegerType(),
-            pa.int16(): IntegerType(),
-            pa.int32(): IntegerType(),
-            pa.int64(): LongType(),
-            pa.float32(): FloatType(),
-            pa.float64(): DoubleType(),
-            pa.string(): StringType(),
-            pa.binary(): BinaryType(),
-            pa.bool_(): BooleanType(),
-            pa.date32(): DateType(),
-            pa.timestamp('us'): TimestampType(),
-            pa.decimal128(38, 18): DecimalType(38, 18),
-        }
-        
-        # Handle nested types if needed
-        if isinstance(pa_type, pa.ListType):
-            element_field_id = field_id_counter[0]
-            field_id_counter[0] += 1
-            element_type = get_iceberg_type(pa_type.value_type)
-            return ListType(
-                element_id=element_field_id,
-                element=element_type,
-                element_required=not pa_type.value_field.nullable
-            )
-        elif isinstance(pa_type, pa.StructType):
-            fields = []
-            for field in pa_type:
-                field_id = field_id_counter[0]
-                field_id_counter[0] += 1
-                field_type = get_iceberg_type(field.type)
-                fields.append(
-                    NestedField(
-                        field_id=field_id,
-                        name=field.name,
-                        field_type=field_type,
-                        required=not field.nullable
-                    )
-                )
-            return StructType(fields=fields)
-            
-        # Get the matching Iceberg type or default to string
-        return type_map.get(pa_type, StringType())
-
-    # Convert each field to Iceberg schema field
     schema_fields = []
+    field_id = 1  # Iceberg requires unique field IDs
+    
     for field in record_batch.schema:
-        field_id = field_id_counter[0]
-        field_id_counter[0] += 1
-        iceberg_type = get_iceberg_type(field.type)
-        schema_fields.append(
-            NestedField(
-                field_id=field_id,
-                name=field.name,
-                field_type=iceberg_type,
-                required=not field.nullable
+        try:
+            field_type = str(field.type)
+            if field_type == 'bool':
+                iceberg_type = BooleanType()
+            elif field_type in ['int64', 'uint64']:
+                iceberg_type = LongType()
+            elif field_type == 'double':
+                iceberg_type = DoubleType()
+            elif field_type == 'timestamp[us]':
+                iceberg_type = TimestampType()
+            else:
+                iceberg_type = StringType()
+            
+            schema_fields.append(
+                NestedField(
+                    field_id=field_id,
+                    name=field.name,
+                    field_type=iceberg_type,
+                    required=False
+                )
             )
-        )
-
-    return Schema(fields=schema_fields)  # Pass fields as named argument
+            field_id += 1
+            
+        except Exception as e:
+            logger.warning(f"Could not convert field {field.name} of type {field.type}: {e}")
+            schema_fields.append(
+                NestedField(
+                    field_id=field_id,
+                    name=field.name,
+                    field_type=StringType(),
+                    required=False
+                )
+            )
+            field_id += 1
+    
+    return Schema(*schema_fields)
 
 class IcebergWriter(DataWriter):
     def __init__(self, config: WriterConfig):
         logger.info("Initializing Iceberg S3 writer...")
         self._init_s3_config(config)
-        self._init_catalog(config)
+        self._init_catalog()
         logger.info(f"Initialized IcebergWriter with endpoint {self.endpoint_url}")
 
     def _init_s3_config(self, config: WriterConfig) -> None:
         """Initialize S3 configuration"""
-        # Format endpoint URL
-        self.endpoint_url = config.endpoint or 'http://localhost:9000'
+        self.endpoint_url = config.endpoint
         
-        # Ensure s3_path starts with s3://
         if not config.s3_path.startswith('s3://'):
             self.s3_path = f"s3://{config.s3_path}"
         else:
@@ -112,132 +85,162 @@ class IcebergWriter(DataWriter):
             
         logger.info(f"Using S3 path: {self.s3_path}")
         
-        self.region = config.region or 'us-east-1'
-        self.database = config.database or 'blockchain'
+        self.partition_cols = config.partition_cols or {}
+        self.default_partition_cols = config.default_partition_cols
         self.anchor_table = config.anchor_table or 'blocks'
+        self.database = config.database or 'blockchain'
 
-    def _init_catalog(self, config: WriterConfig) -> None:
+    def _init_catalog(self) -> None:
         """Initialize Iceberg catalog"""
-        # Format endpoint URL - ensure it's accessible
-        self.endpoint_url = config.endpoint or 'http://minio:9000'  # Use minio service name
+        warehouse_path = f"{self.s3_path}/iceberg-warehouse"
         
-        # Create boto3 session for S3 access
-        self.session = boto3.Session(
-            region_name=self.region,
-            aws_access_key_id='minioadmin',
-            aws_secret_access_key='minioadmin'
-        )
+        # Create a local SQLite catalog file
+        catalog_dir = os.path.join(os.path.expanduser("~"), ".iceberg")
+        os.makedirs(catalog_dir, exist_ok=True)
+        catalog_path = os.path.join(catalog_dir, "catalog.db")
 
-        # Configure PyIceberg catalog using REST
-        from pyiceberg.catalog import load_catalog
-        self.catalog = load_catalog(
-            "rest",  # Catalog name
-            type="rest",  # Use REST catalog type
-            uri="http://iceberg-rest:8181",  # Use iceberg-rest service name
+        # Configure S3 filesystem with correct parameters
+        s3_fs = S3FileSystem(
+            access_key="minioadmin",
+            secret_key="minioadmin",
+            endpoint_override=self.endpoint_url,
+            scheme="http",
+            allow_bucket_creation=True,
+            background_writes=False,  # Disable background writes for better stability
+            request_timeout=60,  # Reduced timeout
+            connect_timeout=30,
+        )
+        
+        # Ensure the base paths exist in MinIO
+        try:
+            s3_fs.create_dir("blockchain-data/iceberg-warehouse")
+            s3_fs.create_dir("blockchain-data/iceberg-s3")
+            logger.info("Created base directories in MinIO")
+        except Exception as e:
+            logger.warning(f"Error creating directories (may already exist): {e}")
+        
+        # Configure catalog with SQLite backend
+        self.catalog = SqlCatalog(
+            name="cherry",
+            uri=f"sqlite:///{catalog_path}",
+            warehouse=warehouse_path,
             s3=dict(
-                endpoint="http://minio:9000",  # Use minio service name
+                endpoint_url=self.endpoint_url,
                 access_key_id="minioadmin",
                 secret_access_key="minioadmin",
-                region=self.region,
-                path_style_access="true",
+                path_style_request=True,
+                use_ssl=False,
+                verify=False,
+                connect_timeout=30,
+                read_timeout=60,
+                retries=dict(
+                    max_attempts=5,
+                    mode="standard"
+                )
             ),
-            warehouse=self.s3_path,
-            region=self.region,
+            io=s3_fs
         )
+        
         # Create namespace if it doesn't exist
         try:
-            self.catalog.create_namespace(self.database)
-            logger.info(f"Created new namespace: {self.database}")
+            self.catalog.create_namespace(
+                (self.database,),
+                properties={
+                    "location": f"{self.s3_path}/{self.database}",
+                    "write.metadata.previous-versions-max": "1"
+                }
+            )
+            logger.info(f"Created namespace: {self.database}")
         except Exception as e:
-            if "NamespaceAlreadyExistsError" in str(e.__class__.__name__):
-                logger.info(f"Using existing namespace: {self.database}")
-            else:
-                logger.error(f"Error creating namespace: {e}")
-                raise
-
-        logger.info(f"Initialized Iceberg catalog with warehouse: {self.s3_path}")
-
-        # Configure S3 client with proper settings
-        self.s3_client = self.session.client(
-            's3',
-            endpoint_url=self.endpoint_url,  # Use minio service name
-            region_name=self.region,
-            config=boto3.session.Config(
-                signature_version='s3v4',
-                s3={'addressing_style': 'path'}
-            ),
-            use_ssl=False,  # MinIO doesn't use SSL in our setup
-            verify=False,   # Skip SSL verification
-            aws_access_key_id='minioadmin',
-            aws_secret_access_key='minioadmin'
+            if not isinstance(e, NoSuchNamespaceError):
+                logger.warning(f"Error creating namespace: {e}")
+        
+        # Initialize FileIO for S3
+        self.file_io = PyArrowFileIO(
+            properties={
+                "s3.endpoint": self.endpoint_url,
+                "s3.access-key-id": "minioadmin",
+                "s3.secret-access-key": "minioadmin",
+                "s3.path-style-access": "true",
+                "s3.ssl-enabled": "false",
+                "s3.verify-ssl": "false",
+                "s3.connection-timeout-ms": "300000",
+                "s3.retry.limit": "5"
+            }
         )
 
-    async def write_iceberg(self, table_name: str, record_batch: pa.RecordBatch) -> None:
-        """Write data to Iceberg table"""
+    async def _write_to_iceberg(self, df: pd.DataFrame, table_name: str, schema: Schema) -> None:
+        """Write DataFrame to S3 using Iceberg format"""
         def write():
-            try:
-                # Convert PyArrow to Pandas for easier manipulation
-                table = pa.Table.from_batches([record_batch])
-                pandas_df = table.to_pandas()
-
-                # Fully qualified table name
-                namespace = self.database.replace('-', '_')  # Iceberg doesn't allow hyphens in namespace
-                table_name_clean = table_name.replace('-', '_')  # Clean table name too
-                full_table_name = f"{namespace}.{table_name_clean}"
-
-                # Create or load table
+            max_retries = 3
+            retry_delay = 1  # seconds
+            
+            for attempt in range(max_retries):
                 try:
-                    iceberg_table = self.catalog.load_table(full_table_name)
-                    logger.info(f"Loaded existing table: {full_table_name}")
-                except Exception as e:
-                    if "NoSuchTableError" not in str(e.__class__.__name__):
-                        logger.error(f"Error loading table: {e}")
-                        raise
-                    logger.info(f"Creating new table: {full_table_name}")
-                    # Create table if it doesn't exist
-                    schema = _convert_pyarrow_to_iceberg_schema(record_batch)
+                    logger.info(f"Writing {len(df)} rows to {table_name} (attempt {attempt + 1}/{max_retries})")
+                    table_identifier = f"{self.database}.{table_name}"
                     
-                    # Add table properties for S3 configuration
-                    properties = {
-                        'write.object-storage.path': f"{self.s3_path}/{table_name_clean}",
-                        'write.object-storage.s3.endpoint': self.endpoint_url,
-                        'write.object-storage.s3.access-key-id': 'minioadmin',
-                        'write.object-storage.s3.secret-access-key': 'minioadmin',
-                        'write.object-storage.s3.path-style-access': 'true',
-                        'write.object-storage.s3.signer-type': 'S3SignerType',
-                        'write.object-storage.s3.region': self.region
-                    }
-
-                    iceberg_table = self.catalog.create_table(
-                        identifier=full_table_name, 
-                        schema=schema,
-                        location=f"{self.s3_path}/{table_name_clean}",
-                        properties=properties
-                    )
-
-                # Write data to Iceberg table using PyArrow
-                file_io = PyArrowFileIO(s3_client=self.s3_client)
-                iceberg_table.append(pandas_df, file_io=file_io)
-
-                logger.info(f"Successfully wrote {len(pandas_df)} rows to Iceberg table {full_table_name}")
-
-            except Exception as e:
-                logger.error(f"Failed to write to Iceberg table: {e}")
-                raise
+                    # Create table if it doesn't exist
+                    if not self.catalog.table_exists(table_identifier):
+                        self.catalog.create_table(
+                            identifier=table_identifier,
+                            schema=schema,
+                            location=f"{self.s3_path}/{table_name}",
+                            properties={
+                                "write.format.default": "parquet",
+                                "write.metadata.compression-codec": "none",
+                                "write.parquet.compression-codec": "snappy",
+                                "write.metadata.previous-versions-max": "1",
+                                "write.object-storage.enabled": "true",
+                                "write.delete.mode": "copy-on-write"
+                            }
+                        )
+                    
+                    table = self.catalog.load_table(table_identifier)
+                    
+                    # Handle non-UTF-8 columns
+                    for col in df.columns:
+                        if df[col].dtype == 'object':
+                            df[col] = df[col].apply(lambda x: str(x) if pd.notna(x) else x)
+                    
+                    # Write to table using pyiceberg's write API
+                    with table.transaction() as tx:
+                        tx.append(df)
+                    
+                    logger.info(f"Successfully wrote {len(df)} rows to {table_name}")
+                    return  # Success, exit retry loop
+                    
+                except Exception as e:
+                    if attempt < max_retries - 1:
+                        logger.warning(f"Attempt {attempt + 1} failed for {table_name}: {e}")
+                        time.sleep(retry_delay * (2 ** attempt))  # Exponential backoff
+                    else:
+                        logger.error(f"Failed to write to Iceberg table after {max_retries} attempts: {e}")
+                        raise
 
         loop = asyncio.get_event_loop()
         with ThreadPoolExecutor() as pool:
             await loop.run_in_executor(pool, write)
 
+    async def write_table(self, table_name: str, record_batch: pa.RecordBatch) -> None:
+        """Write data to S3 as Iceberg table"""
+        logger.info(f"Starting Iceberg write for table {table_name}")
+        
+        table = pa.Table.from_batches([record_batch])
+        pandas_df = table.to_pandas()
+        
+        schema = _get_iceberg_schema(record_batch)
+        await self._write_to_iceberg(pandas_df, table_name, schema)
+
     async def push_data(self, data: Dict[str, pa.RecordBatch]) -> None:
-        """Push data to Iceberg tables"""
+        """Push data to S3"""
         try:
             logger.info(f"Starting push_data for {len(data)} tables: {', '.join(data.keys())}")
 
-            # Separate anchor table from other tables
             if self.anchor_table is None:
                 await self._write_tables(data)
             else:
+                # Split data into non-anchor and anchor tables
                 non_anchor_data = {k: v for k, v in data.items() if k != self.anchor_table}
                 anchor_data = {k: v for k, v in data.items() if k == self.anchor_table}
                 
@@ -250,17 +253,17 @@ class IcebergWriter(DataWriter):
                     await self._write_tables(anchor_data)
             
         except Exception as e:
-            logger.error(f"Error writing to Iceberg: {e}")
+            logger.error(f"Error writing to Iceberg tables: {e}")
             raise
 
     async def _write_tables(self, data: Dict[str, pa.RecordBatch]) -> None:
-        """Write multiple tables concurrently"""
-        table_tasks = {
-            name: asyncio.create_task(self.write_iceberg(name, df), name=f"write_{name}")
+        """Write tables to Iceberg format"""
+        event_tasks = {
+            name: asyncio.create_task(self.write_table(name, df), name=f"write_{name}")
             for name, df in data.items()
         }
         
-        for name, task in table_tasks.items():
+        for name, task in event_tasks.items():
             try:
                 await task
             except Exception as e:
