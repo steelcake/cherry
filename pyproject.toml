@@ -29,7 +29,7 @@ dependencies = [
     "certifi==2025.1.31",
     "cffi==1.17.1",
     "charset-normalizer==3.4.1",
-    "cherry-core==0.0.9",
+    "cherry-core==0.0.10",
     "click==8.1.8",
     "clickhouse-connect==0.8.15",
     "colorama==0.4.6",
