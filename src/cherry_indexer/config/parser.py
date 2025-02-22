@@ -3,7 +3,7 @@ from typing import List, Dict, Optional
 from enum import Enum
 import yaml, logging
 import copy, dacite
-from cherry_core.ingest import ProviderKind, Format
+from cherry_core.ingest import ProviderKind, Format, EvmQuery
 
 logger = logging.getLogger(__name__)
 
@@ -12,6 +12,7 @@ class WriterKind(str, Enum):
     AWS_WRANGLER_S3 = "aws_wrangler_s3"
     POSTGRES = "postgres"
     CLICKHOUSE = "clickhouse"
+    ICEBERG_S3 = "iceberg_s3"
 
 class StepKind(str, Enum):
     EVM_VALIDATE_BLOCK = 'evm_validate_block_data'
@@ -33,7 +34,7 @@ class ProviderConfig:
     retry_base_ms: Optional[int] = None
     retry_ceiling_ms: Optional[int] = None
     http_req_timeout_millis: Optional[int] = None
-    query: Optional[Dict] = None
+    query: Optional[EvmQuery] = None
 
 @dataclass
 class Provider:

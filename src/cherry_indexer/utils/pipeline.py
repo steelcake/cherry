@@ -58,7 +58,7 @@ def provider_to_stream_config(provider_config: CoreProviderConfig) -> StreamConf
 
     return StreamConfig(
         format=provider_config.format,
-        query=dacite.from_dict(data_class=EvmQuery, data=provider_config.query),
+        query=provider_config.query,
         provider=core_provider_config
     )
 

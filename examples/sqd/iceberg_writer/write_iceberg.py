@@ -95,10 +95,10 @@ async def main():
         # Add writer
         writer = Writer(
             name="my_writer",
-            kind=WriterKind.AWS_WRANGLER_S3,
+            kind=WriterKind.ICEBERG_S3,
             config=WriterConfig(
                 endpoint="http://localhost:9000",
-                s3_path="s3://blockchain-data/aws-wrangler-s3",
+                s3_path="s3://blockchain-data/iceberg-s3",
                 anchor_table="blocks",
                 use_boto3=True
             )
