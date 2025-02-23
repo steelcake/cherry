@@ -82,28 +82,34 @@ async def main():
                 kind=ProviderKind.SQD,
                 format=Format.EVM,
                 url="https://portal.sqd.dev/datasets/ethereum-mainnet",
+                max_num_retries=5,
+                retry_backoff_ms=1000,
+                retry_base_ms=1000,
+                retry_ceiling_ms=30000,
+                http_req_timeout_millis=60000,
                 query=EvmQuery(from_block=0, 
-                               logs=
-                               [
-                    LogRequest(
-                        address=["0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"], 
-                        event_signatures= ["Transfer(address,address,uint256)"])
-                ])
+                    logs=[
+                        LogRequest(
+                            address=["0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"], 
+                            event_signatures=["Transfer(address,address,uint256)"]
+                        )
+                    ]
+                )
             )
         )
         config.providers["my_provider"] = provider
 
+        # Add writer with updated configuration
         # Add writer
-        # Modify writer configuration
         writer = Writer(
             name="my_writer",
             kind=WriterKind.ICEBERG_S3,
             config=WriterConfig(
-                endpoint="http://localhost:9000",
+                endpoint="http://127.0.0.1:9000",
                 s3_path="blockchain-data/iceberg-s3",
                 anchor_table="blocks",
                 use_boto3=True,
-                database="blockchain"
+                database="blockchain",
             )
         )
         config.writers["my_writer"] = writer
