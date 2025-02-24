@@ -55,7 +55,6 @@ pipelines:
       
       - name: my_decode_transfers
         kind: evm_decode_events
-        phase: stream
         config:
           event_signature: "Transfer(address,address,uint256)"
           input_table: "logs"
@@ -64,7 +63,6 @@ pipelines:
       
       - name: my_get_block_number_stats
         kind: get_block_number_stats
-        phase: stream
         config:
           input_table: logs
           output_table: block_number_stats

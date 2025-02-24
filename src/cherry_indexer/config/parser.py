@@ -17,11 +17,6 @@ class StepKind(str, Enum):
     EVM_VALIDATE_BLOCK = 'evm_validate_block_data'
     EVM_DECODE_EVENTS = 'evm_decode_events'
 
-class StepPhase(str, Enum):
-    PRE_STREAM = 'pre_stream'
-    STREAM = 'stream'
-    POST_STREAM = 'post_stream'
-
 @dataclass
 class ProviderConfig:
     """Provider-specific configuration"""
@@ -67,7 +62,6 @@ class Step:
     name: str
     kind: Optional[str] = None
     config: Optional[Dict] = None
-    phase: Optional[StepPhase] = StepPhase.STREAM
 
 @dataclass
 class Pipeline:
