@@ -71,7 +71,6 @@ async def main():
         ),
     )
 
-    # Create empty config
     config = cc.Config(
         project_name="my_project",
         description="My description",
