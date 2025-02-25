@@ -1,7 +1,7 @@
 import asyncio
 import logging
-from ..config.parser import parse_config, Pipeline, Provider, Step, StepKind, StepPhase, Config
-from typing import Dict, Union
+from ..config.parser import parse_config, Pipeline, Provider, Step, StepKind, Config
+from typing import Dict, Union, List
 import copy
 from cherry_core.ingest import (
     start_stream,
@@ -62,54 +62,68 @@ def provider_to_stream_config(provider_config: CoreProviderConfig) -> StreamConf
         provider=core_provider_config
     )
 
-async def process_steps(data: Dict[str, pa.RecordBatch], 
-                       pipeline: Pipeline, 
-                       context: Context,
-                       phase: StepPhase) -> Dict[str, pa.RecordBatch]:
-    """Process steps based on their phase"""
-    logger.debug(f"Processing {phase.value} steps: {[step.kind for step in pipeline.steps if step.phase == phase]}")
+async def process_steps(
+    record_batches: Dict[str, pa.RecordBatch],
+    steps: List[Step],
+    context: Context
+) -> Dict[str, pa.RecordBatch]:
+    """
+    Process a series of data transformation steps on record batches.
     
-    res = copy.deepcopy(data)
+    Args:
+        record_batches: Dictionary mapping table names to PyArrow RecordBatches
+        steps: List of Step objects defining the transformations
+        context: Context object containing custom step implementations
+        
+    Returns:
+        Processed record batches after applying all transformation steps
+    """
+    # Log step processing information
+    logger.debug(f"Processing pipeline steps: {[step.kind for step in steps]}")
+    logger.debug(f"Available custom step handlers: {list(context.steps.keys())}")
     
-    # Only process steps matching the current phase
-    matching_steps = [step for step in pipeline.steps if step.phase == phase]
+    # Initialize result with input batches
+    res = record_batches
     
-    for step in matching_steps:
-        logger.info(f"Processing step: {step.kind} with phase: {step.phase}")
+    # Process each step sequentially
+    for step in steps:
+        # Create deep copy to avoid modifying original data
+        res = copy.deepcopy(res)
+        
+        # Handle EVM block validation
+        if step.kind == StepKind.EVM_VALIDATE_BLOCK:
+            logger.debug("Validating EVM block data...")
+            evm_validate_block_data(
+                blocks=res["blocks"],
+                transactions=res["transactions"], 
+                logs=res["logs"],
+                traces=res["traces"]
+            )
             
-        if phase == StepPhase.PRE_STREAM:
-            if context.steps.get(step.kind):
-                context.steps[step.kind](pipeline)
-                
-        elif phase == StepPhase.STREAM:
-            if step.kind == StepKind.EVM_VALIDATE_BLOCK:
-                res = evm_validate_block_data(
-                    blocks=res["blocks"], 
-                    transactions=res["transactions"], 
-                    logs=res["logs"], 
-                    traces=res["traces"]
-                )
-            elif step.kind == StepKind.EVM_DECODE_EVENTS:
-                res[step.config['output_table']] = evm_decode_events(
-                                                    step.config['event_signature'],
-                                                    res[step.config['input_table']], 
-                                                    step.config['allow_decode_fail']
-                                                    )
-            elif context.steps.get(step.kind):
-                res = context.steps[step.kind](res, step)
-                
-        elif phase == StepPhase.POST_STREAM:
-            if context.steps.get(step.kind):
-                context.steps[step.kind](res, pipeline, step)
+        # Handle EVM event decoding
+        elif step.kind == StepKind.EVM_DECODE_EVENTS:
+            logger.debug(f"Decoding EVM events with config: {step.config}")
+            res[step.config['output_table']] = evm_decode_events(
+                step.config['event_signature'],
+                res[step.config['input_table']],
+                step.config['allow_decode_fail']
+            )
+            
+        # Handle custom step processing
+        elif step.kind in context.steps:
+            logger.debug(f"Executing custom step: {step.kind}")
+            res = context.steps[step.kind](res, step)
+        else:
+            logger.warning(f"Unknown step kind: {step.kind}")
+            
+        # Log intermediate results
+        logger.debug(f"Step {step.kind} complete. Current tables: {list(res.keys())}")
             
     return res
 
 async def run_pipeline(pipeline: Pipeline, context: Context, pipeline_name: str):
-    """Run a pipeline with different processing phases"""
+    """Run pipeline"""
     logger.info(f"Running pipeline: {pipeline_name}")
-
-     # 1. Pre-stream processing
-    await process_steps({}, pipeline, context, StepPhase.PRE_STREAM)
 
     # 2. Set up stream
     stream_config = provider_to_stream_config(pipeline.provider.config)
@@ -126,10 +140,7 @@ async def run_pipeline(pipeline: Pipeline, context: Context, pipeline_name: str)
             break
             
         logger.info(f"Raw data num rows: {[(table_name, record_batch.num_rows) for table_name, record_batch in batch.items()]}")
-        processed = await process_steps(batch, pipeline, context, StepPhase.STREAM)
+        processed = await process_steps(batch, pipeline.steps, context)
         logger.info(f"Processed data num rows: {[(table_name, record_batch.num_rows) for table_name, record_batch in processed.items()]}")
         await writer.push_data(processed)
-        
-    # 4. Post-stream processing
-    await process_steps({}, pipeline, context, StepPhase.POST_STREAM)
 

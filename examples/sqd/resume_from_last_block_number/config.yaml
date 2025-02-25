@@ -52,7 +52,6 @@ pipelines:
     steps:
       - name: get_last_block
         kind: get_last_block_number
-        phase: pre_stream
         config:
         
       #- name: my_validate_evm_event
@@ -60,7 +59,6 @@ pipelines:
       
       - name: decode_transfers
         kind: evm_decode_events
-        phase: stream
         config:
           event_signature: "Transfer(address,address,uint256)"
           input_table: "logs"

@@ -1,14 +1,17 @@
 import asyncio, logging
 from cherry_indexer.utils.logging_setup import setup_logging
 from cherry_indexer.utils.pipeline import run_pipelines, Context
-from cherry_indexer.config.parser import Pipeline
+from cherry_indexer.config.parser import (
+    Config, Provider, Writer, Pipeline, Step,
+    ProviderConfig, WriterConfig, WriterKind, 
+    ProviderKind, Format
+)
 import duckdb
 
 # Set up logging
 setup_logging()
 logger = logging.getLogger(__name__)
 
-# Pre-stream steps
 def get_last_block_number_fn(pipeline: Pipeline) -> int:
     """Get last block number before starting stream"""
     try:
@@ -72,14 +75,61 @@ def get_last_block_number_fn(pipeline: Pipeline) -> int:
 async def main():
     """Example of using custom processing steps"""
     try:
-        # Create context
+        # Create empty config
+        config = Config(
+            project_name="my_project",
+            description="My description",
+            providers={},
+            pipelines={},
+            writers={},
+        )
+
+        # Add provider
+        provider = Provider(
+            name="my_provider",
+            config=ProviderConfig(
+                kind=ProviderKind.SQD,
+                format=Format.EVM,
+                url="https://portal.sqd.dev/datasets/ethereum-mainnet",
+                query={
+                    "from_block": 0,
+                    "logs": [{
+                        "address": ["0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"],
+                        "event_signatures": ["Transfer(address,address,uint256)"]
+                    }]
+                }
+            )
+        )
+        config.providers["my_provider"] = provider
+
+        # Add writer
+        writer = Writer(
+            name="my_writer",
+            kind=WriterKind.AWS_WRANGLER_S3,
+            config=WriterConfig(
+                endpoint="http://localhost:9000",
+                s3_path="s3://blockchain-data/aws-wrangler-s3",
+                anchor_table="blocks",
+                use_boto3=True
+            )
+        )
+        config.writers["my_writer"] = writer
+
+        # Add pipeline
+        pipeline = Pipeline(
+            name="my_pipeline",
+            provider=provider,
+            writer=writer,
+            steps=[]
+        )
+        config.pipelines["my_pipeline"] = pipeline
+
+        config.pipelines["my_pipeline"].provider.config.query['from_block'] = get_last_block_number_fn(config.pipelines["my_pipeline"])
+
         context = Context()
 
-        # Add custom processing step using the enum value
-        context.add_step('get_last_block_number', get_last_block_number_fn)
-
         # Run pipelines with custom context
-        await run_pipelines(path="./config.yaml", context=context)
+        await run_pipelines(config=config, context=context)
 
     except Exception as e:
         logger.error(f"Error in main: {e}", exc_info=True)
