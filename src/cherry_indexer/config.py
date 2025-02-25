@@ -1,10 +1,10 @@
 from dataclasses import dataclass
-import clickhouse_connect
+from clickhouse_connect.driver.client import Client as ClickHouseClient
 from typing import List, Dict, Optional
 from enum import Enum
 import logging
 from cherry_core.ingest import ProviderConfig 
-import pyiceberg
+from pyiceberg.catalog import Catalog as IcebergCatalog 
 
 logger = logging.getLogger(__name__)
 
@@ -27,11 +27,12 @@ class Provider:
 class IcebergWriterConfig:
     namespace: str
     database: str 
-    catalog: pyiceberg.Catalog 
+    catalog: IcebergCatalog 
+    write_location: str
 
 @dataclass
 class ClickHouseWriterConfig:
-    client: clickhouse_connect.driver.client.Client
+    client: ClickHouseClient 
 
 @dataclass
 class Writer:

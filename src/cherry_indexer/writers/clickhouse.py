@@ -2,7 +2,7 @@ import logging
 from typing import Dict
 import pyarrow as pa
 from ..writers.base import DataWriter
-from ..config.parser import ClickHouseWriterConfig 
+from ..config import ClickHouseWriterConfig 
 
 logger = logging.getLogger(__name__)
 

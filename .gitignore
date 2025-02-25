@@ -1,0 +1,23 @@
+__pycache__/
+.venv/
+*swp
+logs/
+
+# Ignore .env file
+.env
+
+# Ignore utils folder
+#src/utils/
+
+# Ignore hypersync query generation .py file
+./generate_hypersync_query.py
+
+# Ignore data folder
+data/
+
+# Ignore scripts
+scripts/
+
+# Ignore package related folders
+dist/
+src/cherry*.egg-info/

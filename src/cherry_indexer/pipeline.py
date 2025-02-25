@@ -1,12 +1,12 @@
 import asyncio
 import logging
-from ..config.parser import Pipeline, Step, StepKind, Config
-from typing import Dict, List
+from .config import Pipeline, Step, StepKind, Config
+from typing import Dict, List, Callable
 import copy
 from cherry_core.ingest import start_stream
 from cherry_core import evm_validate_block_data, evm_decode_events
 import pyarrow as pa
-from ..writers.writer import create_writer
+from .writers.writer import create_writer
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +14,7 @@ class Context:
     def __init__(self):
         self.steps = {}
     
-    def add_step(self, kind: str, step: callable):
+    def add_step(self, kind: str, step: Callable):
         self.steps[kind] = step
 
 async def run_pipelines(config: Config, context: Context):
@@ -26,6 +26,7 @@ async def run_pipelines(config: Config, context: Context):
     }
  
     for name, task in tasks.items():
+        logger.debug(f"running task with name: {name}")
         await task
  
 async def process_steps(

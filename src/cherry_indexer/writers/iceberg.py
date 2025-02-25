@@ -1,7 +1,7 @@
 import logging
 from typing import Dict
 from ..writers.base import DataWriter
-from ..config.parser import IcebergWriterConfig
+from ..config import IcebergWriterConfig
 import pyarrow as pa
 
 logger = logging.getLogger(__name__)
@@ -17,6 +17,7 @@ class Writer(DataWriter):
         self.database = config.database
         self.first_write = True
         self.write_location = config.write_location
+        self.catalog = config.catalog
 
     async def write_table(self, table_name: str, record_batch: pa.RecordBatch) -> None:
         logger.info(f"Writing table: {table_name}")

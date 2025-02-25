@@ -148,10 +148,47 @@ wheels = [
 ]
 
 [[package]]
+name = "cherry-core"
+version = "0.0.14"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/1f/c0/8aa88dc016d380ae243e046a5e25a2a2f23a9ed137f3a27bcc72daf6b28d/cherry_core-0.0.14.tar.gz", hash = "sha256:07201b014d4760a1a3b5301e2de5fd176d61cde431a0c1915a6fab8e294973e3", size = 69777 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/08/36/70aa5db2883921e004f0a9684c45611d00e3ae28e31c3c19d2b1365667ff/cherry_core-0.0.14-cp310-cp310-macosx_10_12_x86_64.whl", hash = "sha256:331a86944882fa6d86842d25a7449f7234cbf5a2350c9cda5d9b3a42b24fea6a", size = 6172726 },
+    { url = "https://files.pythonhosted.org/packages/2e/9a/fd85f141204e7cb5db76af49ac3478b5c777ba2ee5ed8b551fbad9bf9168/cherry_core-0.0.14-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:e60d7cc0669693445e752bb460c27a039761bc295e811abb289f149d527c4072", size = 5686496 },
+    { url = "https://files.pythonhosted.org/packages/c2/40/124d03634771e06e68d39778361ee30493740a602c2e13529057c3a39c24/cherry_core-0.0.14-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:943dfc957bbc223a2edff2ef382425663ab324d28579c6726c997826a947c890", size = 5234951 },
+    { url = "https://files.pythonhosted.org/packages/8c/6f/02d3c3c1186050732a7b85f6751619d3a6538a26b7e136bdc798b76c8f1f/cherry_core-0.0.14-cp310-cp310-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:103a7301d6b90a5863013b99454bea3777c0fafea8890792d615ee5b1e1d6e80", size = 5985054 },
+    { url = "https://files.pythonhosted.org/packages/78/58/4984f9cbb22e019c9ba738595d881f38ec7efafbc8e4e5405b0d78b7d743/cherry_core-0.0.14-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:70f86169214a9e194d21bffe66528e84b84daa0ef5777c78ad141a409a430cba", size = 5708849 },
+    { url = "https://files.pythonhosted.org/packages/48/e8/c4a0f02f5d0556f1cbbe9b482e691885d2ba5113df993fb9b0a715338ba8/cherry_core-0.0.14-cp310-cp310-win32.whl", hash = "sha256:dd4a454d84dbb3638967feef97bbddb8d3d23078384e040833af19552e642906", size = 4822060 },
+    { url = "https://files.pythonhosted.org/packages/39/9c/691740d9be9e400de6e7635f0d812107c520ef3e7340037e5b985ca49689/cherry_core-0.0.14-cp310-cp310-win_amd64.whl", hash = "sha256:e144c05197cecd2463ec5757942c316ca00b97d56fb5432f045a73cca2b7ecf9", size = 5569481 },
+    { url = "https://files.pythonhosted.org/packages/2f/62/e864d2008ece3cc09a6e50f93eb5e8e2dc568b991a5569d6e4cb94cd51f8/cherry_core-0.0.14-cp311-cp311-macosx_10_12_x86_64.whl", hash = "sha256:2577249c19dc01bb5d9c0eb60baf36a09cef5bb94032d9e11d4751746291b484", size = 6173494 },
+    { url = "https://files.pythonhosted.org/packages/4f/f1/26014f369722f0ffe22f52015e28d5d9a92eafbb106f9df03b04cc2e7795/cherry_core-0.0.14-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:f94acf1b96ee60413017dfec0c0578645de3ac954c71e9cde43f20c5a67943f5", size = 5684477 },
+    { url = "https://files.pythonhosted.org/packages/19/c6/af92049e35757a660aeaf3c388ecf48de524305334f213a87ca61d28f259/cherry_core-0.0.14-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:a890199d3cd88c5ae732ca5fc3fe91e8f988b7624060b876649a9b3721295712", size = 5232570 },
+    { url = "https://files.pythonhosted.org/packages/9f/9b/d5607b2cfffacab7b458de903b6ad4e67aec5f67c24b67c9c77b91270216/cherry_core-0.0.14-cp311-cp311-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:97a4fb78fb3becc900fe6dcabe6b098b97cb14f4b8c9a176738b4809db5cce0b", size = 6070564 },
+    { url = "https://files.pythonhosted.org/packages/b3/be/04fedce590322aea2e4a3c16281f69d19cd88273a2e19c89dc3161bf629d/cherry_core-0.0.14-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:f2b303166d84dda9daaef24149dfa0d30c904d51afee811d632423f6ba0a1c5a", size = 5709244 },
+    { url = "https://files.pythonhosted.org/packages/18/2e/56c47b06518f68ddf77de50c35715c5b60ee7334b66f10642ac91297cb81/cherry_core-0.0.14-cp311-cp311-win32.whl", hash = "sha256:68d319558d229aa8cd56be0b943b8f5e3fd177b12478cb761e18a0ceac397f23", size = 4820810 },
+    { url = "https://files.pythonhosted.org/packages/80/d0/5632ecd3adba28726ed5c96cf3d5c2f843f42ae83af1e910640a7202aeb8/cherry_core-0.0.14-cp311-cp311-win_amd64.whl", hash = "sha256:691101dfd1d7110f3e54338cd0d719c83caac31e300ce8e7ebb9021e2e6e6ffb", size = 5569875 },
+    { url = "https://files.pythonhosted.org/packages/b1/4c/1bffaaec39a5ef62c762b8580f8a56c82d17c3264067fce2f37cac96e144/cherry_core-0.0.14-cp312-cp312-macosx_10_12_x86_64.whl", hash = "sha256:2c245954bab7e6da65e8d44421d2bd716431fee2239eb5ad73f93edaf13eaec2", size = 6159658 },
+    { url = "https://files.pythonhosted.org/packages/ac/56/203b119bc1ccc45767dd172f9af3d10001e1b4d18d5b1e9d4f49e2ad996b/cherry_core-0.0.14-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:e1f52bc44438ea78021ff9fe176acfdaf31a4017493d1ae2951b5cc9d29510eb", size = 5680005 },
+    { url = "https://files.pythonhosted.org/packages/93/7d/0cc45bbb3eb7da26776bc512124fe1cb05040e72cad20efa3b495dbc0119/cherry_core-0.0.14-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:4e5a71dfd6d3f2525dec229aae9995d582ababa43eab1a3d36b8993a55718605", size = 5167394 },
+    { url = "https://files.pythonhosted.org/packages/4c/86/61363e3bb6a177b21df96157ed55c1dd461eaa40d546682a084dbb0d8528/cherry_core-0.0.14-cp312-cp312-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:baab2cf22b8f41f0899a952d5d382019477101386c9ec34ef09391c7b3b8f0f9", size = 6064395 },
+    { url = "https://files.pythonhosted.org/packages/a1/42/7aff1c91056093b42b68e3745ef9de47601f53d7e4df59be62a6efe865bb/cherry_core-0.0.14-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:80a55a635e48f74ef1bc945e99255714a2a34df57569d30d66a4c2a8b4a37ac1", size = 5644081 },
+    { url = "https://files.pythonhosted.org/packages/cb/b0/3d7c80800ef989e87361c700bb3756dd9e14782da76a6809d4290780f867/cherry_core-0.0.14-cp312-cp312-win32.whl", hash = "sha256:d4b825f7de3fc6a37b3d68758feffe7283e61ed2e63f5fa5575d2b32c120e748", size = 4817944 },
+    { url = "https://files.pythonhosted.org/packages/ec/53/3697de77c7c8b19194ad53b2feb0ccd84246b6c5aa9036046e8f3a216ca3/cherry_core-0.0.14-cp312-cp312-win_amd64.whl", hash = "sha256:b5ae13a899709406c199af9fef7f7626b84146c0098e4f80fc7bb9d9d512b14c", size = 5566823 },
+    { url = "https://files.pythonhosted.org/packages/70/20/0a16b3bc91376634c2c31b799aa73d1bffe3c0afc0b0188a52d5aa1f3bae/cherry_core-0.0.14-cp313-cp313-macosx_10_12_x86_64.whl", hash = "sha256:7fcff8912380fa88b838454e37dcbf8a4408f03ec1ccd74b4822bfb62bd6088b", size = 6158480 },
+    { url = "https://files.pythonhosted.org/packages/4a/fc/139186ad01e2651a90a4632730df973b5a22472b650a1a44a0471f30aee8/cherry_core-0.0.14-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:d4061642b87ede9e74d73076fbc416b6e1a4acc428c02d46604670e5acc5e22c", size = 5678854 },
+    { url = "https://files.pythonhosted.org/packages/95/7e/c702d5c1042e4af6c2863e1ab8b736d19f6e210553305b05ef0a824ba9db/cherry_core-0.0.14-cp313-cp313-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:6045e8bfbeb142b4daa6a302ee2fd9ba318c30bf1068cd7e9b286a7688b54daf", size = 5229050 },
+    { url = "https://files.pythonhosted.org/packages/2f/ba/c42f60a0365ca61c93980f97e46d9a3ff2715e8d6ad4cf34f45fa99066d6/cherry_core-0.0.14-cp313-cp313-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:196095bda861815fcb93145a2bc316d631df0a5e87444e991f201ef1c2e7675c", size = 6064325 },
+    { url = "https://files.pythonhosted.org/packages/65/71/2c6d0351290ccccbece11394255aa43731cbe8f441ba1b76d5cfdfeef7d0/cherry_core-0.0.14-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:b452ac4a1edc9c427e172812f264143b6b217b4df76664ce1ab5ccc0ae4afef3", size = 5702784 },
+    { url = "https://files.pythonhosted.org/packages/91/96/480c0fb9155437da73ed6429a8db87b0c09312671e2043779b58fc32adb9/cherry_core-0.0.14-cp313-cp313-win32.whl", hash = "sha256:25e16d06ca3cb74fa75350e19066b995ec63b606fcadf8a0f53ffa9f902237f7", size = 4817683 },
+    { url = "https://files.pythonhosted.org/packages/fe/74/dcae8c013fd60f21d16b6a645cc5d87e565aa388cf09a5f2283adda66467/cherry_core-0.0.14-cp313-cp313-win_amd64.whl", hash = "sha256:e5ddfab12a6e4fb7a1a6417bfac43866f99587fa32be8b449e28452364ef6cac", size = 5566651 },
+]
+
+[[package]]
 name = "cherry-indexer"
-version = "0.1.0"
+version = "0.1.7"
 source = { editable = "." }
 dependencies = [
+    { name = "cherry-core" },
     { name = "clickhouse-connect" },
     { name = "pyarrow" },
     { name = "pyiceberg" },
@@ -164,6 +201,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "cherry-core", specifier = ">=0.0.14" },
     { name = "clickhouse-connect", specifier = ">=0.8.15" },
     { name = "pyarrow", specifier = ">=19.0.1" },
     { name = "pyiceberg", specifier = ">=0.8.1" },

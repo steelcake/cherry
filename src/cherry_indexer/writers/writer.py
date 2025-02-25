@@ -1,5 +1,5 @@
 from ..writers.base import DataWriter
-from ..config.parser import Writer, WriterKind, IcebergWriterConfig, ClickHouseWriterConfig
+from ..config import Writer, WriterKind, IcebergWriterConfig, ClickHouseWriterConfig
 from ..writers import iceberg, clickhouse
 import logging
 

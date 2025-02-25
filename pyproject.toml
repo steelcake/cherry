@@ -1,6 +1,6 @@
 [project]
 name = "cherry-indexer"
-version = "0.1.0"
+version = "0.1.7"
 description = "Library for building blockchain pipelines"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
@@ -10,6 +10,7 @@ authors = [
 ]
 requires-python = ">=3.10"
 dependencies = [
+    "cherry-core>=0.0.14",
     "clickhouse-connect>=0.8.15",
     "pyarrow>=19.0.1",
     "pyiceberg>=0.8.1",
