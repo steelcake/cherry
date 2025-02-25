@@ -8,13 +8,23 @@ from cherry_indexer.config.parser import (
 )
 from cherry_indexer.utils.logging_setup import setup_logging
 from cherry_indexer.utils.pipeline import run_pipelines, Context
-from cherry_core.ingest import EvmQuery, LogRequest
+from cherry_core.ingest import EvmQuery, LogRequest, Fields, BlockFields
 import numpy as np
 from pyiceberg.catalog import Catalog, Properties
 
 # Set up logging
 setup_logging()
 logger = logging.getLogger(__name__)
+
+def prune_fields(data: Dict[str, pa.RecordBatch], step: Step) -> Dict[str, pa.RecordBatch]:
+    logger.info("printing data", data.items())
+    x = data['blocks'].column('number')
+    blocks = pa.RecordBatch.from_arrays([
+            x
+    ], names=["blocks"])
+    return {
+        'blocks': blocks 
+    }
 
 def get_block_number_stats(data: Dict[str, pa.RecordBatch], step: Step) -> Dict[str, pa.RecordBatch]:
     """Custom processing step for block number statistics"""
@@ -64,6 +74,35 @@ def get_block_number_stats(data: Dict[str, pa.RecordBatch], step: Step) -> Dict[
    
 
 async def main():
+            warehouse_path = f"{self.s3_path}/iceberg-warehouse"
+            catalog_dir = os.path.join(os.path.expanduser("~"), ".iceberg")
+            os.makedirs(catalog_dir, exist_ok=True)
+            catalog_path = os.path.join(catalog_dir, "catalog.db")
+
+            self.catalog = SqlCatalog(
+                name="cherry",
+                uri=f"sqlite:///{catalog_path}",
+                warehouse=warehouse_path,
+                s3=dict(
+                    endpoint_url=self.endpoint_url,
+                    access_key_id="minioadmin",
+                    secret_access_key="minioadmin",
+                    path_style_request=True,
+                    use_ssl=False,
+                    verify=False,
+                    region_name="us-east-1",
+                    allow_http=True,
+                    client_config=dict(
+                        max_pool_connections=30,
+                        connect_timeout=60,
+                        read_timeout=60,
+                        retries=dict(
+                            max_attempts=5,
+                            mode="standard"
+                        )
+                    )
+                )
+            )
     """Example of using custom processing steps"""
     try:
         # Create empty config
@@ -87,7 +126,13 @@ async def main():
                 retry_base_ms=1000,
                 retry_ceiling_ms=30000,
                 http_req_timeout_millis=60000,
-                query=EvmQuery(from_block=0, 
+                query=EvmQuery(
+                    from_block=0, 
+                    fields=Fields(
+                        block=BlockFields(
+                            number=True,
+                        )
+                    ),
                     logs=[
                         LogRequest(
                             address=["0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"], 
@@ -103,7 +148,7 @@ async def main():
         # Add writer
         writer = Writer(
             name="my_writer",
-            kind=WriterKind.ICEBERG_S3,
+            kind=WriterKind.ICEBERG,
             config=WriterConfig(
                 endpoint="http://127.0.0.1:9000",
                 s3_path="blockchain-data/iceberg-s3",
@@ -121,11 +166,9 @@ async def main():
             writer=writer,
             steps=[
                 Step(
-                    name="get_block_number_stats",
-                    kind="get_block_number_stats",
+                    name="prune_fields",
+                    kind="prune_fields",
                     config={
-                        "input_table": "logs",
-                        "output_table": "block_number_stats",
                     }
                 )
             ]
@@ -137,6 +180,7 @@ async def main():
 
         # Add custom processing step using the enum value
         context.add_step('get_block_number_stats', get_block_number_stats)
+        context.add_step('prune_fields', prune_fields)
 
         # Run pipelines with custom context
         await run_pipelines(config=config, context=context)

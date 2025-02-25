@@ -6,13 +6,7 @@ logs/
 # Ignore .env file
 .env
 
-# Ignore utils folder
-#src/utils/
-
-# Ignore hypersync query generation .py file
-./generate_hypersync_query.py
-
-# Ignore data folder
+# Ignored test data folder
 data/
 
 # Ignore scripts

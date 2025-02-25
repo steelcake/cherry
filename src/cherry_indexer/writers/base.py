@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional, List
-import polars as pl
+from typing import Dict
 import logging
 import pyarrow as pa
 
