@@ -79,11 +79,11 @@ async def run_pipeline(pipeline: Pipeline, context: Context, pipeline_name: str)
         if batch is None:
             break
  
-        logger.trace(f"Raw data num rows: {[(table_name, record_batch.num_rows) for table_name, record_batch in batch.items()]}")
+        logger.debug(f"Raw data num rows: {[(table_name, record_batch.num_rows) for table_name, record_batch in batch.items()]}")
 
         processed = await process_steps(batch, pipeline.steps, context)
 
-        logger.trace (f"Processed data num rows: {[(table_name, record_batch.num_rows) for table_name, record_batch in processed.items()]}")
+        logger.debug(f"Processed data num rows: {[(table_name, record_batch.num_rows) for table_name, record_batch in processed.items()]}")
 
         await writer.push_data(processed)
 

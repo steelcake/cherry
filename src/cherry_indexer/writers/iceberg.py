@@ -9,12 +9,18 @@ logger = logging.getLogger(__name__)
 class Writer(DataWriter):
     def __init__(self, config: IcebergWriterConfig):
         logger.info("Initializing Iceberg writer...")
-        config.catalog.create_namespace(
-            config.namespace
-        )
-        logger.info(f"Created namespace: {self.database}")
 
-        self.database = config.database
+        try:
+            config.catalog.create_namespace(
+                config.namespace,
+                properties={"location": config.write_location}
+            )
+        except Exception as e:
+            logger.warning(f"Error creating namespace: {e}")
+        
+        logger.info(f"Created namespace: {config.namespace}")
+
+        self.namespace = config.namespace
         self.first_write = True
         self.write_location = config.write_location
         self.catalog = config.catalog
@@ -22,7 +28,7 @@ class Writer(DataWriter):
     async def write_table(self, table_name: str, record_batch: pa.RecordBatch) -> None:
         logger.info(f"Writing table: {table_name}")
         
-        table_identifier = f"{self.database}.{table_name}"
+        table_identifier = f"s3://blockchain-data/{self.namespace}.{table_name}"
         
         arrow_table = pa.Table.from_batches([record_batch])
 
@@ -32,13 +38,17 @@ class Writer(DataWriter):
     async def push_data(self, data: Dict[str, pa.RecordBatch]) -> None:
         if self.first_write:
             for table_name, table_data in data.items():
-                table_identifier = f"{self.database}.{table_name}"
-                if not self.catalog.table_exists(table_identifier):
+                table_identifier = f"s3://blockchain-data/{self.namespace}.{table_name}"
+                
+                try:
                     self.catalog.create_table(
                         identifier=table_identifier,
                         schema=table_data.schema,
-                        location=self.write_location,
+                        location=self.write_location
                     )
+                except Exception as e:
+                    logger.warning(f"Error creating table: {e}")
+                
             self.first_write = False
 
         for table_name, record_batch in data.items():
