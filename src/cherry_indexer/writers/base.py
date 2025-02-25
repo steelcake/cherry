@@ -5,6 +5,7 @@ import pyarrow as pa
 
 logger = logging.getLogger(__name__)
 
+
 class DataWriter(ABC):
     """Base class for data writers"""
 
@@ -12,4 +13,3 @@ class DataWriter(ABC):
     async def push_data(self, data: Dict[str, pa.RecordBatch]) -> None:
         """Push data to target storage"""
         pass
-

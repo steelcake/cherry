@@ -12,8 +12,10 @@ requires-python = ">=3.10"
 dependencies = [
     "cherry-core>=0.0.14",
     "clickhouse-connect>=0.8.15",
+    "psycopg2>=2.9.10",
     "pyarrow>=19.0.1",
     "pyiceberg>=0.8.1",
+    "sqlalchemy>=2.0.38",
 ]
 
 [build-system]

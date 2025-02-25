@@ -1,22 +1,23 @@
 from cherry_indexer import config as cc
 from cherry_core import ingest
 from pyiceberg.catalog.sql import SqlCatalog
-import logging, os, asyncio, pyarrow as pa
+import logging
+import os
+import asyncio
+import pyarrow as pa
 from cherry_indexer.pipeline import run_pipelines, Context
 from typing import Dict
 
-logging.basicConfig(
-    level=os.environ.get('LOGLEVEL', 'DEBUG').upper()
-)
+logging.basicConfig(level=os.environ.get("LOGLEVEL", "DEBUG").upper())
 
-def prune_fields(data: Dict[str, pa.RecordBatch], step: cc.Step) -> Dict[str, pa.RecordBatch]:
-    x = data['blocks'].column('number')
-    blocks = pa.RecordBatch.from_arrays([
-            x
-    ], names=["blocks"])
-    return {
-        'blocks': blocks 
-    }
+
+def prune_fields(
+    data: Dict[str, pa.RecordBatch], step: cc.Step
+) -> Dict[str, pa.RecordBatch]:
+    x = data["blocks"].column("number")
+    blocks = pa.RecordBatch.from_arrays([x], names=["blocks"])
+    return {"blocks": blocks}
+
 
 async def main():
     provider = cc.Provider(
@@ -52,23 +53,22 @@ async def main():
 
     catalog = SqlCatalog(
         name="cherry",
-        uri=f"postgresql+psycopg2://postgres:postgres@localhost/iceberg",
+        uri="postgresql+psycopg2://postgres:postgres@localhost/iceberg",
         warehouse="s3://blockchain-data",
-        **{"s3.endpoint": "http://localhost:9000",
-        "s3.access-key-id": "minioadmin",
-        "s3.secret-access-key": "minioadmin",
-        }
-                
+        **{
+            "s3.endpoint": "http://localhost:9000",
+            "s3.access-key-id": "minioadmin",
+            "s3.secret-access-key": "minioadmin",
+        },
     )
 
     writer = cc.Writer(
         kind=cc.WriterKind.ICEBERG,
         config=cc.IcebergWriterConfig(
             namespace="my_namespace",
-            database="my_database",
             catalog=catalog,
-            write_location="s3://blockchain-data/"
-        )
+            write_location="s3://blockchain-data/",
+        ),
     )
 
     # Create empty config
@@ -76,7 +76,11 @@ async def main():
         project_name="my_project",
         description="My description",
         pipelines={
-            "my_pipeline": cc.Pipeline(provider=provider, writer=writer, steps=[cc.Step(name="my_prune", kind="prune_fields")])
+            "my_pipeline": cc.Pipeline(
+                provider=provider,
+                writer=writer,
+                steps=[cc.Step(name="my_prune", kind="prune_fields")],
+            )
         },
     )
 
