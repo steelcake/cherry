@@ -18,36 +18,6 @@ import time
 
 logger = logging.getLogger(__name__)
 
-def _get_iceberg_schema(record_batch: pa.RecordBatch) -> Schema:
-    """Convert PyArrow schema to Iceberg schema"""
-    schema_fields = []
-    field_id = 1
-    
-    for field in record_batch.schema:
-        field_type = str(field.type)
-        if field_type == 'bool':
-            iceberg_type = BooleanType()
-        elif field_type in ['int64', 'uint64']:
-            iceberg_type = LongType()
-        elif field_type == 'double':
-            iceberg_type = DoubleType()
-        elif field_type == 'timestamp[us]':
-            iceberg_type = TimestampType()
-        else:
-            iceberg_type = StringType()
-        
-        schema_fields.append(
-            NestedField(
-                field_id=field_id,
-                name=field.name,
-                field_type=iceberg_type,
-                required=False
-            )
-        )
-        field_id += 1
-    
-    return Schema(*schema_fields)
-
 class IcebergWriter(DataWriter):
     def __init__(self, config: WriterConfig):
         logger.info("Initializing Iceberg S3 writer...")
@@ -58,9 +28,9 @@ class IcebergWriter(DataWriter):
     def _init_s3_config(self, config: WriterConfig) -> None:
         """Initialize S3 configuration"""
         self.endpoint_url = config.endpoint
-        self.s3_path = f"s3://{config.s3_path}" if not config.s3_path.startswith('s3://') else config.s3_path
+        self.s3_path = config.s3_path
         self.database = config.database or 'blockchain'
-        self.bucket_name = self.s3_path.split("/")[2]
+        self.bucket_name = self.s3_path.split("/")[0]
         logger.info(f"Using S3 path: {self.s3_path}")
 
     def _init_minio(self) -> None:
@@ -147,10 +117,6 @@ class IcebergWriter(DataWriter):
         """Write data to S3 using Iceberg"""
         logger.info(f"Writing table: {table_name}")
         
-        table = pa.Table.from_batches([record_batch])
-        df = table.to_pandas()
-        
-        schema = _get_iceberg_schema(record_batch)
         table_identifier = f"{self.database}.{table_name}"
         
         try:
@@ -158,20 +124,21 @@ class IcebergWriter(DataWriter):
             if not self.catalog.table_exists(table_identifier):
                 self.catalog.create_table(
                     identifier=table_identifier,
-                    schema=schema,
+                    schema=record_batch.schema,
                     location=f"{self.s3_path}/{table_name}",
                     properties={
                         "write.format.default": "parquet",
-                        "write.metadata.compression-codec": "none",
-                        "write.parquet.compression-codec": "snappy"
                     }
                 )
             
             iceberg_table = self.catalog.load_table(table_identifier)
             
+            # Convert DataFrame back to PyArrow table before writing
+            arrow_table = pa.Table.from_batches([record_batch])
+            
             # Write data using Iceberg
             with iceberg_table.transaction() as tx:
-                tx.append(df)
+                tx.append(arrow_table)
                 
             logger.info(f"Successfully wrote {len(df)} rows to Iceberg table {table_name}")
             

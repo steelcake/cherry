@@ -4,7 +4,7 @@ from typing import Dict
 from cherry_indexer.config.parser import (
     Config, Provider, Writer, Pipeline, Step,
     ProviderConfig, WriterConfig, WriterKind, 
-    ProviderKind, Format, StepPhase
+    ProviderKind, Format
 )
 from cherry_indexer.utils.logging_setup import setup_logging
 from cherry_indexer.utils.pipeline import run_pipelines, Context
@@ -123,7 +123,6 @@ async def main():
                 Step(
                     name="get_block_number_stats",
                     kind="get_block_number_stats",
-                    phase=StepPhase.STREAM,
                     config={
                         "input_table": "logs",
                         "output_table": "block_number_stats",
