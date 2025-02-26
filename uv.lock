@@ -184,35 +184,37 @@ wheels = [
 ]
 
 [[package]]
-name = "cherry-indexer"
-version = "0.1.7"
+name = "cherry-etl"
+version = "0.0.1"
 source = { editable = "." }
 dependencies = [
     { name = "cherry-core" },
     { name = "clickhouse-connect" },
-    { name = "psycopg2" },
     { name = "pyarrow" },
     { name = "pyiceberg" },
-    { name = "sqlalchemy" },
 ]
 
 [package.dev-dependencies]
 dev = [
+    { name = "psycopg2" },
     { name = "ruff" },
+    { name = "sqlalchemy" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "cherry-core", specifier = ">=0.0.14" },
     { name = "clickhouse-connect", specifier = ">=0.8.15" },
-    { name = "psycopg2", specifier = ">=2.9.10" },
     { name = "pyarrow", specifier = ">=19.0.1" },
     { name = "pyiceberg", specifier = ">=0.8.1" },
-    { name = "sqlalchemy", specifier = ">=2.0.38" },
 ]
 
 [package.metadata.requires-dev]
-dev = [{ name = "ruff", specifier = ">=0.9.7" }]
+dev = [
+    { name = "psycopg2", specifier = ">=2.9.10" },
+    { name = "ruff", specifier = ">=0.9.7" },
+    { name = "sqlalchemy", specifier = ">=2.0.38" },
+]
 
 [[package]]
 name = "click"

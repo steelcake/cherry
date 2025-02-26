@@ -1,11 +1,11 @@
-from cherry_indexer import config as cc
+from cherry import config as cc
 from cherry_core import ingest
 from pyiceberg.catalog.sql import SqlCatalog
 import logging
 import os
 import asyncio
 import pyarrow as pa
-from cherry_indexer.pipeline import run_pipelines, Context
+from cherry.pipeline import run_pipelines, Context
 from typing import Dict
 
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "DEBUG").upper())

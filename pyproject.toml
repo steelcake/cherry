@@ -1,6 +1,6 @@
 [project]
-name = "cherry-indexer"
-version = "0.1.7"
+name = "cherry-etl"
+version = "0.0.1"
 description = "Library for building blockchain pipelines"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
@@ -12,9 +12,14 @@ requires-python = ">=3.10"
 dependencies = [
     "cherry-core>=0.0.14",
     "clickhouse-connect>=0.8.15",
-    "psycopg2>=2.9.10",
     "pyarrow>=19.0.1",
     "pyiceberg>=0.8.1",
+]
+
+[dependency-groups]
+dev = [
+    "psycopg2>=2.9.10",
+    "ruff>=0.9.7",
     "sqlalchemy>=2.0.38",
 ]
 
@@ -22,8 +27,6 @@ dependencies = [
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[dependency-groups]
-dev = [
-    "ruff>=0.9.7",
-]
+[tool.hatch.build.targets.wheel]
+packages = ["src/cherry"]
 
