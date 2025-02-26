@@ -1,18 +1,18 @@
 from cherry import config as cc
+from cherry import run_pipelines, Context
 from cherry_core import ingest
 from pyiceberg.catalog.sql import SqlCatalog
 import logging
 import os
 import asyncio
 import pyarrow as pa
-from cherry.pipeline import run_pipelines, Context
 from typing import Dict
 
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "DEBUG").upper())
 
 
 def prune_fields(
-    data: Dict[str, pa.RecordBatch], step: cc.Step
+    data: Dict[str, pa.RecordBatch], _: cc.Step
 ) -> Dict[str, pa.RecordBatch]:
     x = data["blocks"].column("number")
     blocks = pa.RecordBatch.from_arrays([x], names=["blocks"])

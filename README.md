@@ -1,12 +1,12 @@
-# Cherry Event Indexer
+# Cherry 
 
-A flexible blockchain event indexing and data processing pipeline.
+Python library for building blockchain data pipelines
 
 ## Overview
 
-Cherry Event Indexer is a modular system for:
-- Ingesting blockchain events and logs
-- Processing and transforming blockchain data
+Cherry is a modular system for:
+- Ingesting (blockchain) data 
+- Processing and transforming (blockchain) data
 - Writing data to various storage backends
 
 ## Features

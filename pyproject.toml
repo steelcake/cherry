@@ -11,16 +11,16 @@ authors = [
 requires-python = ">=3.10"
 dependencies = [
     "cherry-core>=0.0.14",
-    "clickhouse-connect>=0.8.15",
     "pyarrow>=19.0.1",
+    "sqlalchemy>=2.0.38",
+    "psycopg2>=2.9.10",
     "pyiceberg>=0.8.1",
+    "clickhouse-connect>=0.8.15",
 ]
 
 [dependency-groups]
 dev = [
-    "psycopg2>=2.9.10",
     "ruff>=0.9.7",
-    "sqlalchemy>=2.0.38",
 ]
 
 [build-system]
