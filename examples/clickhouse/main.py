@@ -99,6 +99,7 @@ async def main():
                         kind=StepKind.HEX_ENCODE,
                         config={
                             "tables": ["transfer_events", "transfer_events_cast"]
+                            "allow_cast_fail": True
                         }
                     )
                 ]

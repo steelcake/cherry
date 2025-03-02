@@ -76,7 +76,6 @@ async def process_steps(
                     res[table_name] = prefix_hex_encode(
                         res[table_name]
                     )
-
         elif step.kind in context.steps:
             logger.info(f"Executing custom step: {step.kind} {res}")
             res = context.steps[step.kind](res, step)
