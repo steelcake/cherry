@@ -74,7 +74,7 @@ class CastConfig:
 @dataclass
 class HexEncodeConfig:
     tables: Optional[list[str]] = None
-    prefixed: bool = False
+    prefixed: bool = True
 
 
 @dataclass

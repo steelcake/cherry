@@ -76,14 +76,14 @@ async def main():
                             output_table="transfer_events",
                         ),
                     ),
-                    cc.Step(
-                        name="cast_transfers",
-                        kind=StepKind.CAST,
-                        config=CastConfig(
-                            mappings=[("amount", "Decimal128(38, 0)")],
-                            table_name="transfer_events",
-                        ),
-                    ),
+                    # cc.Step(
+                    #     name="cast_transfers",
+                    #     kind=StepKind.CAST,
+                    #     config=CastConfig(
+                    #         mappings=[("amount", "Decimal128(38, 0)")],
+                    #         table_name="transfer_events",
+                    #     ),
+                    # ),
                     cc.Step(
                         name="prefix_hex_encode",
                         kind=StepKind.HEX_ENCODE,
