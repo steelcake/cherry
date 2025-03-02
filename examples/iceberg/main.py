@@ -11,7 +11,7 @@ from typing import Dict
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "DEBUG").upper())
 
 
-def prune_fields(
+async def prune_fields(
     data: Dict[str, pa.RecordBatch], _: cc.Step
 ) -> Dict[str, pa.RecordBatch]:
     x = data["blocks"].column("number")
