@@ -75,39 +75,65 @@ class Writer(DataWriter):
     def __init__(self, config: ClickHouseWriterConfig):
         self.client = config.client
         self.order_by = config.order_by
+        self.codec = config.codec
+        self.skip_index = config.skip_index
+        self.first_insert = True
 
-    def _create_table_if_not_exists(
-        self, table_name: str, table_data: pa.RecordBatch
-    ) -> None:
-        schema = table_data.schema
+    def _check_table_exists(self, table_name: str) -> bool:
+        res = self.client.query(
+            f"SELECT count() > 0 as table_exists FROM system.tables WHERE database = '{self.client.database}' AND name = '{table_name}'"
+        )
+
+        return bool(res.result_rows[0][0])
+
+    def _create_table(self, table_name: str, schema: pa.Schema) -> None:
         columns = []
 
         for field in schema:
             ch_type = pyarrow_type_to_clickhouse(field.type)
-            columns.append(f"`{field.name}` {ch_type}")
+            col_def = f"`{field.name}` {ch_type}"
 
-        order_by = f"{schema.names[0]}"
-        if len(schema.names) >= 2:
-            order_by = f"({schema.names[0]}, {schema.names[1]})"
-        
-        if table_name in self.order_by:    
-            order_by = (
-                f"({', '.join(self.order_by[table_name])})"
-            )
+            if table_name in self.codec:
+                table_codec = self.codec[table_name]
+
+                if field.name in table_codec:
+                    col_def += f" CODEC({table_codec[field.name]})"
+
+            columns.append(col_def)
+
+        order_by = "tuple()"
+        if table_name in self.order_by:
+            col_list = self.order_by[table_name]
+            if len(col_list) > 0:
+                order_by = f"({', '.join(col_list)})"
 
         create_table_query = f"""
-        CREATE TABLE IF NOT EXISTS {table_name} (
+        CREATE TABLE {table_name} (
             {", ".join(columns)}
         ) ENGINE = MergeTree()
         ORDER BY {order_by}
         """
 
+        logger.debug(f"creating table with: {create_table_query}")
         self.client.command(create_table_query)
-        logger.info(f"Created table {table_name} if it didn't exist with order by {order_by}")
+
+        if table_name in self.skip_index:
+            for idx in self.skip_index[table_name]:
+                skip_index = f"ALTER TABLE {table_name} ADD INDEX {idx.name} {idx.val} TYPE {idx.type_} GRANULARITY {idx.granularity}"
+                logger.debug(f"creating index with {skip_index}")
+                self.client.command(skip_index)
 
     async def push_data(self, data: Dict[str, pa.RecordBatch]) -> None:
+        if self.first_insert:
+            self.first_insert = False
+
+            for table_name, table_data in data.items():
+                if not self._check_table_exists(table_name):
+                    self._create_table(table_name, table_data.schema)
+                else:
+                    logger.debug(
+                        f"table {table_name} already exists so skipping creation"
+                    )
+
         for table_name, table_data in data.items():
-            self._create_table_if_not_exists(table_name, table_data)
-            self.client.insert_arrow(
-                f"{table_name}", pa.Table.from_batches([table_data])
-            )
+            self.client.insert_arrow(table_name, pa.Table.from_batches([table_data]))

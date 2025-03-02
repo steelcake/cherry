@@ -21,6 +21,7 @@ class StepKind(str, Enum):
     CAST = "cast"
     HEX_ENCODE = "hex_encode"
 
+
 @dataclass
 class Provider:
     """Data provider configuration"""
@@ -37,9 +38,19 @@ class IcebergWriterConfig:
 
 
 @dataclass
+class ClickHouseSkipIndex:
+    name: str
+    val: str
+    type_: str
+    granularity: int
+
+
+@dataclass
 class ClickHouseWriterConfig:
     client: ClickHouseClient
+    codec: Dict[str, Dict[str, str]] = field(default_factory=dict)
     order_by: Dict[str, List[str]] = field(default_factory=dict)
+    skip_index: Dict[str, List[ClickHouseSkipIndex]] = field(default_factory=dict)
 
 
 @dataclass

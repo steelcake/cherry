@@ -1,5 +1,10 @@
 from cherry import config as cc
-from cherry.config import StepKind, EvmDecodeEventsConfig, CastConfig, HexEncodeConfig
+from cherry.config import (
+    ClickHouseSkipIndex,
+    StepKind,
+    EvmDecodeEventsConfig,
+    HexEncodeConfig,
+)
 from cherry import run_pipelines, Context
 from cherry_core import ingest
 import logging
@@ -59,9 +64,21 @@ async def main():
     # Create writer with ClickHouse configuration
     writer = cc.Writer(
         kind=cc.WriterKind.CLICKHOUSE,
-        config=cc.ClickHouseWriterConfig(client=clickhouse_client, order_by={"blocks": [],
-                                                                             "logs": []
-                                                                             })
+        config=cc.ClickHouseWriterConfig(
+            client=clickhouse_client,
+            order_by={"blocks": ["number"], "logs": ["block_number", "log_index"]},
+            codec={"logs": {"data": "ZSTD"}},
+            skip_index={
+                "logs": [
+                    ClickHouseSkipIndex(
+                        name="log_addr_idx",
+                        val="address",
+                        type_="bloom_filter(0.01)",
+                        granularity=1,
+                    )
+                ]
+            },
+        ),
     )
 
     config = cc.Config(
