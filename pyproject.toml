@@ -16,6 +16,7 @@ dependencies = [
     "psycopg2>=2.9.10",
     "pyiceberg>=0.8.1",
     "clickhouse-connect>=0.8.15",
+    "dotenv>=0.9.9",
 ]
 
 [dependency-groups]

@@ -8,6 +8,9 @@ import asyncio
 import clickhouse_connect
 from typing import Dict, Tuple
 import pyarrow as pa
+from dotenv import load_dotenv
+
+load_dotenv()
 
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "DEBUG").upper())
 
@@ -15,11 +18,11 @@ logging.basicConfig(level=os.environ.get("LOGLEVEL", "DEBUG").upper())
 async def main():
     # Create ClickHouse client
     clickhouse_client = clickhouse_connect.get_client(
-        host='localhost',
-        port=8123,
-        username='default',
-        password='clickhouse',
-        database='blockchain',
+        host=os.environ.get('CLICKHOUSE_HOST', 'localhost'),
+        port=int(os.environ.get('CLICKHOUSE_PORT', '8123')),
+        username=os.environ.get('CLICKHOUSE_USER', 'default'),
+        password=os.environ.get('CLICKHOUSE_PASSWORD', 'clickhouse'),
+        database=os.environ.get('CLICKHOUSE_DATABASE', 'blockchain'),
     )
 
     provider = cc.Provider(
@@ -30,7 +33,7 @@ async def main():
             query=ingest.Query(
                 kind=ingest.QueryKind.EVM,
                 params=ingest.evm.Query(
-                    from_block=0,
+                    from_block=21930160,
                     logs=[
                         ingest.evm.LogRequest(
                             address=["0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"],
@@ -68,7 +71,30 @@ async def main():
             "my_pipeline": cc.Pipeline(
                 provider=provider,
                 writer=writer,
-                steps=[]
+                steps=[
+                    cc.Step(
+                        name="decode_transfers",
+                        kind=StepKind.EVM_DECODE_EVENTS,
+                        config={
+                            "event_signature": "Transfer(address,address,uint256)",
+                            "input_table": "logs",
+                            "output_table": "transfer_events",
+                            "allow_decode_fail": True
+                        }
+                    ),
+                    cc.Step(
+                        name="cast_transfers",
+                        kind=StepKind.CAST,
+                        config={
+                            "mappings": [
+                                ("amount", "Decimal128(38, 0)")
+                            ],
+                                "input_table": "transfer_events",
+                                "output_table": "transfer_events_cast",
+                            "allow_cast_fail": True
+                        }
+                    )
+                ]
             )
         },
     )
