@@ -4,7 +4,7 @@ from .config import Pipeline, Step, StepKind, Config
 from typing import Dict, List, Callable
 import copy
 from cherry_core.ingest import start_stream
-from cherry_core import evm_validate_block_data, evm_decode_events, cast
+from cherry_core import evm_validate_block_data, evm_decode_events, cast, prefix_hex_encode, hex_encode
 import pyarrow as pa
 from .writers.writer import create_writer
 
@@ -65,6 +65,18 @@ async def process_steps(
                 res[step.config["input_table"]], 
                 step.config["allow_cast_fail"]
             )
+        elif step.kind == StepKind.HEX_ENCODE:
+            logger.debug(f"Executing hex encode step: {step.config}")
+            for table_name in step.config["tables"]:
+                if not res.get("prefixed", True):
+                    res[table_name] = hex_encode(
+                        res[table_name]
+                    )
+                else:
+                    res[table_name] = prefix_hex_encode(
+                        res[table_name]
+                    )
+
         elif step.kind in context.steps:
             logger.info(f"Executing custom step: {step.kind} {res}")
             res = context.steps[step.kind](res, step)

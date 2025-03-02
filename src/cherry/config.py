@@ -18,6 +18,7 @@ class StepKind(str, Enum):
     EVM_VALIDATE_BLOCK = "evm_validate_block_data"
     EVM_DECODE_EVENTS = "evm_decode_events"
     CAST = "cast"
+    HEX_ENCODE = "hex_encode"
 
 
 @dataclass

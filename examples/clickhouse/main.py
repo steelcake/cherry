@@ -76,7 +76,7 @@ async def main():
                         name="decode_transfers",
                         kind=StepKind.EVM_DECODE_EVENTS,
                         config={
-                            "event_signature": "Transfer(address,address,uint256)",
+                            "event_signature": "Transfer(address indexed from, address indexed to, uint256 amount)",
                             "input_table": "logs",
                             "output_table": "transfer_events",
                             "allow_decode_fail": True
@@ -91,7 +91,14 @@ async def main():
                             ],
                                 "input_table": "transfer_events",
                                 "output_table": "transfer_events_cast",
-                            "allow_cast_fail": True
+                                "allow_cast_fail": True
+                        }
+                    ),
+                    cc.Step(
+                        name="my_prefix_hex_encode",
+                        kind=StepKind.HEX_ENCODE,
+                        config={
+                            "tables": ["transfer_events", "transfer_events_cast"]
                         }
                     )
                 ]
