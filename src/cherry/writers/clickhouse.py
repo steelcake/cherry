@@ -74,6 +74,7 @@ def pyarrow_type_to_clickhouse(dt: pa.DataType) -> str:
 class Writer(DataWriter):
     def __init__(self, config: ClickHouseWriterConfig):
         self.client = config.client
+        self.order_by = config.order_by
 
     def _create_table_if_not_exists(
         self, table_name: str, table_data: pa.RecordBatch
@@ -85,15 +86,24 @@ class Writer(DataWriter):
             ch_type = pyarrow_type_to_clickhouse(field.type)
             columns.append(f"`{field.name}` {ch_type}")
 
+        order_by = f"{schema.names[0]}"
+        if len(schema.names) >= 2:
+            order_by = f"({schema.names[0]}, {schema.names[1]})"
+        
+        if table_name in self.order_by:    
+            order_by = (
+                f"({', '.join(self.order_by[table_name])})"
+            )
+
         create_table_query = f"""
         CREATE TABLE IF NOT EXISTS {table_name} (
             {", ".join(columns)}
         ) ENGINE = MergeTree()
-        ORDER BY tuple()
+        ORDER BY {order_by}
         """
 
         self.client.command(create_table_query)
-        logger.info(f"Created table {table_name} if it didn't exist")
+        logger.info(f"Created table {table_name} if it didn't exist with order by {order_by}")
 
     async def push_data(self, data: Dict[str, pa.RecordBatch]) -> None:
         for table_name, table_data in data.items():

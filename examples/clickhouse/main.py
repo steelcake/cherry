@@ -41,6 +41,8 @@ async def main():
                     fields=ingest.evm.Fields(
                         block=ingest.evm.BlockFields(number=True, timestamp=True),
                         log=ingest.evm.LogFields(
+                            block_number=True,
+                            log_index=True,
                             address=True,
                             topic0=True,
                             topic1=True,
@@ -57,7 +59,9 @@ async def main():
     # Create writer with ClickHouse configuration
     writer = cc.Writer(
         kind=cc.WriterKind.CLICKHOUSE,
-        config=cc.ClickHouseWriterConfig(client=clickhouse_client),
+        config=cc.ClickHouseWriterConfig(client=clickhouse_client, order_by={"blocks": [],
+                                                                             "logs": []
+                                                                             })
     )
 
     config = cc.Config(
