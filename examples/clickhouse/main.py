@@ -1,13 +1,11 @@
 from cherry import config as cc
-from cherry.config import StepKind
+from cherry.config import StepKind, EvmDecodeEventsConfig, CastConfig, HexEncodeConfig
 from cherry import run_pipelines, Context
-from cherry_core import ingest, cast
+from cherry_core import ingest
 import logging
 import os
 import asyncio
 import clickhouse_connect
-from typing import Dict, Tuple
-import pyarrow as pa
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -18,11 +16,11 @@ logging.basicConfig(level=os.environ.get("LOGLEVEL", "DEBUG").upper())
 async def main():
     # Create ClickHouse client
     clickhouse_client = clickhouse_connect.get_client(
-        host=os.environ.get('CLICKHOUSE_HOST', 'localhost'),
-        port=int(os.environ.get('CLICKHOUSE_PORT', '8123')),
-        username=os.environ.get('CLICKHOUSE_USER', 'default'),
-        password=os.environ.get('CLICKHOUSE_PASSWORD', 'clickhouse'),
-        database=os.environ.get('CLICKHOUSE_DATABASE', 'blockchain'),
+        host=os.environ.get("CLICKHOUSE_HOST", "localhost"),
+        port=int(os.environ.get("CLICKHOUSE_PORT", "8123")),
+        username=os.environ.get("CLICKHOUSE_USER", "default"),
+        password=os.environ.get("CLICKHOUSE_PASSWORD", "clickhouse"),
+        database=os.environ.get("CLICKHOUSE_DATABASE", "blockchain"),
     )
 
     provider = cc.Provider(
@@ -59,9 +57,7 @@ async def main():
     # Create writer with ClickHouse configuration
     writer = cc.Writer(
         kind=cc.WriterKind.CLICKHOUSE,
-        config=cc.ClickHouseWriterConfig(
-            client=clickhouse_client
-        ),
+        config=cc.ClickHouseWriterConfig(client=clickhouse_client),
     )
 
     config = cc.Config(
@@ -75,40 +71,30 @@ async def main():
                     cc.Step(
                         name="decode_transfers",
                         kind=StepKind.EVM_DECODE_EVENTS,
-                        config={
-                            "event_signature": "Transfer(address indexed from, address indexed to, uint256 amount)",
-                            "input_table": "logs",
-                            "output_table": "transfer_events",
-                            "allow_decode_fail": True
-                        }
+                        config=EvmDecodeEventsConfig(
+                            event_signature="Transfer(address indexed from, address indexed to, uint256 amount)",
+                            output_table="transfer_events",
+                        ),
                     ),
                     cc.Step(
                         name="cast_transfers",
                         kind=StepKind.CAST,
-                        config={
-                            "mappings": [
-                                ("amount", "Decimal128(38, 0)")
-                            ],
-                                "input_table": "transfer_events",
-                                "output_table": "transfer_events_cast",
-                                "allow_cast_fail": True
-                        }
+                        config=CastConfig(
+                            mappings=[("amount", "Decimal128(38, 0)")],
+                            table_name="transfer_events",
+                        ),
                     ),
                     cc.Step(
-                        name="my_prefix_hex_encode",
+                        name="prefix_hex_encode",
                         kind=StepKind.HEX_ENCODE,
-                        config={
-                            "tables": ["transfer_events", "transfer_events_cast"]
-                            "allow_cast_fail": True
-                        }
-                    )
-                ]
+                        config=HexEncodeConfig(),
+                    ),
+                ],
             )
         },
     )
 
     context = Context()
-
 
     await run_pipelines(config, context)
 

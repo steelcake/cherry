@@ -1,12 +1,21 @@
 import asyncio
+from collections.abc import Awaitable
 import logging
-from .config import Pipeline, Step, StepKind, Config
+from .config import (
+    CastConfig,
+    EvmDecodeEventsConfig,
+    EvmValidateBlockDataConfig,
+    HexEncodeConfig,
+    Pipeline,
+    Step,
+    StepKind,
+    Config,
+)
 from typing import Dict, List, Callable
-import copy
 from cherry_core.ingest import start_stream
-from cherry_core import evm_validate_block_data, evm_decode_events, cast, prefix_hex_encode, hex_encode
 import pyarrow as pa
 from .writers.writer import create_writer
+from . import steps as step_def
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +24,13 @@ class Context:
     def __init__(self):
         self.steps = {}
 
-    def add_step(self, kind: str, step: Callable):
+    def add_step(
+        self,
+        kind: str,
+        step: Callable[
+            [Dict[str, pa.RecordBatch], Step], Awaitable[Dict[str, pa.RecordBatch]]
+        ],
+    ):
         self.steps[kind] = step
 
 
@@ -41,44 +56,23 @@ async def process_steps(
     res = record_batches
 
     for step in steps:
-        res = copy.deepcopy(res)
+        logger.debug(f"running step kind: {step.kind} name: {step.name}")
 
-        if step.kind == StepKind.EVM_VALIDATE_BLOCK:
-            logger.debug("Validating EVM block data...")
-            evm_validate_block_data(
-                blocks=res["blocks"],
-                transactions=res["transactions"],
-                logs=res["logs"],
-                traces=res["traces"],
-            )
+        if step.kind == StepKind.EVM_VALIDATE_BLOCK_DATA:
+            assert isinstance(step.config, EvmValidateBlockDataConfig)
+            res = step_def.evm_validate_block_data.execute(res, step.config)
         elif step.kind == StepKind.EVM_DECODE_EVENTS:
-            logger.debug(f"Decoding EVM events with config: {step.config}")
-            res[step.config["output_table"]] = evm_decode_events(
-                step.config["event_signature"],
-                res[step.config["input_table"]],
-                step.config["allow_decode_fail"],
-            )
+            assert isinstance(step.config, EvmDecodeEventsConfig)
+            res = step_def.evm_decode_events.execute(res, step.config)
         elif step.kind == StepKind.CAST:
-            logger.debug(f"Executing cast step: {step.config}")
-            res[step.config["output_table"]] = cast(
-                step.config["mappings"],
-                res[step.config["input_table"]], 
-                step.config["allow_cast_fail"]
-            )
+            assert isinstance(step.config, CastConfig)
+            res = step_def.cast.execute(res, step.config)
         elif step.kind == StepKind.HEX_ENCODE:
-            logger.debug(f"Executing hex encode step: {step.config}")
-            for table_name in step.config["tables"]:
-                if not res.get("prefixed", True):
-                    res[table_name] = hex_encode(
-                        res[table_name]
-                    )
-                else:
-                    res[table_name] = prefix_hex_encode(
-                        res[table_name]
-                    )
+            assert isinstance(step.config, HexEncodeConfig)
+            res = step_def.hex_encode.execute(res, step.config)
         elif step.kind in context.steps:
             logger.info(f"Executing custom step: {step.kind} {res}")
-            res = context.steps[step.kind](res, step)
+            res = await context.steps[step.kind](res, step)
         else:
             logger.warning(f"Unknown step kind: {step.kind}")
 

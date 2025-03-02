@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from cherry_core import Tuple
 from clickhouse_connect.driver.client import Client as ClickHouseClient
 from typing import List, Dict, Optional
 from enum import Enum
@@ -15,7 +16,7 @@ class WriterKind(str, Enum):
 
 
 class StepKind(str, Enum):
-    EVM_VALIDATE_BLOCK = "evm_validate_block_data"
+    EVM_VALIDATE_BLOCK_DATA = "evm_validate_block_data"
     EVM_DECODE_EVENTS = "evm_decode_events"
     CAST = "cast"
     HEX_ENCODE = "hex_encode"
@@ -25,8 +26,8 @@ class StepKind(str, Enum):
 class Provider:
     """Data provider configuration"""
 
+    config: ProviderConfig
     name: Optional[str] = None
-    config: Optional[ProviderConfig] = None
 
 
 @dataclass
@@ -48,10 +49,45 @@ class Writer:
 
 
 @dataclass
+class EvmValidateBlockDataConfig:
+    blocks: str = "blocks"
+    transactions: str = "transactions"
+    logs: str = "logs"
+    traces: str = "traces"
+
+
+@dataclass
+class EvmDecodeEventsConfig:
+    event_signature: str
+    allow_decode_fail: bool = False
+    input_table: str = "logs"
+    output_table: str = "decoded_logs"
+
+
+@dataclass
+class CastConfig:
+    table_name: str
+    mappings: List[Tuple[str, str]]
+    allow_cast_fail: bool = False
+
+
+@dataclass
+class HexEncodeConfig:
+    tables: Optional[list[str]] = None
+    prefixed: bool = False
+
+
+@dataclass
 class Step:
     name: str
     kind: StepKind | str
-    config: Optional[Dict] = None
+    config: Optional[
+        Dict
+        | EvmValidateBlockDataConfig
+        | EvmDecodeEventsConfig
+        | CastConfig
+        | HexEncodeConfig
+    ] = None
 
 
 @dataclass
