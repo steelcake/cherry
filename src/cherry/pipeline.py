@@ -4,7 +4,7 @@ from .config import Pipeline, Step, StepKind, Config
 from typing import Dict, List, Callable
 import copy
 from cherry_core.ingest import start_stream
-from cherry_core import evm_validate_block_data, evm_decode_events
+from cherry_core import evm_validate_block_data, evm_decode_events, cast
 import pyarrow as pa
 from .writers.writer import create_writer
 
@@ -57,6 +57,13 @@ async def process_steps(
                 step.config["event_signature"],
                 res[step.config["input_table"]],
                 step.config["allow_decode_fail"],
+            )
+        elif step.kind == StepKind.CAST:
+            logger.debug(f"Executing cast step: {step.config}")
+            res[step.config["output_table"]] = cast(
+                step.config["mappings"],
+                res[step.config["input_table"]], 
+                step.config["allow_cast_fail"]
             )
         elif step.kind in context.steps:
             logger.info(f"Executing custom step: {step.kind} {res}")
