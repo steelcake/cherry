@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from cherry_core import Tuple
 from clickhouse_connect.driver.client import Client as ClickHouseClient
 from typing import List, Dict, Optional
@@ -21,7 +21,6 @@ class StepKind(str, Enum):
     CAST = "cast"
     HEX_ENCODE = "hex_encode"
 
-
 @dataclass
 class Provider:
     """Data provider configuration"""
@@ -40,6 +39,7 @@ class IcebergWriterConfig:
 @dataclass
 class ClickHouseWriterConfig:
     client: ClickHouseClient
+    order_by: Dict[str, List[str]] = field(default_factory=dict)
 
 
 @dataclass
@@ -74,7 +74,7 @@ class CastConfig:
 @dataclass
 class HexEncodeConfig:
     tables: Optional[list[str]] = None
-    prefixed: bool = False
+    prefixed: bool = True
 
 
 @dataclass

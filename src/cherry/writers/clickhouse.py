@@ -7,9 +7,74 @@ from ..config import ClickHouseWriterConfig
 logger = logging.getLogger(__name__)
 
 
+def pyarrow_type_to_clickhouse(dt: pa.DataType) -> str:
+    if pa.types.is_boolean(dt):
+        return "Bool"
+    elif pa.types.is_int8(dt):
+        return "Int8"
+    elif pa.types.is_int16(dt):
+        return "Int16"
+    elif pa.types.is_int32(dt):
+        return "Int32"
+    elif pa.types.is_int64(dt):
+        return "Int64"
+    elif pa.types.is_uint8(dt):
+        return "UInt8"
+    elif pa.types.is_uint16(dt):
+        return "UInt16"
+    elif pa.types.is_uint32(dt):
+        return "UInt32"
+    elif pa.types.is_uint64(dt):
+        return "UInt64"
+    elif pa.types.is_float16(dt):
+        return "Float32"  # ClickHouse doesn't support Float16
+    elif pa.types.is_float32(dt):
+        return "Float32"
+    elif pa.types.is_float64(dt):
+        return "Float64"
+    elif pa.types.is_string(dt):
+        return "String"
+    elif pa.types.is_binary(dt):
+        return "String"  # ClickHouse uses String for binary data too
+    elif pa.types.is_date32(dt):
+        return "Date"  # Date32 in Arrow is the same as Date in ClickHouse
+    elif pa.types.is_date64(dt):
+        return "DateTime"  # Date64 maps to DateTime
+    elif pa.types.is_timestamp(dt):
+        return "DateTime"  # Timestamp maps to DateTime
+    elif pa.types.is_time32(dt):
+        return "Int32"  # Time32 in Arrow maps to Int32 in ClickHouse
+    elif pa.types.is_time64(dt):
+        return "Int64"  # Time64 in Arrow maps to Int64 in ClickHouse
+    elif pa.types.is_list(dt):
+        return f"Array({pyarrow_type_to_clickhouse(dt.value_type)})"
+    elif pa.types.is_struct(dt):
+        fields = [
+            f"{field.name} {pyarrow_type_to_clickhouse(field.type)}" for field in dt
+        ]
+        return f"Tuple({', '.join(fields)})"
+    elif pa.types.is_map(dt):
+        key_type = pyarrow_type_to_clickhouse(dt.key_type)
+        value_type = pyarrow_type_to_clickhouse(dt.value_type)
+        return f"Map({key_type}, {value_type})"
+    elif pa.types.is_decimal128(dt):
+        # For Decimal128, we can get precision and scale
+        precision = dt.precision
+        scale = dt.scale
+        return f"Decimal({precision}, {scale})"
+    elif pa.types.is_decimal256(dt):
+        # For Decimal256, we can get precision and scale
+        precision = dt.precision
+        scale = dt.scale
+        return f"Decimal({precision}, {scale})"
+    else:
+        raise Exception(f"Unimplemented pyarrow type: {dt}")
+
+
 class Writer(DataWriter):
     def __init__(self, config: ClickHouseWriterConfig):
         self.client = config.client
+        self.order_by = config.order_by
 
     def _create_table_if_not_exists(
         self, table_name: str, table_data: pa.RecordBatch
@@ -17,35 +82,28 @@ class Writer(DataWriter):
         schema = table_data.schema
         columns = []
 
-        # Map PyArrow types to ClickHouse types
-        type_mapping = {
-            pa.string(): "String",
-            pa.int64(): "Int64",
-            pa.int32(): "Int32",
-            pa.float64(): "Float64",
-            pa.float32(): "Float32",
-            pa.bool_(): "UInt8",
-            pa.timestamp("ns"): "DateTime64(9)",
-            pa.binary(): "String",
-        }
-
         for field in schema:
-            ch_type = type_mapping.get(field.type, "String")
+            ch_type = pyarrow_type_to_clickhouse(field.type)
             columns.append(f"`{field.name}` {ch_type}")
+
+        order_by = f"{schema.names[0]}"
+        if len(schema.names) >= 2:
+            order_by = f"({schema.names[0]}, {schema.names[1]})"
+        
+        if table_name in self.order_by:    
+            order_by = (
+                f"({', '.join(self.order_by[table_name])})"
+            )
 
         create_table_query = f"""
         CREATE TABLE IF NOT EXISTS {table_name} (
             {", ".join(columns)}
         ) ENGINE = MergeTree()
-        ORDER BY tuple()
+        ORDER BY {order_by}
         """
 
-        try:
-            self.client.command(create_table_query)
-            logger.info(f"Created table {table_name} if it didn't exist")
-        except Exception as e:
-            logger.error(f"Error creating table {table_name}: {str(e)}")
-            raise
+        self.client.command(create_table_query)
+        logger.info(f"Created table {table_name} if it didn't exist with order by {order_by}")
 
     async def push_data(self, data: Dict[str, pa.RecordBatch]) -> None:
         for table_name, table_data in data.items():

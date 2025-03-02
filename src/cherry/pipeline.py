@@ -74,7 +74,7 @@ async def process_steps(
             logger.info(f"Executing custom step: {step.kind} {res}")
             res = await context.steps[step.kind](res, step)
         else:
-            logger.warning(f"Unknown step kind: {step.kind}")
+            raise Exception(f"Unknown step kind: {step.kind}")
 
         logger.debug(f"Step {step.kind} complete. Current tables: {list(res.keys())}")
 
