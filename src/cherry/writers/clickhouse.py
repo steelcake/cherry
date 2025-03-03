@@ -3,6 +3,7 @@ from typing import Dict
 import pyarrow as pa
 from ..writers.base import DataWriter
 from ..config import ClickHouseWriterConfig
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -78,15 +79,22 @@ class Writer(DataWriter):
         self.codec = config.codec
         self.skip_index = config.skip_index
         self.first_insert = True
+        self.anchor_table = config.anchor_table
 
-    def _check_table_exists(self, table_name: str) -> bool:
-        res = self.client.query(
-            f"SELECT count() > 0 as table_exists FROM system.tables WHERE database = '{self.client.database}' AND name = '{table_name}'"
+    async def _create_table_if_not_exists(self, table_name: str, schema: pa.Schema):
+        if not await self._check_table_exists(table_name):
+            await self._create_table(table_name, schema)
+        else:
+            logger.debug(f"table {table_name} already exists so skipping creation")
+
+    async def _check_table_exists(self, table_name: str) -> bool:
+        res = await self.client.query(
+            f"SELECT count() > 0 as table_exists FROM system.tables WHERE database = '{self.client.client.database}' AND name = '{table_name}'"
         )
 
         return bool(res.result_rows[0][0])
 
-    def _create_table(self, table_name: str, schema: pa.Schema) -> None:
+    async def _create_table(self, table_name: str, schema: pa.Schema) -> None:
         columns = []
 
         for field in schema:
@@ -115,25 +123,53 @@ class Writer(DataWriter):
         """
 
         logger.debug(f"creating table with: {create_table_query}")
-        self.client.command(create_table_query)
+
+        await self.client.command(create_table_query)
 
         if table_name in self.skip_index:
             for idx in self.skip_index[table_name]:
                 skip_index = f"ALTER TABLE {table_name} ADD INDEX {idx.name} {idx.val} TYPE {idx.type_} GRANULARITY {idx.granularity}"
                 logger.debug(f"creating index with {skip_index}")
-                self.client.command(skip_index)
+                await self.client.command(skip_index)
 
     async def push_data(self, data: Dict[str, pa.RecordBatch]) -> None:
+        # create tables if this is the first insert
         if self.first_insert:
-            self.first_insert = False
+            tasks = []
 
             for table_name, table_data in data.items():
-                if not self._check_table_exists(table_name):
-                    self._create_table(table_name, table_data.schema)
-                else:
-                    logger.debug(
-                        f"table {table_name} already exists so skipping creation"
-                    )
+                task = asyncio.create_task(
+                    self._create_table_if_not_exists(table_name, table_data.schema),
+                    name=f"create table {table_name}",
+                )
+                tasks.append(task)
 
+            for task in tasks:
+                await task
+
+            self.first_insert = False
+
+        # insert into all tables except the anchor table in parallel
+        tasks = []
         for table_name, table_data in data.items():
-            self.client.insert_arrow(table_name, pa.Table.from_batches([table_data]))
+            if table_name == self.anchor_table:
+                continue
+
+            task = asyncio.create_task(
+                self.client.insert_arrow(
+                    table_name, pa.Table.from_batches([table_data])
+                ),
+                name=f"write to {table_name}",
+            )
+
+            tasks.append(task)
+
+        for task in tasks:
+            await task
+
+        # insert into anchor table after all other inserts are done
+        if self.anchor_table is not None:
+            table_data = data[self.anchor_table]
+            await self.client.insert_arrow(
+                self.anchor_table, pa.Table.from_batches([table_data])
+            )

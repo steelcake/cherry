@@ -71,7 +71,6 @@ async def process_steps(
             assert isinstance(step.config, HexEncodeConfig)
             res = step_def.hex_encode.execute(res, step.config)
         elif step.kind in context.steps:
-            logger.info(f"Executing custom step: {step.kind} {res}")
             res = await context.steps[step.kind](res, step)
         else:
             raise Exception(f"Unknown step kind: {step.kind}")
