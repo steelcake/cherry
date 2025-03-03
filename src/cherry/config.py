@@ -1,10 +1,12 @@
-from dataclasses import dataclass, field
-from cherry_core import Tuple
-from clickhouse_connect.driver.asyncclient import AsyncClient as ClickHouseClient
-from typing import List, Dict, Optional
-from enum import Enum
 import logging
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Dict, List, Optional, Union
+
+from cherry_core import Tuple
 from cherry_core.ingest import ProviderConfig
+from clickhouse_connect.driver.asyncclient import AsyncClient as ClickHouseClient
+from deltalake import DataCatalog
 from pyiceberg.catalog import Catalog as IcebergCatalog
 
 logger = logging.getLogger(__name__)
@@ -13,6 +15,7 @@ logger = logging.getLogger(__name__)
 class WriterKind(str, Enum):
     CLICKHOUSE = "clickhouse"
     ICEBERG = "iceberg"
+    DELTA_LAKE = "delta_lake"
 
 
 class StepKind(str, Enum):
@@ -35,6 +38,29 @@ class IcebergWriterConfig:
     namespace: str
     catalog: IcebergCatalog
     write_location: str
+
+
+@dataclass
+class DeltaLakeWriterConfig:
+    table_uri: Optional[str] = None
+
+    # New catalog-based config using the enum type
+    data_catalog: Optional[Union[str, "DataCatalog"]] = (
+        None  # To support both string and enum
+    )
+    database_name: Optional[str] = None
+    table_name: Optional[str] = None
+    catalog_options: Optional[Dict[str, str]] = field(default_factory=dict)
+
+    # Storage options for both approaches
+    storage_options: Optional[Dict[str, str]] = field(default_factory=dict)
+
+    def __post_init__(self):
+        """Validate configuration."""
+        if not self.table_uri and not (self.data_catalog and self.database_name):
+            raise ValueError(
+                "Either table_uri or (data_catalog and database_name) must be provided"
+            )
 
 
 @dataclass
