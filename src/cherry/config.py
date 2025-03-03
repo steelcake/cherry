@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from cherry_core import Tuple
-from clickhouse_connect.driver.client import Client as ClickHouseClient
+from clickhouse_connect.driver.asyncclient import AsyncClient as ClickHouseClient
 from typing import List, Dict, Optional
 from enum import Enum
 import logging
@@ -51,6 +51,7 @@ class ClickHouseWriterConfig:
     codec: Dict[str, Dict[str, str]] = field(default_factory=dict)
     order_by: Dict[str, List[str]] = field(default_factory=dict)
     skip_index: Dict[str, List[ClickHouseSkipIndex]] = field(default_factory=dict)
+    anchor_table: Optional[str] = None
 
 
 @dataclass
@@ -73,6 +74,7 @@ class EvmDecodeEventsConfig:
     allow_decode_fail: bool = False
     input_table: str = "logs"
     output_table: str = "decoded_logs"
+    hstack: bool = True
 
 
 @dataclass

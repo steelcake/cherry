@@ -11,8 +11,16 @@ def execute(
 ) -> Dict[str, RecordBatch]:
     data = deepcopy(data)
 
-    data[config.output_table] = evm_decode_events(
-        config.event_signature, data[config.input_table], config.allow_decode_fail
+    input_table = data[config.input_table]
+
+    output_table = evm_decode_events(
+        config.event_signature, input_table, config.allow_decode_fail
     )
+
+    if config.hstack:
+        for i, col in enumerate(input_table.columns):
+            output_table = output_table.append_column(input_table.field(i), col)
+
+    data[config.output_table] = output_table
 
     return data
