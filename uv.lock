@@ -185,7 +185,7 @@ wheels = [
 
 [[package]]
 name = "cherry-etl"
-version = "0.0.2"
+version = "0.0.3"
 source = { editable = "." }
 dependencies = [
     { name = "cherry-core" },
@@ -199,6 +199,7 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "pyarrow-stubs" },
     { name = "ruff" },
 ]
 
@@ -214,7 +215,10 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
-dev = [{ name = "ruff", specifier = ">=0.9.7" }]
+dev = [
+    { name = "pyarrow-stubs", specifier = ">=17.17" },
+    { name = "ruff", specifier = ">=0.9.7" },
+]
 
 [[package]]
 name = "click"
@@ -558,6 +562,18 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/3a/d4/b4a3aa781a2c715520aa8ab4fe2e7fa49d33a1d4e71c8fc6ab7b5de7a3f8/pyarrow-19.0.1-cp313-cp313t-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:5a9137cf7e1640dce4c190551ee69d478f7121b5c6f323553b319cac936395f6", size = 42171896 },
     { url = "https://files.pythonhosted.org/packages/23/1b/716d4cd5a3cbc387c6e6745d2704c4b46654ba2668260d25c402626c5ddb/pyarrow-19.0.1-cp313-cp313t-manylinux_2_28_aarch64.whl", hash = "sha256:7c1bca1897c28013db5e4c83944a2ab53231f541b9e0c3f4791206d0c0de389a", size = 40464851 },
     { url = "https://files.pythonhosted.org/packages/ed/bd/54907846383dcc7ee28772d7e646f6c34276a17da740002a5cefe90f04f7/pyarrow-19.0.1-cp313-cp313t-manylinux_2_28_x86_64.whl", hash = "sha256:58d9397b2e273ef76264b45531e9d552d8ec8a6688b7390b5be44c02a37aade8", size = 42085744 },
+]
+
+[[package]]
+name = "pyarrow-stubs"
+version = "17.17"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pyarrow" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/9a/71/de34645bf936f287816a034e2e24bc0f433dd8102daad7d4b6ca35086503/pyarrow_stubs-17.17.tar.gz", hash = "sha256:0b28482e222de359b6753c71b42177afa3f682ba7b1707628b9d1a20b7252326", size = 83460 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b0/98/7b740f3e5c4a9208d65e3ac3dfc78ece7b877c371c03a1b02f7e4eb65020/pyarrow_stubs-17.17-py3-none-any.whl", hash = "sha256:e693d5aaa05e93babef6b677af64fc1da57f5e424068b2b30d05865c266e44f9", size = 79901 },
 ]
 
 [[package]]

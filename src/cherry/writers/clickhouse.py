@@ -132,7 +132,7 @@ class Writer(DataWriter):
                 logger.debug(f"creating index with {skip_index}")
                 await self.client.command(skip_index)
 
-    async def push_data(self, data: Dict[str, pa.RecordBatch]) -> None:
+    async def push_data(self, data: Dict[str, pa.Table]) -> None:
         # create tables if this is the first insert
         if self.first_insert:
             tasks = []
@@ -156,9 +156,7 @@ class Writer(DataWriter):
                 continue
 
             task = asyncio.create_task(
-                self.client.insert_arrow(
-                    table_name, pa.Table.from_batches([table_data])
-                ),
+                self.client.insert_arrow(table_name, table_data),
                 name=f"write to {table_name}",
             )
 
@@ -170,6 +168,4 @@ class Writer(DataWriter):
         # insert into anchor table after all other inserts are done
         if self.anchor_table is not None:
             table_data = data[self.anchor_table]
-            await self.client.insert_arrow(
-                self.anchor_table, pa.Table.from_batches([table_data])
-            )
+            await self.client.insert_arrow(self.anchor_table, table_data)

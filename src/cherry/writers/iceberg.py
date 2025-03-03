@@ -25,17 +25,15 @@ class Writer(DataWriter):
         self.write_location = config.write_location
         self.catalog = config.catalog
 
-    async def write_table(self, table_name: str, record_batch: pa.RecordBatch) -> None:
+    async def write_table(self, table_name: str, arrow_table: pa.Table) -> None:
         logger.debug(f"Writing table: {table_name}")
 
         table_identifier = f"{self.namespace}.{table_name}"
 
-        arrow_table = pa.Table.from_batches([record_batch])
-
         iceberg_table = self.catalog.load_table(table_identifier)
         iceberg_table.append(arrow_table)
 
-    async def push_data(self, data: Dict[str, pa.RecordBatch]) -> None:
+    async def push_data(self, data: Dict[str, pa.Table]) -> None:
         if self.first_write:
             for table_name, table_data in data.items():
                 table_identifier = f"{self.namespace}.{table_name}"
@@ -47,5 +45,5 @@ class Writer(DataWriter):
 
             self.first_write = False
 
-        for table_name, record_batch in data.items():
-            await self.write_table(table_name, record_batch)
+        for table_name, arrow_table in data.items():
+            await self.write_table(table_name, arrow_table)

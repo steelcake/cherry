@@ -27,9 +27,7 @@ class Context:
     def add_step(
         self,
         kind: str,
-        step: Callable[
-            [Dict[str, pa.RecordBatch], Step], Awaitable[Dict[str, pa.RecordBatch]]
-        ],
+        step: Callable[[Dict[str, pa.Table], Step], Awaitable[Dict[str, pa.Table]]],
     ):
         self.steps[kind] = step
 
@@ -46,10 +44,10 @@ async def run_pipelines(config: Config, context: Context):
 
 
 async def process_steps(
-    record_batches: Dict[str, pa.RecordBatch],
+    record_batches: Dict[str, pa.Table],
     steps: List[Step],
     context: Context,
-) -> Dict[str, pa.RecordBatch]:
+) -> Dict[str, pa.Table]:
     logger.debug(f"Processing pipeline steps: {[step.kind for step in steps]}")
     logger.debug(f"Available custom step handlers: {list(context.steps.keys())}")
 
@@ -88,18 +86,15 @@ async def run_pipeline(pipeline: Pipeline, context: Context, pipeline_name: str)
     writer = create_writer(pipeline.writer)
 
     while True:
-        batch = await stream.next()
-        if batch is None:
+        data = await stream.next()
+        if data is None:
             break
 
-        logger.debug(
-            f"Raw data num rows: {[(table_name, record_batch.num_rows) for table_name, record_batch in batch.items()]}"
-        )
+        tables = {}
 
-        processed = await process_steps(batch, pipeline.steps, context)
+        for table_name, table_batch in data.items():
+            tables[table_name] = pa.Table.from_batches([table_batch])
 
-        logger.debug(
-            f"Processed data num rows: {[(table_name, record_batch.num_rows) for table_name, record_batch in processed.items()]}"
-        )
+        processed = await process_steps(tables, pipeline.steps, context)
 
         await writer.push_data(processed)

@@ -1,6 +1,6 @@
 [project]
 name = "cherry-etl"
-version = "0.0.2"
+version = "0.0.3"
 description = "Library for building blockchain pipelines"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
@@ -21,6 +21,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "pyarrow-stubs>=17.17",
     "ruff>=0.9.7",
 ]
 

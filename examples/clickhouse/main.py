@@ -46,23 +46,12 @@ def record_batch_from_schema(schema: pa.Schema) -> pa.RecordBatch:
     )
 
 
-async def join_data(
-    data: Dict[str, pa.RecordBatch], _: cc.Step
-) -> Dict[str, pa.RecordBatch]:
-    blocks = pa.Table.from_batches([data["blocks"]])
-    transfers = pa.Table.from_batches([data["transfers"]])
+async def join_data(data: Dict[str, pa.Table], _: cc.Step) -> Dict[str, pa.Table]:
+    blocks = data["blocks"]
+    transfers = data["transfers"]
 
     blocks = blocks.rename_columns(["block_number", "block_timestamp"])
-
     out = transfers.join(blocks, keys="block_number")
-
-    batches = out.to_batches()
-
-    out = (
-        pa.concat_batches(batches)
-        if len(batches) > 0
-        else record_batch_from_schema(out.schema)
-    )
 
     return {"transfers": out}
 
