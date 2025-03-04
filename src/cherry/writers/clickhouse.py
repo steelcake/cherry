@@ -1,5 +1,5 @@
 import logging
-from typing import Dict
+from typing import Dict, cast as type_cast
 import pyarrow as pa
 from ..writers.base import DataWriter
 from ..config import ClickHouseWriterConfig
@@ -48,22 +48,28 @@ def pyarrow_type_to_clickhouse(dt: pa.DataType) -> str:
     elif pa.types.is_time64(dt):
         return "Int64"  # Time64 in Arrow maps to Int64 in ClickHouse
     elif pa.types.is_list(dt):
+        dt = type_cast(pa.ListType, dt)
         return f"Array({pyarrow_type_to_clickhouse(dt.value_type)})"
     elif pa.types.is_struct(dt):
+        dt = type_cast(pa.StructType, dt)
         fields = [
-            f"{field.name} {pyarrow_type_to_clickhouse(field.type)}" for field in dt
+            f"{field.name} {pyarrow_type_to_clickhouse(field.type)}"
+            for field in list(dt)
         ]
         return f"Tuple({', '.join(fields)})"
     elif pa.types.is_map(dt):
+        dt = type_cast(pa.MapType, dt)
         key_type = pyarrow_type_to_clickhouse(dt.key_type)
-        value_type = pyarrow_type_to_clickhouse(dt.value_type)
-        return f"Map({key_type}, {value_type})"
+        item_type = pyarrow_type_to_clickhouse(dt.item_type)
+        return f"Map({key_type}, {item_type})"
     elif pa.types.is_decimal128(dt):
+        dt = type_cast(pa.Decimal128Type, dt)
         # For Decimal128, we can get precision and scale
         precision = dt.precision
         scale = dt.scale
         return f"Decimal({precision}, {scale})"
     elif pa.types.is_decimal256(dt):
+        dt = type_cast(pa.Decimal256Type, dt)
         # For Decimal256, we can get precision and scale
         precision = dt.precision
         scale = dt.scale

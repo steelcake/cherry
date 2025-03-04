@@ -13,7 +13,7 @@ def execute(
         blocks=arrow_table_to_batch(data[config.blocks]),
         transactions=arrow_table_to_batch(data[config.transactions]),
         logs=arrow_table_to_batch(data[config.logs]),
-        traces=arrow_table_to_batch([config.traces]),
+        traces=arrow_table_to_batch(data[config.traces]),
     )
 
     return data
