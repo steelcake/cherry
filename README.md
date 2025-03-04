@@ -1,7 +1,9 @@
 # Cherry 
 [![PyPI version](https://badge.fury.io/py/cherry-etl.svg)](https://badge.fury.io/py/cherry-etl)
 
-Python framework for building blockchain data pipelines. Cherry is in early stages of development so API is changing and we are figuring things out.
+Python framework for building blockchain data pipelines.
+
+Cherry is in the early stages of development, so the API is changing, and we are still figuring things out.
 
 We would love to get your feedback [on our telegram channel](https://t.me/cherryframework).
 
@@ -17,7 +19,7 @@ Core libraries we use for ingesting/decoding/validating/transforming blockchain 
 
 ## Status
 
-We are still trying to figure out our core use cases and trying to building up to them. Also here is a rough roadmap:
+We are still trying to figure out our core use cases and trying to build up to them. Here is a rough roadmap::
 
 - Add option to ingest Solana data from geyser plugin/RPC.
 - Add option to ingest EVM data from Ethereum RPC.
