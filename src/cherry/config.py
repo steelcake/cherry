@@ -17,6 +17,7 @@ class WriterKind(str, Enum):
     CLICKHOUSE = "clickhouse"
     ICEBERG = "iceberg"
     DELTA_LAKE = "delta_lake"
+    LOCAL_PARQUET = "local_parquet"
 
 
 class StepKind(str, Enum):
@@ -29,8 +30,6 @@ class StepKind(str, Enum):
 
 @dataclass
 class Provider:
-    """Data provider configuration"""
-
     config: ProviderConfig
     name: Optional[str] = None
 
@@ -69,9 +68,19 @@ class ClickHouseWriterConfig:
 
 
 @dataclass
+class LocalParquetWriterConfig:
+    output_dir: str
+
+
+@dataclass
 class Writer:
     kind: WriterKind
-    config: ClickHouseWriterConfig | IcebergWriterConfig | DeltaLakeWriterConfig
+    config: (
+        ClickHouseWriterConfig
+        | IcebergWriterConfig
+        | DeltaLakeWriterConfig
+        | LocalParquetWriterConfig
+    )
 
 
 @dataclass
