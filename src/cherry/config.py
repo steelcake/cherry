@@ -19,6 +19,7 @@ class WriterKind(str, Enum):
     DELTA_LAKE = "delta_lake"
     LOCAL_PARQUET = "local_parquet"
 
+
 class StepKind(str, Enum):
     EVM_VALIDATE_BLOCK_DATA = "evm_validate_block_data"
     EVM_DECODE_EVENTS = "evm_decode_events"
@@ -29,8 +30,6 @@ class StepKind(str, Enum):
 
 @dataclass
 class Provider:
-    """Data provider configuration"""
-
     config: ProviderConfig
     name: Optional[str] = None
 
@@ -67,15 +66,21 @@ class ClickHouseWriterConfig:
     skip_index: Dict[str, List[ClickHouseSkipIndex]] = field(default_factory=dict)
     anchor_table: Optional[str] = None
 
+
 @dataclass
 class LocalParquetWriterConfig:
-    output_dir: Optional[str] = "data"
+    output_dir: str
 
 
 @dataclass
 class Writer:
     kind: WriterKind
-    config: ClickHouseWriterConfig | IcebergWriterConfig | DeltaLakeWriterConfig | LocalParquetWriterConfig
+    config: (
+        ClickHouseWriterConfig
+        | IcebergWriterConfig
+        | DeltaLakeWriterConfig
+        | LocalParquetWriterConfig
+    )
 
 
 @dataclass

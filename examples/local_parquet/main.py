@@ -10,17 +10,12 @@ from cherry_core import ingest
 import logging
 import os
 import asyncio
-from dotenv import load_dotenv
 import pyarrow as pa
 from typing import Dict
 import argparse
-from pathlib import Path
 
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "DEBUG").upper())
 logger = logging.getLogger(__name__)
-
-# Get the directory where this script is located
-SCRIPT_DIR = Path(__file__).parent.absolute()
 
 
 async def join_data(data: Dict[str, pa.Table], _: cc.Step) -> Dict[str, pa.Table]:
@@ -47,7 +42,9 @@ async def main(provider_kind: ingest.ProviderKind):
                     from_block=0,  # Start from genesis for example
                     logs=[
                         ingest.evm.LogRequest(
-                            address=["0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"],  # USDC contract
+                            address=[
+                                "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                            ],  # USDC contract
                             event_signatures=["Transfer(address,address,uint256)"],
                         )
                     ],
@@ -72,9 +69,7 @@ async def main(provider_kind: ingest.ProviderKind):
     # Create writer with local parquet configuration
     writer = cc.Writer(
         kind=cc.WriterKind.LOCAL_PARQUET,
-        config=cc.LocalParquetWriterConfig(
-            output_dir=str(SCRIPT_DIR / "data")
-        ),
+        config=cc.LocalParquetWriterConfig(output_dir="./data"),
     )
 
     config = cc.Config(
@@ -102,7 +97,7 @@ async def main(provider_kind: ingest.ProviderKind):
                         kind=StepKind.CAST,
                         config=CastConfig(
                             table_name="transfers",
-                            mappings=[("block_timestamp", "Int64")],
+                            mappings={"block_timestamp": pa.int64()},
                         ),
                     ),
                     cc.Step(
@@ -133,4 +128,4 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    asyncio.run(main(args.provider)) 
+    asyncio.run(main(args.provider))
