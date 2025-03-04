@@ -1,7 +1,9 @@
 # Cherry 
 [![PyPI version](https://badge.fury.io/py/cherry-etl.svg)](https://badge.fury.io/py/cherry-etl)
 
-Python framework for building blockchain data pipelines.
+Python framework for building blockchain data pipelines.  
+
+<br/>
 
 Cherry is in the early stages of development, so the API is changing, and we are still figuring things out.
 
