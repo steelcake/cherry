@@ -2,6 +2,7 @@ import asyncio
 from collections.abc import Awaitable
 import logging
 from .config import (
+    CastByTypeConfig,
     CastConfig,
     EvmDecodeEventsConfig,
     EvmValidateBlockDataConfig,
@@ -68,6 +69,9 @@ async def process_steps(
         elif step.kind == StepKind.HEX_ENCODE:
             assert isinstance(step.config, HexEncodeConfig)
             res = step_def.hex_encode.execute(res, step.config)
+        elif step.kind == StepKind.CAST_BY_TYPE:
+            assert isinstance(step.config, CastByTypeConfig)
+            res = step_def.cast_by_type.execute(res, step.config)
         elif step.kind in context.steps:
             res = await context.steps[step.kind](res, step)
         else:

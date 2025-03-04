@@ -1,8 +1,7 @@
-from clickhouse_connect.driver.asyncclient import AsyncClient
 import pyarrow as pa
 from cherry import config as cc
 from cherry.config import (
-    ClickHouseSkipIndex,
+    CastByTypeConfig,
     StepKind,
     EvmDecodeEventsConfig,
     HexEncodeConfig,
@@ -13,22 +12,29 @@ from cherry_core import ingest
 import logging
 import os
 import asyncio
-import clickhouse_connect
 from dotenv import load_dotenv
 import traceback
-from typing import Dict
+from typing import Dict, cast as type_cast
 import argparse
+import deltalake
+from deltalake import DeltaTable
 
 load_dotenv()
 
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "DEBUG").upper())
 logger = logging.getLogger(__name__)
 
+data_uri = "./data"
 
-async def get_start_block(client: AsyncClient) -> int:
+
+def get_start_block() -> int:
     try:
-        res = await client.query("SELECT MAX(block_number) FROM transfers")
-        return res.result_rows[0][0] or 0
+        table = DeltaTable(table_uri=f"{data_uri}/transfers")
+        qb = deltalake.QueryBuilder()
+        qb.register("transfers", table)
+        res = qb.sql("SELECT MAX(block_number) from transfers").fetchall()
+        res = pa.Table.from_batches(res)
+        return type_cast(int, res.column(0).to_pylist()[0])
     except Exception:
         logger.warning(f"failed to get start block from db: {traceback.format_exc()}")
         return 0
@@ -45,15 +51,7 @@ async def join_data(data: Dict[str, pa.Table], _: cc.Step) -> Dict[str, pa.Table
 
 
 async def main(provider_kind: ingest.ProviderKind):
-    clickhouse_client = await clickhouse_connect.get_async_client(
-        host=os.environ.get("CLICKHOUSE_HOST", "localhost"),
-        port=int(os.environ.get("CLICKHOUSE_PORT", "8123")),
-        username=os.environ.get("CLICKHOUSE_USER", "default"),
-        password=os.environ.get("CLICKHOUSE_PASSWORD", "clickhouse"),
-        database=os.environ.get("CLICKHOUSE_DATABASE", "blockchain"),
-    )
-
-    from_block = await get_start_block(clickhouse_client)
+    from_block = get_start_block()
     logger.info(f"starting to ingest from block {from_block}")
 
     provider = cc.Provider(
@@ -93,33 +91,9 @@ async def main(provider_kind: ingest.ProviderKind):
 
     # Create writer with ClickHouse configuration
     writer = cc.Writer(
-        kind=cc.WriterKind.CLICKHOUSE,
-        config=cc.ClickHouseWriterConfig(
-            client=clickhouse_client,
-            order_by={"transfers": ["block_number"]},
-            codec={"transfers": {"data": "ZSTD"}},
-            skip_index={
-                "transfers": [
-                    ClickHouseSkipIndex(
-                        name="log_addr_idx",
-                        val="address",
-                        type_="bloom_filter(0.01)",
-                        granularity=1,
-                    ),
-                    ClickHouseSkipIndex(
-                        name="from_addr_idx",
-                        val="from",
-                        type_="bloom_filter(0.01)",
-                        granularity=1,
-                    ),
-                    ClickHouseSkipIndex(
-                        name="to_addr_idx",
-                        val="to",
-                        type_="bloom_filter(0.01)",
-                        granularity=1,
-                    ),
-                ]
-            },
+        kind=cc.WriterKind.DELTA_LAKE,
+        config=cc.DeltaLakeWriterConfig(
+            data_uri=data_uri,
         ),
     )
 
@@ -149,6 +123,15 @@ async def main(provider_kind: ingest.ProviderKind):
                         config=CastConfig(
                             table_name="transfers",
                             mappings={"block_timestamp": pa.int64()},
+                        ),
+                    ),
+                    cc.Step(
+                        name="cast_by_type",
+                        kind=StepKind.CAST_BY_TYPE,
+                        config=CastByTypeConfig(
+                            from_type=pa.decimal256(76, 0),
+                            to_type=pa.decimal128(38, 0),
+                            safe=True,
                         ),
                     ),
                     cc.Step(

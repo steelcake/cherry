@@ -135,7 +135,7 @@ async def main(provider_kind: ingest.ProviderKind):
                         kind=StepKind.CAST,
                         config=CastConfig(
                             table_name="swaps",
-                            mappings=[("block_timestamp", "Int64")],
+                            mappings={"block_timestamp": pa.int64()},
                         ),
                     ),
                     # cc.Step(

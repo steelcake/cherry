@@ -1,13 +1,14 @@
 import logging
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional
 
-from cherry_core import Tuple
 from cherry_core.ingest import ProviderConfig
 from clickhouse_connect.driver.asyncclient import AsyncClient as ClickHouseClient
-from deltalake import DataCatalog
 from pyiceberg.catalog import Catalog as IcebergCatalog
+import deltalake
+import pyarrow as pa
+import pyarrow.compute as pa_compute
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,7 @@ class StepKind(str, Enum):
     EVM_DECODE_EVENTS = "evm_decode_events"
     CAST = "cast"
     HEX_ENCODE = "hex_encode"
+    CAST_BY_TYPE = "cast_by_type"
 
 
 @dataclass
@@ -42,25 +44,11 @@ class IcebergWriterConfig:
 
 @dataclass
 class DeltaLakeWriterConfig:
-    table_uri: Optional[str] = None
-
-    # New catalog-based config using the enum type
-    data_catalog: Optional[Union[str, "DataCatalog"]] = (
-        None  # To support both string and enum
-    )
-    database_name: Optional[str] = None
-    table_name: Optional[str] = None
-    catalog_options: Optional[Dict[str, str]] = field(default_factory=dict)
-
-    # Storage options for both approaches
-    storage_options: Optional[Dict[str, str]] = field(default_factory=dict)
-
-    def __post_init__(self):
-        """Validate configuration."""
-        if not self.table_uri and not (self.data_catalog and self.database_name):
-            raise ValueError(
-                "Either table_uri or (data_catalog and database_name) must be provided"
-            )
+    data_uri: str
+    partition_by: Dict[str, list[str]] = field(default_factory=dict)
+    storage_options: Optional[Dict[str, str]] = None
+    writer_properties: Optional[deltalake.WriterProperties] = None
+    anchor_table: Optional[str] = None
 
 
 @dataclass
@@ -83,7 +71,7 @@ class ClickHouseWriterConfig:
 @dataclass
 class Writer:
     kind: WriterKind
-    config: ClickHouseWriterConfig | IcebergWriterConfig
+    config: ClickHouseWriterConfig | IcebergWriterConfig | DeltaLakeWriterConfig
 
 
 @dataclass
@@ -106,14 +94,23 @@ class EvmDecodeEventsConfig:
 @dataclass
 class CastConfig:
     table_name: str
-    mappings: List[Tuple[str, str]]
-    allow_cast_fail: bool = False
+    mappings: Dict[str, pa.DataType]
+    safe: Optional[bool] = None
+    options: Optional[pa_compute.CastOptions] = None
 
 
 @dataclass
 class HexEncodeConfig:
     tables: Optional[list[str]] = None
     prefixed: bool = True
+
+
+@dataclass
+class CastByTypeConfig:
+    from_type: pa.DataType
+    to_type: pa.DataType
+    safe: Optional[bool] = None
+    options: Optional[pa_compute.CastOptions] = None
 
 
 @dataclass
@@ -126,6 +123,7 @@ class Step:
         | EvmDecodeEventsConfig
         | CastConfig
         | HexEncodeConfig
+        | CastByTypeConfig
     ] = None
 
 
