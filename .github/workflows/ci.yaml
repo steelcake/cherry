@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: astral-sh/setup-uv@v3
+      - run: uv build
+      - run: uv run ruff format --check
+      - run: uv run ruff check
+      - run: uv run pyright
+
