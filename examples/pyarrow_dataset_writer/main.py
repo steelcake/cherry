@@ -44,7 +44,7 @@ async def main(provider_kind: ingest.ProviderKind):
             query=ingest.Query(
                 kind=ingest.QueryKind.EVM,
                 params=ingest.evm.Query(
-                    from_block=0,  # Start from genesis for example
+                    from_block=21075234,
                     logs=[
                         ingest.evm.LogRequest(
                             address=["0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"],  # USDC contract
@@ -71,9 +71,14 @@ async def main(provider_kind: ingest.ProviderKind):
 
     # Create writer with local parquet configuration
     writer = cc.Writer(
-        kind=cc.WriterKind.LOCAL_PARQUET,
-        config=cc.LocalParquetWriterConfig(
-            output_dir=str(SCRIPT_DIR / "data")
+        kind=cc.WriterKind.PYARROW_DATASET,
+        config=cc.PyArrowDatasetWriterConfig(
+            output_dir=str(SCRIPT_DIR / "data"),
+            partition_cols={
+                "transfers": ["block_number"]  # Partition transfers table by from/to addresses
+            },
+            anchor_table="transfers",
+            max_partitions=10000,
         ),
     )
 
