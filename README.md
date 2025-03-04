@@ -60,7 +60,7 @@ To run an example with trace level logging for rust modules:
 RUST_LOG=trace uv run examples/{example_name}/main.py --provider {sqd or hypersync}
 ```
 
-### Development
+## Development
 
 This repo uses `uv` for development.
 
