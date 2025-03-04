@@ -1,4 +1,17 @@
 import pyarrow as pa
+from copy import deepcopy
+
+
+def arrow_schema_binary_to_string(schema: pa.Schema) -> pa.Schema:
+    schema = deepcopy(schema)
+
+    for i, name in enumerate(schema.names):
+        dt = schema.field(i).type
+        if pa.types.is_binary(dt):
+            dt = pa.utf8()
+        schema = schema.set(i, pa.field(name, dt))
+
+    return schema
 
 
 def record_batch_from_schema(schema: pa.Schema) -> pa.RecordBatch:

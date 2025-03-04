@@ -1,7 +1,7 @@
 from typing import Dict
 from copy import deepcopy
 
-from cherry_core import evm_decode_events
+from cherry_core import evm_decode_events, evm_event_signature_to_arrow_schema
 from ..config import EvmDecodeEventsConfig
 import pyarrow as pa
 
@@ -21,7 +21,10 @@ def execute(
             evm_decode_events(config.event_signature, batch, config.allow_decode_fail)
         )
 
-    output_table = pa.Table.from_batches(output_batches)
+    output_table = pa.Table.from_batches(
+        output_batches,
+        schema=evm_event_signature_to_arrow_schema(config.event_signature),
+    )
 
     if config.hstack:
         for i, col in enumerate(input_table.columns):

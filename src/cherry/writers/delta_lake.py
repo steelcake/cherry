@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, Optional, Union
+from typing import Dict, Optional
 
 import pyarrow as pa
 from deltalake import DataCatalog, DeltaTable, write_deltalake

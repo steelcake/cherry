@@ -34,18 +34,6 @@ async def get_start_block(client: AsyncClient) -> int:
         return 0
 
 
-def record_batch_from_schema(schema: pa.Schema) -> pa.RecordBatch:
-    arrays = []
-
-    for t in schema.types:
-        arrays.append(pa.array([], type=t))
-
-    return pa.record_batch(
-        arrays,
-        schema=schema,
-    )
-
-
 async def join_data(data: Dict[str, pa.Table], _: cc.Step) -> Dict[str, pa.Table]:
     blocks = data["blocks"]
     transfers = data["transfers"]
