@@ -17,7 +17,7 @@ class WriterKind(str, Enum):
     CLICKHOUSE = "clickhouse"
     ICEBERG = "iceberg"
     DELTA_LAKE = "delta_lake"
-
+    LOCAL_PARQUET = "local_parquet"
 
 class StepKind(str, Enum):
     EVM_VALIDATE_BLOCK_DATA = "evm_validate_block_data"
@@ -67,11 +67,15 @@ class ClickHouseWriterConfig:
     skip_index: Dict[str, List[ClickHouseSkipIndex]] = field(default_factory=dict)
     anchor_table: Optional[str] = None
 
+@dataclass
+class LocalParquetWriterConfig:
+    output_dir: Optional[str] = "data"
+
 
 @dataclass
 class Writer:
     kind: WriterKind
-    config: ClickHouseWriterConfig | IcebergWriterConfig | DeltaLakeWriterConfig
+    config: ClickHouseWriterConfig | IcebergWriterConfig | DeltaLakeWriterConfig | LocalParquetWriterConfig
 
 
 @dataclass

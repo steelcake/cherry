@@ -5,8 +5,9 @@ from ..config import (
     IcebergWriterConfig,
     ClickHouseWriterConfig,
     DeltaLakeWriterConfig,
+    LocalParquetWriterConfig,
 )
-from ..writers import iceberg, clickhouse, delta_lake
+from ..writers import iceberg, clickhouse, delta_lake, local_parquet
 import logging
 
 logger = logging.getLogger(__name__)
@@ -23,5 +24,8 @@ def create_writer(writer: Writer) -> DataWriter:
         case WriterKind.DELTA_LAKE:
             assert isinstance(writer.config, DeltaLakeWriterConfig)
             return delta_lake.Writer(writer.config)
+        case WriterKind.LOCAL_PARQUET:
+            assert isinstance(writer.config, LocalParquetWriterConfig)
+            return local_parquet.Writer(writer.config)
         case _:
             raise ValueError(f"Invalid writer kind: {writer.kind}")
