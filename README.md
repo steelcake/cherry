@@ -1,3 +1,5 @@
+<img src="https://steelcake.com/cherry-brand-logo.jpg" width="350px" />
+
 # Cherry 
 [![PyPI version](https://badge.fury.io/py/cherry-etl.svg)](https://badge.fury.io/py/cherry-etl)
 
@@ -10,6 +12,12 @@ Cherry is in the early stages of development, so the API is changing, and we are
 We would love to help you get started and get your feedback on [our telegram channel](https://t.me/cherryframework).
 
 Core libraries we use for ingesting/decoding/validating/transforming blockchain data are implemented in [cherry-core](https://github.com/steelcake/cherry-core) repo.
+
+<b> This project is sponsored by: </b>
+
+[<img src="https://steelcake.com/envio-logo.png" width="150px" />](https://envio.dev)
+[<img src="https://steelcake.com/sqd-logo.png" width="165px" />](https://sqd.ai)
+[<img src="https://steelcake.com/space-operator-logo.webp" height="75px" />](https://linktr.ee/spaceoperator)
 
 ## Features
 
