@@ -10,27 +10,13 @@ from cherry_core import ingest
 import logging
 import os
 import asyncio
-<<<<<<< HEAD
 import pyarrow as pa
 from typing import Dict
 import argparse
-=======
-from dotenv import load_dotenv
-import pyarrow as pa
-from typing import Dict
-import argparse
-from pathlib import Path
->>>>>>> ec9330d (add local writer)
 
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "DEBUG").upper())
 logger = logging.getLogger(__name__)
 
-<<<<<<< HEAD
-=======
-# Get the directory where this script is located
-SCRIPT_DIR = Path(__file__).parent.absolute()
-
->>>>>>> ec9330d (add local writer)
 
 async def join_data(data: Dict[str, pa.Table], _: cc.Step) -> Dict[str, pa.Table]:
     blocks = data["blocks"]
@@ -56,13 +42,9 @@ async def main(provider_kind: ingest.ProviderKind):
                     from_block=0,  # Start from genesis for example
                     logs=[
                         ingest.evm.LogRequest(
-<<<<<<< HEAD
                             address=[
                                 "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
                             ],  # USDC contract
-=======
-                            address=["0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"],  # USDC contract
->>>>>>> ec9330d (add local writer)
                             event_signatures=["Transfer(address,address,uint256)"],
                         )
                     ],
@@ -87,13 +69,7 @@ async def main(provider_kind: ingest.ProviderKind):
     # Create writer with local parquet configuration
     writer = cc.Writer(
         kind=cc.WriterKind.LOCAL_PARQUET,
-<<<<<<< HEAD
         config=cc.LocalParquetWriterConfig(output_dir="./data"),
-=======
-        config=cc.LocalParquetWriterConfig(
-            output_dir=str(SCRIPT_DIR / "data")
-        ),
->>>>>>> ec9330d (add local writer)
     )
 
     config = cc.Config(
@@ -121,11 +97,7 @@ async def main(provider_kind: ingest.ProviderKind):
                         kind=StepKind.CAST,
                         config=CastConfig(
                             table_name="transfers",
-<<<<<<< HEAD
                             mappings={"block_timestamp": pa.int64()},
-=======
-                            mappings=[("block_timestamp", "Int64")],
->>>>>>> ec9330d (add local writer)
                         ),
                     ),
                     cc.Step(
@@ -156,8 +128,4 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-<<<<<<< HEAD
     asyncio.run(main(args.provider))
-=======
-    asyncio.run(main(args.provider)) 
->>>>>>> ec9330d (add local writer)
