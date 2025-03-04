@@ -1,155 +1,49 @@
 # Cherry 
+[![PyPI version](https://badge.fury.io/py/cherry-etl.svg)](https://badge.fury.io/py/cherry-etl)
 
-Python library for building blockchain data pipelines
+Python framework for building blockchain data pipelines. Cherry is in early stages of development so API is changing and we are figuring things out.
 
-## Overview
+We would love to get your feedback [on our telegram channel](https://t.me/cherryframework).
 
-Cherry is a modular system for:
-- Ingesting (blockchain) data 
-- Processing and transforming (blockchain) data
-- Writing data to various storage backends
+Core libraries we use for ingesting/decoding/validating/transforming blockchain data are implemented in [cherry-core](https://github.com/steelcake/cherry-core) repo.
 
 ## Features
 
-- **Modular Pipeline Architecture**
-  - Configurable data providers
-  - Customizable processing steps
-  - Pluggable storage backends
+- Ingest data from multiple providers with a uniform interface. This makes switching providers as easy as changing a couple lines in config.
+- Prebuilt functionality to decode/validate/transform blockchain data.
+- Support for both Ethereum (EVM) and Solana (SVM) based blockchains.
+- Write data into Clickhouse, Iceberg, Deltalake, Parquet/Arrow (via pyarrow).
+- Keep datasets fresh with continuous ingestion.
 
-- **Built-in Steps**
-  - EVM block validation
-  - Event decoding
-  - Custom processing steps
+## Status
 
-- **Storage Options**
-  - Local Parquet files
-  - AWS S3
-  - More coming soon...
+We are still trying to figure out our core use cases and trying to building up to them. Also here is a rough roadmap:
 
-## Project Structure:
+- Add option to ingest Solana data from geyser plugin/RPC.
+- Add option to ingest EVM data from Ethereum RPC.
+- Implement more advanced validation.
+- Add more writers like DuckDB, PostgreSQL.
+- Build an end-to-end testing flow so we can test the framework and users can test their pipelines using the same flow.
+- Build a benchmark flow so we can optimize the framework and user can optimize their pipelines using the same flow. This will also make it easy to compare performance of providers and writers. 
+- Implement more blockchain formats like SUI, Aptos, Fuel.
+- Implement automatic rollback handling. Currently we don't handle rollbacks so we stay behind the tip of the chain in order to avoid writing wrong data.
 
-```
-cherry/
-├── src/
-│ ├── config/ # Configuration parsing
-│ ├── utils/ # Pipeline and utilities
-│ └── writers/ # Storage backends
-├── examples/ # Example implementations
-├── tests/ # Test suite
-└── config.yaml # Pipeline configuration
-```
+## Usage Examples
 
-## Prerequisites:
-- Python 3.10 or higher
-- Docker and Docker Compose
-- MinIO (for local S3-compatible storage)
+See `examples` directory.
 
-## Installation Steps
+Can run examples with `uv run examples/{example_name}/main.py --provider {sqd or hypersync}`
 
-Clone the repository and go to the project root:
+For examples that require databases or other infra, run `docker-compose -f examples/{example_name}/docker-compose.yaml up -d` to start the necessary docker containers.
+Can run `docker-compose -f examples/{example_name}/docker-compose.yaml down -v` after running the example to stop the docker containers and delete the data.
 
-```bash
-git clone https://github.com/steelcake/cherry.git
-cd cherry
-```
+### Development
 
-Create and activate a virtual environment:
+This repo uses `uv` for development.
 
-```bash
-# Create virtual environment (all platforms)
-python -m venv .venv
-
-# Activate virtual environment
-
-# For Windows with git bash:
-source .venv/Scripts/activate
-
-# For macOS/Linux:
-source .venv/bin/activate
-```
-
-Install dependencies:
-
-```bash
-pip install -r requirements.txt
-```
-
-Set up environment variables:
-
-Create a .env file in the project root
-Add your Hypersync API token:
-
-## Quick Start
-
-1. Create a config file (`config.yaml`):
-
-2. Run the script:
-
-```bash
-python main.py
-```
-
-## Custom Processing Steps
-
-To add a custom processing step, you need to:
-
-1. Define the step function
-2. Add the step to the context
-3. Add the step to the config
-
-example: get_block_number_stats.py
-```python
-def get_block_number_stats(data: Dict[str, pa.RecordBatch], step_config: Dict[str, Any]) -> Dict[str, pa.RecordBatch]:
-    """Custom processing step for transfer events"""
-    pass
-```
-
-config.yaml
-```yaml
-steps:
-  - name: my_get_block_number_stats
-    kind: get_block_number_stats
-    config:
-      input_table: logs
-      output_table: block_number_stats
-```
-
-## Running the Project
-
-Start MinIO server (for local S3 storage):
-
-```bash
-# Navigate to docker-compose directory
-cd docker-compose
-
-# Start MinIO using docker-compose
-docker-compose up -d
-
-# Return to project root
-cd ..
-```
-
-Default credentials:
-
-```
-Access Key: minioadmin
-Secret Key: minioadmin
-Console URL: http://localhost:9001
-```
-
-Note: The MinIO service will be automatically configured with the correct ports and volumes as defined in the docker-compose.yml file.
-
-Configure pipelines:
-
-- Open config.yaml
-- Adjust query, event filters, and batch sizes as needed for your pipeline
-- Configure writer settings (S3/local parquet etc.)
-
-Run the indexer:
-
-```bash
-python main.py
-```
+- Format the code with `uv run ruff format`
+- Lint the code with `uv run ruff check`
+- Run type checks with `uv run pyright`
 
 ## License
 
