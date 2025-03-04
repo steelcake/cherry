@@ -5,7 +5,7 @@ Python framework for building blockchain data pipelines.
 
 Cherry is in the early stages of development, so the API is changing, and we are still figuring things out.
 
-We would love to get your feedback [on our telegram channel](https://t.me/cherryframework).
+We would love to help you get started and get your feedback on [our telegram channel](https://t.me/cherryframework).
 
 Core libraries we use for ingesting/decoding/validating/transforming blockchain data are implemented in [cherry-core](https://github.com/steelcake/cherry-core) repo.
 
@@ -38,6 +38,17 @@ Can run examples with `uv run examples/{example_name}/main.py --provider {sqd or
 
 For examples that require databases or other infra, run `docker-compose -f examples/{example_name}/docker-compose.yaml up -d` to start the necessary docker containers.
 Can run `docker-compose -f examples/{example_name}/docker-compose.yaml down -v` after running the example to stop the docker containers and delete the data.
+
+## Logging
+
+Python code uses the standard `logging` module of python, so it can be configured according to [python docs](https://docs.python.org/3/library/logging.html).
+
+Set `RUST_LOG` environment variable according to [env_logger docs](https://docs.rs/env_logger/latest/env_logger/#enabling-logging) in order to see logs from rust modules.
+
+To run an example with trace level logging for rust modules:
+```
+RUST_LOG=trace uv run examples/{example_name}/main.py --provider {sqd or hypersync}
+```
 
 ### Development
 
