@@ -17,7 +17,7 @@ class WriterKind(str, Enum):
     CLICKHOUSE = "clickhouse"
     ICEBERG = "iceberg"
     DELTA_LAKE = "delta_lake"
-    LOCAL_PARQUET = "local_parquet"
+    PYARROW_DATASET = "pyarrow_dataset"
 
 class StepKind(str, Enum):
     EVM_VALIDATE_BLOCK_DATA = "evm_validate_block_data"
@@ -68,6 +68,9 @@ class ClickHouseWriterConfig:
 @dataclass
 class LocalParquetWriterConfig:
     output_dir: Optional[str] = "data"
+    partition_cols: Optional[Dict[str, List[str]]] = None
+    anchor_table: Optional[str] = None
+    max_partitions: Optional[int] = 100000
 
 
 @dataclass
@@ -151,3 +154,14 @@ class Config:
     project_name: str
     description: str
     pipelines: Dict[str, Pipeline]
+
+
+@dataclass
+class PyArrowDatasetWriterConfig:
+    output_dir: str
+    partition_cols: Optional[Dict[str, List[str]]] = None
+    anchor_table: Optional[str] = None
+    max_partitions: int = 100000
+    filesystem: Optional[str] = None
+    use_threads: bool = True
+    existing_data_behavior: str = "overwrite_or_ignore"

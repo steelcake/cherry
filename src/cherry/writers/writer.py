@@ -1,3 +1,4 @@
+from . import pyarrow_dataset
 from ..writers.base import DataWriter
 from ..config import (
     Writer,
@@ -5,9 +6,9 @@ from ..config import (
     IcebergWriterConfig,
     ClickHouseWriterConfig,
     DeltaLakeWriterConfig,
-    LocalParquetWriterConfig,
+    PyArrowDatasetWriterConfig,
 )
-from ..writers import iceberg, clickhouse, delta_lake, local_parquet
+from ..writers import iceberg, clickhouse, delta_lake
 import logging
 
 logger = logging.getLogger(__name__)
@@ -24,8 +25,8 @@ def create_writer(writer: Writer) -> DataWriter:
         case WriterKind.DELTA_LAKE:
             assert isinstance(writer.config, DeltaLakeWriterConfig)
             return delta_lake.Writer(writer.config)
-        case WriterKind.LOCAL_PARQUET:
-            assert isinstance(writer.config, LocalParquetWriterConfig)
-            return local_parquet.Writer(writer.config)
+        case WriterKind.PYARROW_DATASET:
+            assert isinstance(writer.config, PyArrowDatasetWriterConfig)
+            return pyarrow_dataset.Writer(writer.config)
         case _:
             raise ValueError(f"Invalid writer kind: {writer.kind}")
