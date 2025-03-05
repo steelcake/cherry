@@ -1,6 +1,6 @@
 [project]
 name = "cherry-etl"
-version = "0.0.3"
+version = "0.0.4"
 description = "Library for building blockchain pipelines"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
@@ -10,7 +10,7 @@ authors = [
 ]
 requires-python = ">=3.10"
 dependencies = [
-    "cherry-core>=0.0.16",
+    "cherry-core>=0.0.17",
     "pyarrow>=19.0.1",
     "sqlalchemy>=2.0.38",
     "psycopg2-binary>=2.9.10",
