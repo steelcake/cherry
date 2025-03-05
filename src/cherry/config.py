@@ -1,7 +1,7 @@
 import logging
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Literal, TypeAlias
 
 from cherry_core.ingest import ProviderConfig
 from clickhouse_connect.driver.asyncclient import AsyncClient as ClickHouseClient
@@ -9,6 +9,7 @@ from pyiceberg.catalog import Catalog as IcebergCatalog
 import deltalake
 import pyarrow as pa
 import pyarrow.compute as pa_compute
+from pyarrow import fs
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,7 @@ class WriterKind(str, Enum):
     CLICKHOUSE = "clickhouse"
     ICEBERG = "iceberg"
     DELTA_LAKE = "delta_lake"
+    PYARROW_DATASET = "pyarrow_dataset"
 
 
 class StepKind(str, Enum):
@@ -29,8 +31,6 @@ class StepKind(str, Enum):
 
 @dataclass
 class Provider:
-    """Data provider configuration"""
-
     config: ProviderConfig
     name: Optional[str] = None
 
@@ -68,10 +68,31 @@ class ClickHouseWriterConfig:
     anchor_table: Optional[str] = None
 
 
+ExistingDataBehavior: TypeAlias = Literal[
+    "overwrite_or_ignore", "error", "delete_matching"
+]
+
+
+@dataclass
+class PyArrowDatasetWriterConfig:
+    output_dir: str
+    partition_cols: Optional[Dict[str, List[str]]] = None
+    anchor_table: Optional[str] = None
+    max_partitions: int = 100000
+    filesystem: Optional[fs.FileSystem] = None
+    use_threads: bool = True
+    existing_data_behavior: ExistingDataBehavior = "overwrite_or_ignore"
+
+
 @dataclass
 class Writer:
     kind: WriterKind
-    config: ClickHouseWriterConfig | IcebergWriterConfig | DeltaLakeWriterConfig
+    config: (
+        ClickHouseWriterConfig
+        | IcebergWriterConfig
+        | DeltaLakeWriterConfig
+        | PyArrowDatasetWriterConfig
+    )
 
 
 @dataclass
