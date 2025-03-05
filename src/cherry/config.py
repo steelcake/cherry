@@ -68,16 +68,11 @@ class ClickHouseWriterConfig:
 
 
 @dataclass
-class LocalParquetWriterConfig:
+class PyArrowDatasetWriterConfig:
     output_dir: Optional[str] = "data"
     partition_cols: Optional[Dict[str, List[str]]] = None
     anchor_table: Optional[str] = None
     max_partitions: Optional[int] = 100000
-
-
-@dataclass
-class LocalParquetWriterConfig:
-    output_dir: str
 
 
 @dataclass
@@ -87,7 +82,7 @@ class Writer:
         ClickHouseWriterConfig
         | IcebergWriterConfig
         | DeltaLakeWriterConfig
-        | LocalParquetWriterConfig
+        | PyArrowDatasetWriterConfig
     )
 
 

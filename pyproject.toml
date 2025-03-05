@@ -19,6 +19,7 @@ dependencies = [
     "dotenv>=0.9.9",
     "deltalake>=0.24.0",
     "pyarrow-stubs>=17.17",
+    "pytest>=8.3.5",
 ]
 
 [dependency-groups]

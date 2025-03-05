@@ -1,6 +1,5 @@
 import pyarrow as pa
 import pytest
-from pathlib import Path
 import pyarrow.parquet as pq
 
 from cherry.config import PyArrowDatasetWriterConfig

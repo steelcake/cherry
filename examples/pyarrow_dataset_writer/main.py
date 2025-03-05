@@ -10,7 +10,6 @@ from cherry_core import ingest
 import logging
 import os
 import asyncio
-from dotenv import load_dotenv
 import pyarrow as pa
 from typing import Dict
 import argparse
