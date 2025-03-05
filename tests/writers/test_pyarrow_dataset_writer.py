@@ -43,10 +43,10 @@ async def test_local_parquet_writer(tmp_path, blocks):
     # Read back the data directly using Parquet API
     output_dir = tmp_path / table_name
     parquet_files = list(output_dir.glob("*.parquet"))
-    
+
     # Verify that at least one parquet file was created
     assert len(parquet_files) > 0
-    
+
     # Read the first parquet file
     result = pq.read_table(parquet_files[0])
 
@@ -62,8 +62,7 @@ async def test_local_parquet_writer_with_partitioning(tmp_path, blocks):
 
     # Setup the writer with partitioning
     config = PyArrowDatasetWriterConfig(
-        output_dir=str(tmp_path),
-        partition_cols={"test_table": ["partition"]}
+        output_dir=str(tmp_path), partition_cols={"test_table": ["partition"]}
     )
     writer = Writer(config)
 

@@ -19,6 +19,7 @@ class WriterKind(str, Enum):
     DELTA_LAKE = "delta_lake"
     PYARROW_DATASET = "pyarrow_dataset"
 
+
 class StepKind(str, Enum):
     EVM_VALIDATE_BLOCK_DATA = "evm_validate_block_data"
     EVM_DECODE_EVENTS = "evm_decode_events"
@@ -64,6 +65,7 @@ class ClickHouseWriterConfig:
     order_by: Dict[str, List[str]] = field(default_factory=dict)
     skip_index: Dict[str, List[ClickHouseSkipIndex]] = field(default_factory=dict)
     anchor_table: Optional[str] = None
+
 
 @dataclass
 class LocalParquetWriterConfig:

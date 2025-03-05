@@ -28,10 +28,12 @@ class Writer(DataWriter):
         os.makedirs(output_path, exist_ok=True)
 
         # Get partitioning config for this table
-        partition_cols = self.partition_cols.get(table_name, []) if self.partition_cols else []
+        partition_cols = (
+            self.partition_cols.get(table_name, []) if self.partition_cols else []
+        )
 
         # Generate timestamp-based filename using datetime
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         base_filename = f"{timestamp}_{{i}}.parquet"
 
         try:
@@ -44,13 +46,15 @@ class Writer(DataWriter):
                 basename_template=base_filename,
                 use_threads=self.use_threads,
                 existing_data_behavior=self.existing_data_behavior,
-                max_partitions=self.max_partitions
+                max_partitions=self.max_partitions,
             )
         except Exception as e:
             logger.error(f"Error writing table {table_name}: {str(e)}")
             raise
 
-        logger.debug(f"Written table {table_name} to {output_path} with partitioning {partition_cols}")
+        logger.debug(
+            f"Written table {table_name} to {output_path} with partitioning {partition_cols}"
+        )
 
     async def push_data(self, data: Dict[str, pa.Table]) -> None:
         # Write all tables except the anchor table first
@@ -60,8 +64,7 @@ class Writer(DataWriter):
                 continue
 
             task = asyncio.create_task(
-                self._write_table(table_name, table_data),
-                name=f"write to {table_name}"
+                self._write_table(table_name, table_data), name=f"write to {table_name}"
             )
             tasks.append(task)
 
@@ -71,4 +74,4 @@ class Writer(DataWriter):
 
         # Write anchor table last if specified
         if self.anchor_table and self.anchor_table in data:
-            await self._write_table(self.anchor_table, data[self.anchor_table]) 
+            await self._write_table(self.anchor_table, data[self.anchor_table])
