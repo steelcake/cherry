@@ -14,6 +14,8 @@ import pyarrow as pa
 from typing import Dict
 import argparse
 from pathlib import Path
+import pyarrow.parquet as pq
+import pyarrow.compute as pc
 
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "DEBUG").upper())
 logger = logging.getLogger(__name__)
@@ -31,7 +33,33 @@ async def join_data(data: Dict[str, pa.Table], _: cc.Step) -> Dict[str, pa.Table
     return {"transfers": out}
 
 
+def get_start_block(output_dir: Path) -> int:
+    try:
+        transfers_dir = output_dir / "transfers"
+        if not transfers_dir.exists():
+            return 0
+
+        parquet_files = list(transfers_dir.glob("**/*.parquet"))
+        if not parquet_files:
+            return 0
+
+        last_file = max(parquet_files, key=lambda f: f.stat().st_mtime)
+        table = pq.read_table(last_file)
+
+        if "block_number" in table.column_names:
+            max_block = pc.max(table.column("block_number")).as_py()
+            return max_block + 1
+
+        return 0
+    except Exception as e:
+        logger.warning(f"Error reading start block: {e}")
+        return 0
+
+
 async def main(provider_kind: ingest.ProviderKind):
+    output_dir = SCRIPT_DIR / "data"
+    from_block = get_start_block(output_dir)
+
     provider = cc.Provider(
         name="my_provider",
         config=ingest.ProviderConfig(
@@ -42,7 +70,7 @@ async def main(provider_kind: ingest.ProviderKind):
             query=ingest.Query(
                 kind=ingest.QueryKind.EVM,
                 params=ingest.evm.Query(
-                    from_block=21075234,
+                    from_block=from_block,  # Use the calculated start block
                     logs=[
                         ingest.evm.LogRequest(
                             address=[
@@ -71,7 +99,7 @@ async def main(provider_kind: ingest.ProviderKind):
     writer = cc.Writer(
         kind=cc.WriterKind.PYARROW_DATASET,
         config=cc.PyArrowDatasetWriterConfig(
-            output_dir=str(SCRIPT_DIR / "data"),
+            output_dir=str(output_dir),
             partition_cols={"transfers": ["block_number"]},
             anchor_table="transfers",
             max_partitions=10000,

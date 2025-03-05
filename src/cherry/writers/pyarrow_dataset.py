@@ -29,17 +29,14 @@ class Writer(DataWriter):
         output_path = self.output_dir / table_name
         os.makedirs(output_path, exist_ok=True)
 
-        # Get partitioning config for this table
         partition_cols = (
             self.partition_cols.get(table_name, []) if self.partition_cols else []
         )
 
-        # Generate timestamp-based filename using datetime
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         base_filename = f"{timestamp}_{{i}}.parquet"
 
         try:
-            # Use pyarrow.parquet.write_to_dataset with all available options
             pq.write_to_dataset(
                 table,
                 root_path=str(output_path),
