@@ -18,7 +18,6 @@ from pathlib import Path
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "DEBUG").upper())
 logger = logging.getLogger(__name__)
 
-# Get the directory where this script is located
 SCRIPT_DIR = Path(__file__).parent.absolute()
 
 
@@ -69,17 +68,11 @@ async def main(provider_kind: ingest.ProviderKind):
             ),
         ),
     )
-
-    # Create writer with local parquet configuration
     writer = cc.Writer(
         kind=cc.WriterKind.PYARROW_DATASET,
         config=cc.PyArrowDatasetWriterConfig(
             output_dir=str(SCRIPT_DIR / "data"),
-            partition_cols={
-                "transfers": [
-                    "block_number"
-                ]  # Partition transfers table by from/to addresses
-            },
+            partition_cols={"transfers": ["block_number"]},
             anchor_table="transfers",
             max_partitions=10000,
         ),
@@ -110,7 +103,7 @@ async def main(provider_kind: ingest.ProviderKind):
                         kind=StepKind.CAST,
                         config=CastConfig(
                             table_name="transfers",
-                            mappings=[("block_timestamp", "Int64")],
+                            mappings={"block_timestamp": pa.int64()},
                         ),
                     ),
                     cc.Step(

@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from datetime import datetime
 from .base import DataWriter
-from ..config import PyArrowDatasetWriterConfig
+from ..config import PyArrowDatasetWriterConfig, ExistingDataBehavior
 import asyncio
 
 logger = logging.getLogger(__name__)
@@ -20,7 +20,9 @@ class Writer(DataWriter):
         self.max_partitions = config.max_partitions
         self.filesystem = config.filesystem
         self.use_threads = config.use_threads
-        self.existing_data_behavior = config.existing_data_behavior
+        self.existing_data_behavior: ExistingDataBehavior = (
+            config.existing_data_behavior
+        )
         os.makedirs(self.output_dir, exist_ok=True)
 
     async def _write_table(self, table_name: str, table: pa.Table) -> None:
@@ -57,7 +59,6 @@ class Writer(DataWriter):
         )
 
     async def push_data(self, data: Dict[str, pa.Table]) -> None:
-        # Write all tables except the anchor table first
         tasks = []
         for table_name, table_data in data.items():
             if table_name == self.anchor_table:
@@ -68,10 +69,8 @@ class Writer(DataWriter):
             )
             tasks.append(task)
 
-        # Wait for all writes to complete
         for task in tasks:
             await task
 
-        # Write anchor table last if specified
         if self.anchor_table and self.anchor_table in data:
             await self._write_table(self.anchor_table, data[self.anchor_table])
