@@ -27,6 +27,7 @@ class StepKind(str, Enum):
     CAST = "cast"
     HEX_ENCODE = "hex_encode"
     CAST_BY_TYPE = "cast_by_type"
+    BASE58_ENCODE = "base58_encode"
 
 
 @dataclass
@@ -127,6 +128,11 @@ class HexEncodeConfig:
 
 
 @dataclass
+class Base58EncodeConfig:
+    tables: Optional[list[str]] = None
+
+
+@dataclass
 class CastByTypeConfig:
     from_type: pa.DataType
     to_type: pa.DataType
@@ -145,6 +151,7 @@ class Step:
         | CastConfig
         | HexEncodeConfig
         | CastByTypeConfig
+        | Base58EncodeConfig
     ] = None
 
 

@@ -91,7 +91,6 @@ async def main(provider_kind: ingest.ProviderKind):
         ),
     )
 
-    # Create writer with ClickHouse configuration
     writer = cc.Writer(
         kind=cc.WriterKind.CLICKHOUSE,
         config=cc.ClickHouseWriterConfig(
@@ -169,7 +168,7 @@ async def main(provider_kind: ingest.ProviderKind):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Clickhouse example")
+    parser = argparse.ArgumentParser(description="example")
 
     parser.add_argument(
         "--provider",

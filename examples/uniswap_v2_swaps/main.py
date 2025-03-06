@@ -5,7 +5,6 @@ from cherry.config import (
     ClickHouseSkipIndex,
     StepKind,
     EvmDecodeEventsConfig,
-    # HexEncodeConfig,
     CastConfig,
 )
 from cherry import run_pipelines, Context
@@ -138,11 +137,6 @@ async def main(provider_kind: ingest.ProviderKind):
                             mappings={"block_timestamp": pa.int64()},
                         ),
                     ),
-                    # cc.Step(
-                    #     name="prefix_hex_encode",
-                    #     kind=StepKind.HEX_ENCODE,
-                    #     config=HexEncodeConfig(),
-                    # ),
                 ],
             )
         },
@@ -156,7 +150,7 @@ async def main(provider_kind: ingest.ProviderKind):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Clickhouse example")
+    parser = argparse.ArgumentParser(description="example")
 
     parser.add_argument(
         "--provider",

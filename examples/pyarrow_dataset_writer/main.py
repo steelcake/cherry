@@ -151,7 +151,7 @@ async def main(provider_kind: ingest.ProviderKind):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Local Parquet Example")
+    parser = argparse.ArgumentParser(description="example")
 
     parser.add_argument(
         "--provider",
