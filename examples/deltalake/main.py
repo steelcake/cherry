@@ -89,7 +89,6 @@ async def main(provider_kind: ingest.ProviderKind):
         ),
     )
 
-    # Create writer with ClickHouse configuration
     writer = cc.Writer(
         kind=cc.WriterKind.DELTA_LAKE,
         config=cc.DeltaLakeWriterConfig(
@@ -152,7 +151,7 @@ async def main(provider_kind: ingest.ProviderKind):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Clickhouse example")
+    parser = argparse.ArgumentParser(description="example")
 
     parser.add_argument(
         "--provider",

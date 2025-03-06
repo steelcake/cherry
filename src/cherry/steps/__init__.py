@@ -5,6 +5,7 @@ from . import (
     hex_encode,
     util,
     cast_by_type,
+    base58_encode,
 )
 
 __all__ = [
@@ -14,4 +15,5 @@ __all__ = [
     "hex_encode",
     "util",
     "cast_by_type",
+    "base58_encode",
 ]

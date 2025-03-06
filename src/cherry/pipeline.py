@@ -2,6 +2,7 @@ import asyncio
 from collections.abc import Awaitable
 import logging
 from .config import (
+    Base58EncodeConfig,
     CastByTypeConfig,
     CastConfig,
     EvmDecodeEventsConfig,
@@ -69,6 +70,11 @@ async def process_steps(
         elif step.kind == StepKind.HEX_ENCODE:
             assert isinstance(step.config, HexEncodeConfig)
             res = step_def.hex_encode.execute(res, step.config)
+        elif step.kind == StepKind.BASE58_ENCODE:
+            assert isinstance(step.config, Base58EncodeConfig)
+            res = await asyncio.to_thread(
+                step_def.base58_encode.execute, res, step.config
+            )
         elif step.kind == StepKind.CAST_BY_TYPE:
             assert isinstance(step.config, CastByTypeConfig)
             res = step_def.cast_by_type.execute(res, step.config)
@@ -76,8 +82,6 @@ async def process_steps(
             res = await context.steps[step.kind](res, step)
         else:
             raise Exception(f"Unknown step kind: {step.kind}")
-
-        logger.debug(f"Step {step.kind} complete. Current tables: {list(res.keys())}")
 
     return res
 
