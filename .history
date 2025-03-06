@@ -1,7 +1,0 @@
-#V2
-SELECT * FROM "./data/instructions\n\n"\n;
-SELECT * FROM "data/instructions"\n;
-SELECT * FROM "data/instructions/*"\n;
-SELECT * FROM "data/instructions/*.parquet"\n;
-CREATE EXTERNAL TABLE my_table STORED AS PARQUET LOCATION "data/instructions";
-\\q
