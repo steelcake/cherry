@@ -111,6 +111,7 @@ async def main():
                 "instructions": ["block_slot"],
                 "token_balances": ["block_slot"],
             },
+            anchor_table="blocks",
         ),
     )
 
