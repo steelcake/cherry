@@ -52,7 +52,7 @@ services:
 
 networks:
   default:
-    name: cherry_network  # Optional: give the default network a specific name
+    name: cherry_network  # Optional: give the default network a specific name.
 
 volumes:
   minio_data:
