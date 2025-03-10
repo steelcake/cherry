@@ -2,6 +2,8 @@
 name = "cherry-etl"
 version = "0.0.5"
 description = "Library for building blockchain pipelines"
+repository = "https://github.com/steelcake/cherry"
+homepage = "https://github.com/steelcake/cherry"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
 authors = [
