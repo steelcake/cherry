@@ -39,6 +39,17 @@ services:
       default:
         aliases:
           - minio.localhost
+  mc:
+    image: minio/mc
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      sleep 5 &&
+      mc config host add myminio http://minio:9000 minioadmin minioadmin &&
+      mc mb myminio/blockchain-data
+      "
+
 networks:
   default:
     name: cherry_network  # Optional: give the default network a specific name
