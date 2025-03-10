@@ -5,7 +5,7 @@ from cherry.config import (
 )
 from cherry import run_pipelines, Context
 from typing import Dict
-from cherry_core import ingest 
+from cherry_core import ingest
 import logging
 import os
 import asyncio
@@ -31,9 +31,10 @@ async def get_start_block(client: AsyncClient) -> int:
         logger.warning(f"failed to get start block from db: {traceback.format_exc()}")
         return default_start_block
 
+
 async def join_data(data: Dict[str, pa.Table], _: cc.Step) -> Dict[str, pa.Table]:
     blocks = data["blocks"]
-    transactions = data["transactions"]
+    data["transactions"]
     token_balances = data["token_balances"]
 
     blocks = blocks.rename_columns(["block_slot", "block_timestamp"])
@@ -41,7 +42,7 @@ async def join_data(data: Dict[str, pa.Table], _: cc.Step) -> Dict[str, pa.Table
     token_balances = token_balances.join(blocks, keys="block_slot")
     # token_balances = token_balances.join(transactions, keys=["block_slot", "transaction_index"])
 
-    return { "token_balances": token_balances }
+    return {"token_balances": token_balances}
 
 
 async def main():
