@@ -1,5 +1,7 @@
 .history
 
+uv.lock
+
 __pycache__/
 .venv/
 *swp
