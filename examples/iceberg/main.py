@@ -6,7 +6,8 @@ import logging
 import os
 import asyncio
 import pyarrow as pa
-from typing import Dict
+from typing import Dict, Optional
+import argparse
 
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "DEBUG").upper())
 
@@ -17,12 +18,12 @@ async def prune_fields(data: Dict[str, pa.Table], _: cc.Step) -> Dict[str, pa.Ta
     return {"blocks": blocks}
 
 
-async def main():
+async def main(provider_kind: ingest.ProviderKind, url: Optional[str]):
     provider = cc.Provider(
         name="my_provider",
         config=ingest.ProviderConfig(
-            kind=ingest.ProviderKind.SQD,
-            url="https://portal.sqd.dev/datasets/ethereum-mainnet",
+            kind=provider_kind,
+            url=url,
             query=ingest.Query(
                 kind=ingest.QueryKind.EVM,
                 params=ingest.evm.Query(
@@ -89,4 +90,22 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    parser = argparse.ArgumentParser(description="example")
+
+    parser.add_argument(
+        "--provider",
+        choices=["sqd", "hypersync"],
+        required=True,
+        help="Specify the provider ('sqd' or 'hypersync')",
+    )
+
+    args = parser.parse_args()
+
+    url = None
+
+    if args.provider == ingest.ProviderKind.HYPERSYNC:
+        url = "https://eth.hypersync.xyz"
+    elif args.provider == ingest.ProviderKind.SQD:
+        url = "https://portal.sqd.dev/datasets/ethereum-mainnet"
+
+    asyncio.run(main(args.provider, url))

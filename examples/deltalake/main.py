@@ -14,7 +14,7 @@ import os
 import asyncio
 from dotenv import load_dotenv
 import traceback
-from typing import Dict, cast as type_cast
+from typing import Dict, cast as type_cast, Optional
 import argparse
 import deltalake
 from deltalake import DeltaTable
@@ -50,7 +50,7 @@ async def join_data(data: Dict[str, pa.Table], _: cc.Step) -> Dict[str, pa.Table
     return {"transfers": out}
 
 
-async def main(provider_kind: ingest.ProviderKind):
+async def main(provider_kind: ingest.ProviderKind, url: Optional[str]):
     from_block = get_start_block()
     logger.info(f"starting to ingest from block {from_block}")
 
@@ -58,9 +58,7 @@ async def main(provider_kind: ingest.ProviderKind):
         name="my_provider",
         config=ingest.ProviderConfig(
             kind=provider_kind,
-            url="https://portal.sqd.dev/datasets/ethereum-mainnet"
-            if provider_kind == ingest.ProviderKind.SQD
-            else None,
+            url=url,
             query=ingest.Query(
                 kind=ingest.QueryKind.EVM,
                 params=ingest.evm.Query(
@@ -162,4 +160,11 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    asyncio.run(main(args.provider))
+    url = None
+
+    if args.provider == ingest.ProviderKind.HYPERSYNC:
+        url = "https://eth.hypersync.xyz"
+    elif args.provider == ingest.ProviderKind.SQD:
+        url = "https://portal.sqd.dev/datasets/ethereum-mainnet"
+
+    asyncio.run(main(args.provider, url))

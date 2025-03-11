@@ -11,7 +11,7 @@ import logging
 import os
 import asyncio
 import pyarrow as pa
-from typing import Dict
+from typing import Dict, Optional
 import argparse
 from pathlib import Path
 import pyarrow.parquet as pq
@@ -56,7 +56,7 @@ def get_start_block(output_dir: Path) -> int:
         return 0
 
 
-async def main(provider_kind: ingest.ProviderKind):
+async def main(provider_kind: ingest.ProviderKind, url: Optional[str]):
     output_dir = SCRIPT_DIR / "data"
     from_block = get_start_block(output_dir)
 
@@ -64,9 +64,7 @@ async def main(provider_kind: ingest.ProviderKind):
         name="my_provider",
         config=ingest.ProviderConfig(
             kind=provider_kind,
-            url="https://portal.sqd.dev/datasets/ethereum-mainnet"
-            if provider_kind == ingest.ProviderKind.SQD
-            else None,
+            url=url,
             query=ingest.Query(
                 kind=ingest.QueryKind.EVM,
                 params=ingest.evm.Query(
@@ -162,4 +160,11 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    asyncio.run(main(args.provider))
+    url = None
+
+    if args.provider == ingest.ProviderKind.HYPERSYNC:
+        url = "https://eth.hypersync.xyz"
+    elif args.provider == ingest.ProviderKind.SQD:
+        url = "https://portal.sqd.dev/datasets/ethereum-mainnet"
+
+    asyncio.run(main(args.provider, url))

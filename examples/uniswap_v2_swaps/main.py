@@ -15,7 +15,7 @@ import asyncio
 import clickhouse_connect
 from dotenv import load_dotenv
 import traceback
-from typing import Dict
+from typing import Dict, Optional
 import argparse
 
 load_dotenv()
@@ -43,7 +43,7 @@ async def join_data(data: Dict[str, pa.Table], _: cc.Step) -> Dict[str, pa.Table
     return {"swaps": out}
 
 
-async def main(provider_kind: ingest.ProviderKind):
+async def main(provider_kind: ingest.ProviderKind, url: Optional[str]):
     clickhouse_client = await clickhouse_connect.get_async_client(
         host=os.environ.get("CLICKHOUSE_HOST", "localhost"),
         port=int(os.environ.get("CLICKHOUSE_PORT", "8123")),
@@ -61,9 +61,7 @@ async def main(provider_kind: ingest.ProviderKind):
         name="my_provider",
         config=ingest.ProviderConfig(
             kind=provider_kind,
-            url="https://portal.sqd.dev/datasets/ethereum-mainnet"
-            if provider_kind == ingest.ProviderKind.SQD
-            else None,
+            url=url,
             query=ingest.Query(
                 kind=ingest.QueryKind.EVM,
                 params=ingest.evm.Query(
@@ -161,4 +159,11 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    asyncio.run(main(args.provider))
+    url = None
+
+    if args.provider == ingest.ProviderKind.HYPERSYNC:
+        url = "https://eth.hypersync.xyz"
+    elif args.provider == ingest.ProviderKind.SQD:
+        url = "https://portal.sqd.dev/datasets/ethereum-mainnet"
+
+    asyncio.run(main(args.provider, url))
