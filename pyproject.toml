@@ -18,13 +18,13 @@ dependencies = [
     "psycopg2-binary>=2.9.10",
     "pyiceberg>=0.8.1",
     "clickhouse-connect>=0.8.15",
-    "dotenv>=0.9.9",
     "deltalake>=0.24.0",
     "pyarrow-stubs>=17.17",
 ]
 
 [dependency-groups]
 dev = [
+    "dotenv>=0.9.9",
     "pyright>=1.1.396",
     "ruff>=0.9.7",
 ]
