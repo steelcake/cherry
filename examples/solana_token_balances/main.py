@@ -20,7 +20,7 @@ load_dotenv()
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "DEBUG").upper())
 logger = logging.getLogger(__name__)
 
-default_start_block = 269828500
+default_start_block = 317617480
 
 
 async def get_start_block(client: AsyncClient) -> int:
@@ -69,7 +69,7 @@ async def main():
                     token_balances=[
                         ingest.svm.TokenBalanceRequest(
                             pre_mint=["27G8MtK7VtTcCHkpASjSDdkWWYfoqT6ggEuKidVJidD4"],
-                            transaction=True,
+                            include_transactions=True,
                         ),
                     ],
                     fields=ingest.svm.Fields(

@@ -18,7 +18,7 @@ load_dotenv()
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "DEBUG").upper())
 logger = logging.getLogger(__name__)
 
-default_start_block = 269828500
+default_start_block = 317617480
 
 
 async def get_start_block(client: AsyncClient) -> int:
@@ -63,8 +63,8 @@ async def main():
                             ],
                             is_committed=True,
                             # inner_instructions=True,
-                            transaction=True,
-                            transaction_token_balances=True,
+                            include_transactions=True,
+                            include_transaction_token_balances=True,
                         ),
                     ],
                     fields=ingest.svm.Fields(
