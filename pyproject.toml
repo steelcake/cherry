@@ -1,6 +1,6 @@
 [project]
 name = "cherry-etl"
-version = "0.2.0"
+version = "0.2.1"
 description = "Library for building blockchain pipelines"
 repository = "https://github.com/steelcake/cherry"
 homepage = "https://github.com/steelcake/cherry"
