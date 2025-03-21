@@ -14,6 +14,11 @@ from pyarrow import fs
 logger = logging.getLogger(__name__)
 
 
+class StepFormat(str, Enum):
+    POLARS = "polars"
+    PYARROW = "pyarrow"
+
+
 class WriterKind(str, Enum):
     CLICKHOUSE = "clickhouse"
     ICEBERG = "iceberg"

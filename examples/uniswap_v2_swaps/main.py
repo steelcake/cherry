@@ -17,6 +17,7 @@ from dotenv import load_dotenv
 import traceback
 from typing import Dict, Optional
 import argparse
+import polars
 
 load_dotenv()
 
@@ -33,12 +34,17 @@ async def get_start_block(client: AsyncClient) -> int:
         return 0
 
 
-async def join_data(data: Dict[str, pa.Table], _: cc.Step) -> Dict[str, pa.Table]:
+async def join_data(
+    data: Dict[str, polars.DataFrame], _: cc.Step
+) -> Dict[str, polars.DataFrame]:
     blocks = data["blocks"]
     swaps = data["swaps"]
 
-    blocks = blocks.rename_columns(["block_number", "block_timestamp"])
-    out = swaps.join(blocks, keys="block_number")
+    blocks = blocks.select(
+        polars.col("slot").alias("block_slot"),
+        polars.col("timestamp").alias("block_timestamp"),
+    )
+    out = swaps.join(blocks, on="block_number")
 
     return {"swaps": out}
 
@@ -69,6 +75,7 @@ async def main(provider_kind: ingest.ProviderKind, url: Optional[str]):
                     logs=[
                         ingest.evm.LogRequest(
                             event_signatures=[event_signature],
+                            include_blocks=True,
                         )
                     ],
                     fields=ingest.evm.Fields(
@@ -121,6 +128,14 @@ async def main(provider_kind: ingest.ProviderKind, url: Optional[str]):
                         config=EvmDecodeEventsConfig(
                             event_signature=event_signature,
                             output_table="swaps",
+                        ),
+                    ),
+                    cc.Step(
+                        name="i256_to_i128",
+                        kind=StepKind.CAST_BY_TYPE,
+                        config=cc.CastByTypeConfig(
+                            from_type=pa.decimal256(76, 0),
+                            to_type=pa.decimal128(38, 0),
                         ),
                     ),
                     cc.Step(

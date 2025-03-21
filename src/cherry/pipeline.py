@@ -1,5 +1,6 @@
 import asyncio
 from collections.abc import Awaitable
+from dataclasses import dataclass
 import logging
 from .config import (
     Base58EncodeConfig,
@@ -15,11 +16,25 @@ from .config import (
 )
 from typing import Dict, List, Callable
 from cherry_core.ingest import start_stream
+from .config import StepFormat
 import pyarrow as pa
 from .writers.writer import create_writer
 from . import steps as step_def
+import polars
 
 logger = logging.getLogger(__name__)
+
+POLARS_STEP = Callable[
+    [Dict[str, polars.DataFrame], Step], Awaitable[Dict[str, polars.DataFrame]]
+]
+
+PYARROW_STEP = Callable[[Dict[str, pa.Table], Step], Awaitable[Dict[str, pa.Table]]]
+
+
+@dataclass
+class StepInfo:
+    runner: POLARS_STEP | PYARROW_STEP
+    format: StepFormat
 
 
 class Context:
@@ -29,9 +44,10 @@ class Context:
     def add_step(
         self,
         kind: str,
-        step: Callable[[Dict[str, pa.Table], Step], Awaitable[Dict[str, pa.Table]]],
+        runner: POLARS_STEP | PYARROW_STEP,
+        format: StepFormat = StepFormat.POLARS,
     ):
-        self.steps[kind] = step
+        self.steps[kind] = StepInfo(runner=runner, format=format)
 
 
 async def run_pipelines(config: Config, context: Context):
@@ -79,11 +95,49 @@ async def process_steps(
             assert isinstance(step.config, CastByTypeConfig)
             res = step_def.cast_by_type.execute(res, step.config)
         elif step.kind in context.steps:
-            res = await context.steps[step.kind](res, step)
+            step_info = context.steps[step.kind]
+
+            if step_info.format == StepFormat.POLARS:
+                res = pyarrow_data_to_polars(res)
+                res = polars_data_to_pyarrow(await step_info.runner(res, step))
+            elif step_info.format == StepFormat.PYARROW:
+                res = await step_info.runner(res, step)
+            else:
+                raise Exception(f"Unknown step format: {step_info.format}")
+
         else:
             raise Exception(f"Unknown step kind: {step.kind}")
 
     return res
+
+
+def pyarrow_data_to_polars(data: Dict[str, pa.Table]) -> Dict[str, polars.DataFrame]:
+    new_data = {}
+
+    for table_name, table_data in data.items():
+        new_data[table_name] = polars.from_arrow(table_data)
+
+    return new_data
+
+
+def polars_data_to_pyarrow(data: Dict[str, polars.DataFrame]) -> Dict[str, pa.Table]:
+    new_data = {}
+
+    for table_name, table_data in data.items():
+        new_data[table_name] = pyarrow_large_binary_to_binary(table_data.to_arrow())
+
+    return new_data
+
+
+def pyarrow_large_binary_to_binary(table: pa.Table) -> pa.Table:
+    columns = []
+    for column in table.columns:
+        if column.type == pa.large_binary():
+            columns.append(column.cast(pa.binary(), safe=True))
+        else:
+            columns.append(column)
+
+    return pa.Table.from_arrays(columns, names=table.column_names)
 
 
 async def run_pipeline(pipeline: Pipeline, context: Context, pipeline_name: str):
