@@ -1,13 +1,13 @@
 from clickhouse_connect.driver.asyncclient import AsyncClient
 import pyarrow as pa
-from cherry import config as cc
-from cherry.config import (
+from cherry_etl import config as cc
+from cherry_etl.config import (
     ClickHouseSkipIndex,
     StepKind,
     EvmDecodeEventsConfig,
     CastConfig,
 )
-from cherry import run_pipelines, Context
+from cherry_etl import run_pipelines, Context
 from cherry_core import ingest
 import logging
 import os

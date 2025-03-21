@@ -1,5 +1,5 @@
-from cherry import config as cc
-from cherry import run_pipelines, Context
+from cherry_etl import config as cc
+from cherry_etl import run_pipelines, Context
 from cherry_core import ingest
 from pyiceberg.catalog.sql import SqlCatalog
 import logging
