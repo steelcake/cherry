@@ -134,7 +134,7 @@ def pyarrow_large_binary_to_binary(table: pa.Table) -> pa.Table:
     for column in table.columns:
         if column.type == pa.large_binary():
             columns.append(column.cast(pa.binary(), safe=True))
-        if column.type == pa.large_string():
+        elif column.type == pa.large_string():
             columns.append(column.cast(pa.string(), safe=True))
         else:
             columns.append(column)
