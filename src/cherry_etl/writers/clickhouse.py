@@ -35,7 +35,11 @@ def pyarrow_type_to_clickhouse(dt: pa.DataType) -> str:
         return "Float64"
     elif pa.types.is_string(dt):
         return "String"
+    elif pa.types.is_large_string(dt):
+        return "String"
     elif pa.types.is_binary(dt):
+        return "String"  # ClickHouse uses String for binary data too
+    elif pa.types.is_large_binary(dt):
         return "String"  # ClickHouse uses String for binary data too
     elif pa.types.is_date32(dt):
         return "Date"  # Date32 in Arrow is the same as Date in ClickHouse
@@ -49,6 +53,9 @@ def pyarrow_type_to_clickhouse(dt: pa.DataType) -> str:
         return "Int64"  # Time64 in Arrow maps to Int64 in ClickHouse
     elif pa.types.is_list(dt):
         dt = type_cast(pa.ListType, dt)
+        return f"Array({pyarrow_type_to_clickhouse(dt.value_type)})"
+    elif pa.types.is_large_list(dt):
+        dt = type_cast(pa.LargeListType, dt)
         return f"Array({pyarrow_type_to_clickhouse(dt.value_type)})"
     elif pa.types.is_struct(dt):
         dt = type_cast(pa.StructType, dt)
