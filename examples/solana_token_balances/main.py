@@ -79,6 +79,7 @@ async def main():
                         ingest.svm.TokenBalanceRequest(
                             pre_mint=["27G8MtK7VtTcCHkpASjSDdkWWYfoqT6ggEuKidVJidD4"],
                             include_transactions=True,
+                            include_blocks=True,
                         ),
                     ],
                     fields=ingest.svm.Fields(

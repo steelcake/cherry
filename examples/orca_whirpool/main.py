@@ -65,6 +65,7 @@ async def main():
                             # inner_instructions=True,
                             include_transactions=True,
                             include_transaction_token_balances=True,
+                            include_blocks=True,
                         ),
                     ],
                     fields=ingest.svm.Fields(
