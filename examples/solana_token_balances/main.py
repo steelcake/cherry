@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 import traceback
 import clickhouse_connect
 from clickhouse_connect.driver.asyncclient import AsyncClient
-import pyarrow as pa
+import polars
 
 load_dotenv()
 
@@ -32,15 +32,24 @@ async def get_start_block(client: AsyncClient) -> int:
         return default_start_block
 
 
-async def join_data(data: Dict[str, pa.Table], _: cc.Step) -> Dict[str, pa.Table]:
+async def join_data(
+    data: Dict[str, polars.DataFrame], _: cc.Step
+) -> Dict[str, polars.DataFrame]:
     blocks = data["blocks"]
-    data["transactions"]
+    transactions = data["transactions"]
     token_balances = data["token_balances"]
 
-    blocks = blocks.rename_columns(["block_slot", "block_timestamp"])
+    blocks = blocks.select(
+        polars.col("slot").alias("block_slot"),
+        polars.col("timestamp").alias("block_timestamp"),
+    )
 
-    token_balances = token_balances.join(blocks, keys="block_slot")
-    # token_balances = token_balances.join(transactions, keys=["block_slot", "transaction_index"])
+    token_balances = token_balances.join(blocks, on="block_slot")
+    token_balances = token_balances.join(
+        transactions, on=["block_slot", "transaction_index"]
+    )
+
+    token_balances = token_balances.filter(polars.col("err").is_null())
 
     return {"token_balances": token_balances}
 
@@ -81,6 +90,7 @@ async def main():
                             block_slot=True,
                             transaction_index=True,
                             signatures=True,
+                            err=True,
                         ),
                         token_balance=ingest.svm.TokenBalanceFields(
                             block_slot=True,

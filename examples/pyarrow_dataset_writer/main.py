@@ -16,6 +16,7 @@ import argparse
 from pathlib import Path
 import pyarrow.parquet as pq
 import pyarrow.compute as pc
+import polars
 
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "DEBUG").upper())
 logger = logging.getLogger(__name__)
@@ -23,12 +24,17 @@ logger = logging.getLogger(__name__)
 SCRIPT_DIR = Path(__file__).parent.absolute()
 
 
-async def join_data(data: Dict[str, pa.Table], _: cc.Step) -> Dict[str, pa.Table]:
+async def join_data(
+    data: Dict[str, polars.DataFrame], _: cc.Step
+) -> Dict[str, polars.DataFrame]:
     blocks = data["blocks"]
     transfers = data["transfers"]
 
-    blocks = blocks.rename_columns(["block_number", "block_timestamp"])
-    out = transfers.join(blocks, keys="block_number")
+    blocks = blocks.select(
+        polars.col("number").alias("block_number"),
+        polars.col("timestamp").alias("block_timestamp"),
+    )
+    out = transfers.join(blocks, on="block_number")
 
     return {"transfers": out}
 
@@ -75,6 +81,7 @@ async def main(provider_kind: ingest.ProviderKind, url: Optional[str]):
                                 "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
                             ],  # USDC contract
                             event_signatures=["Transfer(address,address,uint256)"],
+                            include_blocks=True,
                         )
                     ],
                     fields=ingest.evm.Fields(
@@ -118,6 +125,14 @@ async def main(provider_kind: ingest.ProviderKind, url: Optional[str]):
                         config=EvmDecodeEventsConfig(
                             event_signature="Transfer(address indexed from, address indexed to, uint256 amount)",
                             output_table="transfers",
+                        ),
+                    ),
+                    cc.Step(
+                        name="i256_to_i128",
+                        kind=StepKind.CAST_BY_TYPE,
+                        config=cc.CastByTypeConfig(
+                            from_type=pa.decimal256(76, 0),
+                            to_type=pa.decimal128(38, 0),
                         ),
                     ),
                     cc.Step(

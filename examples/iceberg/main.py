@@ -5,17 +5,10 @@ from pyiceberg.catalog.sql import SqlCatalog
 import logging
 import os
 import asyncio
-import pyarrow as pa
-from typing import Dict, Optional
+from typing import Optional
 import argparse
 
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "DEBUG").upper())
-
-
-async def prune_fields(data: Dict[str, pa.Table], _: cc.Step) -> Dict[str, pa.Table]:
-    x = data["blocks"].column("number")
-    blocks = pa.Table.from_arrays([x], names=["blocks"])
-    return {"blocks": blocks}
 
 
 async def main(provider_kind: ingest.ProviderKind, url: Optional[str]):
@@ -32,6 +25,7 @@ async def main(provider_kind: ingest.ProviderKind, url: Optional[str]):
                         ingest.evm.LogRequest(
                             address=["0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"],
                             event_signatures=["Transfer(address,address,uint256)"],
+                            include_blocks=True,
                         )
                     ],
                     fields=ingest.evm.Fields(
@@ -77,14 +71,12 @@ async def main(provider_kind: ingest.ProviderKind, url: Optional[str]):
             "my_pipeline": cc.Pipeline(
                 provider=provider,
                 writer=writer,
-                steps=[cc.Step(name="my_prune", kind="prune_fields")],
+                steps=[],
             )
         },
     )
 
     context = Context()
-
-    context.add_step("prune_fields", prune_fields)
 
     await run_pipelines(config, context)
 
