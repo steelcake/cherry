@@ -33,7 +33,7 @@ class Writer(DataWriter):
                     )
 
                 # ignore lint warning relating to unused variable
-                # this variable is used in the sqd query string
+                # this variable is used in the sql query string
                 _ = table_data
 
             self.first_push = False
@@ -43,7 +43,7 @@ class Writer(DataWriter):
                     f"INSERT INTO {table_name} SELECT * FROM table_data"
                 )
                 # ignore lint warning relating to unused variable
-                # this variable is used in the sqd query string
+                # this variable is used in the sql query string
                 _ = table_data
 
         self.connection.commit()
