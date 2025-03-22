@@ -25,3 +25,6 @@ scripts/
 # Ignore package related folders
 dist/
 src/cherry*.egg-info/
+
+# ignore duckdb WAL file
+*.wal
