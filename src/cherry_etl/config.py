@@ -10,6 +10,7 @@ import deltalake
 import pyarrow as pa
 import pyarrow.compute as pa_compute
 from pyarrow import fs
+import duckdb
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +25,7 @@ class WriterKind(str, Enum):
     ICEBERG = "iceberg"
     DELTA_LAKE = "delta_lake"
     PYARROW_DATASET = "pyarrow_dataset"
+    DUCKDB = "duckdb"
 
 
 class StepKind(str, Enum):
@@ -91,6 +93,11 @@ class PyArrowDatasetWriterConfig:
 
 
 @dataclass
+class DuckdbWriterConfig:
+    connection: duckdb.DuckDBPyConnection
+
+
+@dataclass
 class Writer:
     kind: WriterKind
     config: (
@@ -98,6 +105,7 @@ class Writer:
         | IcebergWriterConfig
         | DeltaLakeWriterConfig
         | PyArrowDatasetWriterConfig
+        | DuckdbWriterConfig
     )
 
 

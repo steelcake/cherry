@@ -1,6 +1,6 @@
 [project]
 name = "cherry-etl"
-version = "0.2.3"
+version = "0.2.4"
 description = "Library for building blockchain pipelines"
 repository = "https://github.com/steelcake/cherry"
 homepage = "https://github.com/steelcake/cherry"
@@ -12,7 +12,7 @@ authors = [
 ]
 requires-python = ">=3.10"
 dependencies = [
-    "cherry-core>=0.1.0",
+    "cherry-core>=0.1.1",
     "pyarrow>=19.0.1",
     "sqlalchemy>=2.0.38",
     "psycopg2-binary>=2.9.10",
@@ -21,6 +21,7 @@ dependencies = [
     "deltalake>=0.24.0",
     "pyarrow-stubs>=17.17",
     "polars>=1.25.2",
+    "duckdb>=1.2.1",
 ]
 
 [dependency-groups]
