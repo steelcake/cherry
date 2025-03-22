@@ -24,7 +24,10 @@ load_dotenv()
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "DEBUG").upper())
 logger = logging.getLogger(__name__)
 
-db_path = "./data"
+if not os.path.exists("data"):
+    os.makedirs("data")
+
+db_path = "./data/transfers"
 
 
 def get_start_block(con: duckdb.DuckDBPyConnection) -> int:
