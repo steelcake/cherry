@@ -1,44 +1,24 @@
-<img src="https://steelcake.com/cherry-brand-logo.jpg" width="350px" />
+# Cherry  [<img src="https://steelcake.com/telegram-logo.png" width="30px" />](https://t.me/cherryframework) 
 
-# Cherry 
-[![PyPI version](https://badge.fury.io/py/cherry-etl.svg)](https://badge.fury.io/py/cherry-etl)
+[![PyPI version](https://badge.fury.io/py/cherry-etl.svg)](https://pypi.org/project/cherry-etl/)
 
-Python framework for building blockchain data pipelines.  
+Cherry is a python library for building blockchain data pipelines.
 
-<br/>
-
-Cherry is in the early stages of development, so the API is changing, and we are still figuring things out.
-
-We would love to help you get started and get your feedback on [our telegram channel](https://t.me/cherryframework).
-
-Core libraries we use for ingesting/decoding/validating/transforming blockchain data are implemented in [cherry-core](https://github.com/steelcake/cherry-core) repo.
-
-<b> This project is sponsored by: </b>
-
-[<img src="https://steelcake.com/envio-logo.png" width="150px" />](https://envio.dev)
-[<img src="https://steelcake.com/sqd-logo.png" width="165px" />](https://sqd.ai)
-[<img src="https://steelcake.com/space-operator-logo.webp" height="75px" />](https://linktr.ee/spaceoperator)
+It is designed to make building production-ready blockchain data pipelines easy.
 
 ## Features
 
-- Ingest data from multiple providers with a uniform interface. This makes switching providers as easy as changing a couple lines in config.
-- Prebuilt functionality to decode/validate/transform blockchain data.
-- Support for both Ethereum (EVM) and Solana (SVM) based blockchains.
-- Write data into Clickhouse, Iceberg, Deltalake, Parquet/Arrow (via pyarrow).
-- Keep datasets fresh with continuous ingestion.
-
-## Status
-
-We are still trying to figure out our core use cases and trying to build up to them. Here is a rough roadmap::
-
-- Add option to ingest Solana data from geyser plugin/RPC.
-- Add option to ingest EVM data from Ethereum RPC.
-- Implement more advanced validation.
-- Add more writers like DuckDB, PostgreSQL.
-- Build an end-to-end testing flow so we can test the framework and users can test their pipelines using the same flow.
-- Build a benchmark flow so we can optimize the framework and user can optimize their pipelines using the same flow. This will also make it easy to compare performance of providers and writers. 
-- Implement more blockchain formats like SUI, Aptos, Fuel.
-- Implement automatic rollback handling. Currently we don't handle rollbacks so we stay behind the tip of the chain in order to avoid writing wrong data.
+- Don't need SQL or external config files. Only write `python`. Able to create `self-contained` python scripts and utilize the dynamic nature of python.
+- `High-performance` and `low-cost` proprietary data sources are available `without the downside of platform lock-in`. Just change two lines to switch between data providers.
+- Prebuilt functionality to `decode`, `validate`, `transform` blockchain data. All implemented in `rust` for performance. Including `UInt256`, `ethereum hex`, `solana base58` encoding/decoding functionality, and more.
+- Support for both `Ethereum (EVM)` and `Solana (SVM)` based blockchains. More to come.
+- Write data into `Clickhouse`, `Iceberg`, `Deltalake`, `DuckDB`, `Parquet` and any other supported platform. Can switch between writers without changing any other part of the pipeline.
+- `Schema inference`, don't need to manually create and manage database schemas, cherry figures out how it should create the tables so you don't have to.
+- Keep datasets fresh with `continuous ingestion`.
+- `Fully parallelized and optimized architecture`. Next batch of data is being fetched while your pre-processing function is running, while the database writes are being executed in parallel. Don't need to hand optimize anything.
+- Write transformations in any `Arrow` compatible library, `polars`, `pandas`, `datafusion`, `duckdb` and so on.
+- Prebuilt library of transformations e.g. encode all binary columns to `ethereum prefixed-hex` format or `solana base58` format strings.
+- Prebuilt functionality to implement `crash-resistance`. Make your pipeline crash resistant so it doesn't lose data and starts from where it left off in case of a crash.
 
 ## Usage Examples
 
@@ -68,6 +48,8 @@ This repo uses `uv` for development.
 - Lint the code with `uv run ruff check`
 - Run type checks with `uv run pyright`
 
+Core libraries we use for ingesting/decoding/validating/transforming blockchain data are implemented in [cherry-core](https://github.com/steelcake/cherry-core) repo.
+
 ## License
 
 Licensed under either of
@@ -84,3 +66,10 @@ at your option.
 Unless you explicitly state otherwise, any contribution intentionally submitted
 for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
 dual licensed as above, without any additional terms or conditions.
+
+## Sponsors
+
+[<img src="https://steelcake.com/envio-logo.png" width="150px" />](https://envio.dev)
+[<img src="https://steelcake.com/sqd-logo.png" width="165px" />](https://sqd.ai)
+[<img src="https://steelcake.com/space-operator-logo.webp" height="75px" />](https://linktr.ee/spaceoperator)
+
