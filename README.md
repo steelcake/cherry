@@ -20,10 +20,13 @@ It is designed to make building production-ready blockchain data pipelines easy.
 - Prebuilt library of transformations e.g. encode all binary columns to `ethereum prefixed-hex` format or `solana base58` format strings.
 - Prebuilt functionality to implement `crash-resistance`. Make your pipeline crash resistant so it doesn't lose data and starts from where it left off in case of a crash.
 
-## Supported blockchain formats
+## Data providers
 
-- **Ethereum (EVM)**
-- **Solana (SVM)**
+| Provider            | Ethereum (EVM) | Solana (SVM)  |
+|---------------------|----------------|---------------|
+| [HyperSync](https://docs.envio.dev/docs/HyperSync/overview) | ✅ | ❌ |
+| [SQD](https://docs.sqd.ai/)             | ✅ | ✅ |
+| [Yellowstone-GRPC](https://github.com/rpcpool/yellowstone-grpc) | ❌ | ✅ |
 
 ## Supported output formats
 
@@ -31,16 +34,13 @@ It is designed to make building production-ready blockchain data pipelines easy.
 - **Iceberg**
 - **Deltalake**
 - **DuckDB**
+- **Arrow Datasets**
 - **Parquet**
 
-## Usage Examples
+## Usage examples
 
-See `examples` directory.
-
-Can run examples with `uv run examples/{example_name}/main.py --provider {sqd or hypersync}`
-
-For examples that require databases or other infra, run `docker-compose -f examples/{example_name}/docker-compose.yaml up -d` to start the necessary docker containers.
-Can run `docker-compose -f examples/{example_name}/docker-compose.yaml down -v` after running the example to stop the docker containers and delete the data.
+- [**Ethereum(EVM)** examples](examples/eth)
+- [**Solana(SVM)** examples](examples/solana)
 
 ## Logging
 
