@@ -20,6 +20,19 @@ It is designed to make building production-ready blockchain data pipelines easy.
 - Prebuilt library of transformations e.g. encode all binary columns to `ethereum prefixed-hex` format or `solana base58` format strings.
 - Prebuilt functionality to implement `crash-resistance`. Make your pipeline crash resistant so it doesn't lose data and starts from where it left off in case of a crash.
 
+## Supported blockchain formats
+
+- **Ethereum (EVM)**
+- **Solana (SVM)**
+
+## Supported output formats
+
+- **ClickHouse**
+- **Iceberg**
+- **Deltalake**
+- **DuckDB**
+- **Parquet**
+
 ## Usage Examples
 
 See `examples` directory.
