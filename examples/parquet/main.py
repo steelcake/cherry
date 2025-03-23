@@ -13,15 +13,13 @@ import asyncio
 import pyarrow as pa
 from typing import Dict, Optional
 import argparse
-from pathlib import Path
-import pyarrow.parquet as pq
-import pyarrow.compute as pc
 import polars
+import traceback
 
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "DEBUG").upper())
 logger = logging.getLogger(__name__)
 
-SCRIPT_DIR = Path(__file__).parent.absolute()
+base_dir = "./data"
 
 
 async def join_data(
@@ -39,32 +37,19 @@ async def join_data(
     return {"transfers": out}
 
 
-def get_start_block(output_dir: Path) -> int:
+def get_start_block() -> int:
     try:
-        transfers_dir = output_dir / "transfers"
-        if not transfers_dir.exists():
-            return 0
-
-        parquet_files = list(transfers_dir.glob("**/*.parquet"))
-        if not parquet_files:
-            return 0
-
-        last_file = max(parquet_files, key=lambda f: f.stat().st_mtime)
-        table = pq.read_table(last_file)
-
-        if "block_number" in table.column_names:
-            max_block = pc.max(table.column("block_number")).as_py()
-            return max_block + 1
-
-        return 0
-    except Exception as e:
-        logger.warning(f"Error reading start block: {e}")
+        df = polars.scan_parquet(base_dir + "/transfers")
+        data = df.select(polars.col("block_number").max().alias("max_block")).collect()
+        return data[0, 0]
+    except Exception:
+        logger.warning(f"failed to get start block from db: {traceback.format_exc()}")
         return 0
 
 
 async def main(provider_kind: ingest.ProviderKind, url: Optional[str]):
-    output_dir = SCRIPT_DIR / "data"
-    from_block = get_start_block(output_dir)
+    from_block = get_start_block()
+    logger.info(f"starting to ingest from block {from_block}")
 
     provider = cc.Provider(
         name="my_provider",
@@ -101,13 +86,11 @@ async def main(provider_kind: ingest.ProviderKind, url: Optional[str]):
             ),
         ),
     )
+
     writer = cc.Writer(
         kind=cc.WriterKind.PYARROW_DATASET,
         config=cc.PyArrowDatasetWriterConfig(
-            output_dir=str(output_dir),
-            partition_cols={"transfers": ["block_number"]},
-            anchor_table="transfers",
-            max_partitions=10000,
+            base_dir=base_dir,
         ),
     )
 

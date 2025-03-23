@@ -1,7 +1,7 @@
 import logging
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, List, Optional, Literal, TypeAlias
+from typing import Dict, List, Optional
 
 from cherry_core.ingest import ProviderConfig
 from clickhouse_connect.driver.asyncclient import AsyncClient as ClickHouseClient
@@ -9,7 +9,8 @@ from pyiceberg.catalog import Catalog as IcebergCatalog
 import deltalake
 import pyarrow as pa
 import pyarrow.compute as pa_compute
-from pyarrow import fs
+import pyarrow.dataset as pa_dataset
+import pyarrow.fs as pa_fs
 import duckdb
 
 logger = logging.getLogger(__name__)
@@ -76,20 +77,24 @@ class ClickHouseWriterConfig:
     anchor_table: Optional[str] = None
 
 
-ExistingDataBehavior: TypeAlias = Literal[
-    "overwrite_or_ignore", "error", "delete_matching"
-]
-
-
 @dataclass
 class PyArrowDatasetWriterConfig:
-    output_dir: str
-    partition_cols: Optional[Dict[str, List[str]]] = None
-    anchor_table: Optional[str] = None
-    max_partitions: int = 100000
-    filesystem: Optional[fs.FileSystem] = None
+    base_dir: str
+    basename_template: Optional[str] = None
+    partitioning: Dict[str, pa_dataset.Partitioning | list[str]] = field(
+        default_factory=dict
+    )
+    partitioning_flavor: Dict[str, str] = field(default_factory=dict)
+    filesystem: Optional[pa_fs.FileSystem] = None
+    file_options: Optional[pa_dataset.FileWriteOptions] = None
     use_threads: bool = True
-    existing_data_behavior: ExistingDataBehavior = "overwrite_or_ignore"
+    max_partitions: int = 1024
+    max_open_files: int = 1024
+    max_rows_per_file: int = 0
+    min_rows_per_group: int = 0
+    max_rows_per_group: int = 1024 * 1024
+    create_dir: bool = True
+    anchor_table: Optional[str] = None
 
 
 @dataclass
