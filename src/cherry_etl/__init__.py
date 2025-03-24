@@ -1,4 +1,4 @@
 from . import config
-from .pipeline import run_pipelines, run_pipeline, Context
+from .pipeline import run_pipeline
 
-__all__ = ["config", "run_pipelines", "run_pipeline", "Context"]
+__all__ = ["config", "run_pipeline"]

@@ -1,7 +1,7 @@
 import logging
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, Callable
 
 from cherry_core.ingest import ProviderConfig
 from clickhouse_connect.driver.asyncclient import AsyncClient as ClickHouseClient
@@ -12,13 +12,9 @@ import pyarrow.compute as pa_compute
 import pyarrow.dataset as pa_dataset
 import pyarrow.fs as pa_fs
 import duckdb
+import polars as pl
 
 logger = logging.getLogger(__name__)
-
-
-class StepFormat(str, Enum):
-    POLARS = "polars"
-    PYARROW = "pyarrow"
 
 
 class WriterKind(str, Enum):
@@ -30,18 +26,13 @@ class WriterKind(str, Enum):
 
 
 class StepKind(str, Enum):
+    CUSTOM = "custom"
     EVM_VALIDATE_BLOCK_DATA = "evm_validate_block_data"
     EVM_DECODE_EVENTS = "evm_decode_events"
     CAST = "cast"
     HEX_ENCODE = "hex_encode"
     CAST_BY_TYPE = "cast_by_type"
     BASE58_ENCODE = "base58_encode"
-
-
-@dataclass
-class Provider:
-    config: ProviderConfig
-    name: Optional[str] = None
 
 
 @dataclass
@@ -159,29 +150,28 @@ class CastByTypeConfig:
 
 
 @dataclass
+class CustomStepConfig:
+    runner: Callable[[Dict[str, pl.DataFrame], Optional[Any]], Dict[str, pl.DataFrame]]
+    context: Optional[Any] = None
+
+
+@dataclass
 class Step:
-    name: str
-    kind: StepKind | str
-    config: Optional[
-        Dict
-        | EvmValidateBlockDataConfig
+    kind: StepKind
+    config: (
+        EvmValidateBlockDataConfig
         | EvmDecodeEventsConfig
         | CastConfig
         | HexEncodeConfig
         | CastByTypeConfig
         | Base58EncodeConfig
-    ] = None
+        | CustomStepConfig
+    )
+    name: Optional[str] = None
 
 
 @dataclass
 class Pipeline:
-    provider: Provider
+    provider: ProviderConfig
     writer: Writer
     steps: List[Step]
-
-
-@dataclass
-class Config:
-    project_name: str
-    description: str
-    pipelines: Dict[str, Pipeline]
