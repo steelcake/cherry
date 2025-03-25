@@ -12,7 +12,7 @@ from .config import (
     Step,
     StepKind,
 )
-from typing import Dict, List
+from typing import Dict, List, Optional
 from cherry_core.ingest import start_stream
 import pyarrow as pa
 from .writers.writer import create_writer
@@ -100,7 +100,7 @@ def pyarrow_large_binary_to_binary(table: pa.Table) -> pa.Table:
     return pa.Table.from_arrays(columns, names=table.column_names)
 
 
-async def run_pipeline(pipeline_name: str, pipeline: Pipeline):
+async def run_pipeline(pipeline: Pipeline, pipeline_name: Optional[str] = None):
     logger.info(f"Running pipeline: {pipeline_name}")
 
     stream = start_stream(pipeline.provider, pipeline.query)
