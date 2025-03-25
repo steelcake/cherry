@@ -11,6 +11,7 @@ from .config import (
     Pipeline,
     Step,
     StepKind,
+    U256ToBinaryConfig,
 )
 from typing import Dict, List, Optional
 from cherry_core.ingest import start_stream
@@ -48,6 +49,9 @@ async def process_steps(
         elif step.kind == StepKind.HEX_ENCODE:
             assert isinstance(step.config, HexEncodeConfig)
             data = step_def.hex_encode.execute(data, step.config)
+        elif step.kind == StepKind.U256_TO_BINARY:
+            assert isinstance(step.config, U256ToBinaryConfig)
+            data = step_def.u256_to_binary.execute(data, step.config)
         elif step.kind == StepKind.BASE58_ENCODE:
             assert isinstance(step.config, Base58EncodeConfig)
             data = await asyncio.to_thread(
