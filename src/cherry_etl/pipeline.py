@@ -103,7 +103,7 @@ def pyarrow_large_binary_to_binary(table: pa.Table) -> pa.Table:
 async def run_pipeline(pipeline_name: str, pipeline: Pipeline):
     logger.info(f"Running pipeline: {pipeline_name}")
 
-    stream = start_stream(pipeline.provider)
+    stream = start_stream(pipeline.provider, pipeline.query)
 
     writer = create_writer(pipeline.writer)
 

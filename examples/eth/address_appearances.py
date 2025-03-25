@@ -5,7 +5,6 @@ import logging
 import os
 import asyncio
 from dotenv import load_dotenv
-import traceback
 from typing import Any, Dict, Optional
 import argparse
 import duckdb
@@ -16,24 +15,7 @@ load_dotenv()
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO").upper())
 logger = logging.getLogger(__name__)
 
-if not os.path.exists("data"):
-    os.makedirs("data")
-
 TABLE_NAME = "address_appearances"
-DB_PATH = "./data/address_appearances"
-
-
-# used to find where we left off when starting the pipeline
-def get_start_block(con: duckdb.DuckDBPyConnection) -> int:
-    try:
-        res = con.sql(f"SELECT MAX(block_number) from {TABLE_NAME}").fetchone()
-        if res is not None:
-            return int(res[0]) + 1
-        else:
-            return 0
-    except Exception:
-        logger.warning(f"failed to get start block from db: {traceback.format_exc()}")
-        return 0
 
 
 # filter traces by action type, extract address column and create relationship column
@@ -83,44 +65,39 @@ async def sync_data(
     from_block: int,
     to_block: Optional[int],
 ):
-    start_block = get_start_block(connection)
     logger.info(f"starting to ingest from block {from_block}")
 
-    from_block = max(start_block, from_block)
-
     if to_block is not None and from_block > to_block:
-        logger.info(
-            "skipping syncing data since the requested block range is behind the existing data"
-        )
-        return
+        raise Exception("block range is invalid")
 
     provider = ingest.ProviderConfig(
         # The provider we want to use is selected like this, only need to change these two
         #  parameters to switch to another provider and the pipeline work exactly the same
         kind=provider_kind,
         url=provider_url,
-        query=ingest.Query(
-            # we want evm data
-            kind=ingest.QueryKind.EVM,
-            params=ingest.evm.Query(
-                from_block=from_block,
-                to_block=to_block,
-                # select all traces since we need all
-                traces=[ingest.evm.TraceRequest()],
-                # select the fields we need, can think of this like the SELECT fields FROM table SQL statement.
-                fields=ingest.evm.Fields(
-                    # select these fields from traces table
-                    trace=ingest.evm.TraceFields(
-                        block_number=True,
-                        block_hash=True,
-                        transaction_hash=True,
-                        type_=True,
-                        from_=True,
-                        to=True,
-                        address=True,
-                        author=True,
-                        refund_address=True,
-                    ),
+    )
+
+    query = ingest.Query(
+        # we want evm data
+        kind=ingest.QueryKind.EVM,
+        params=ingest.evm.Query(
+            from_block=from_block,
+            to_block=to_block,
+            # select all traces since we need all
+            traces=[ingest.evm.TraceRequest()],
+            # select the fields we need, can think of this like the SELECT fields FROM table SQL statement.
+            fields=ingest.evm.Fields(
+                # select these fields from traces table
+                trace=ingest.evm.TraceFields(
+                    block_number=True,
+                    block_hash=True,
+                    transaction_hash=True,
+                    type_=True,
+                    from_=True,
+                    to=True,
+                    address=True,
+                    author=True,
+                    refund_address=True,
                 ),
             ),
         ),
@@ -136,9 +113,8 @@ async def sync_data(
 
     # main pipeline configuration object, this object will tell cherry how to run the etl pipeline
     pipeline = cc.Pipeline(
-        # data provider to be used
         provider=provider,
-        # writer to be used, only need to change this parameter to write to some other output.
+        query=query,
         writer=writer,
         steps=[
             # run our custom step to process traces into address appearances
@@ -168,8 +144,8 @@ async def main(
     from_block: int,
     to_block: Optional[int],
 ):
-    # create duckdb handle to persist the data
-    connection = duckdb.connect(database=DB_PATH)
+    # create an in-memory duckdb database
+    connection = duckdb.connect()
 
     # sync the data into duckdb
     await sync_data(
