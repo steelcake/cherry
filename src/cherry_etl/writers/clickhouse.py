@@ -93,6 +93,7 @@ class Writer(DataWriter):
         self.skip_index = config.skip_index
         self.first_insert = True
         self.anchor_table = config.anchor_table
+        self.engine = config.engine
 
     async def _create_table_if_not_exists(self, table_name: str, schema: pa.Schema):
         if not await self._check_table_exists(table_name):
@@ -131,7 +132,7 @@ class Writer(DataWriter):
         create_table_query = f"""
         CREATE TABLE {table_name} (
             {", ".join(columns)}
-        ) ENGINE = MergeTree()
+        ) ENGINE = {self.engine} 
         ORDER BY {order_by}
         """
 

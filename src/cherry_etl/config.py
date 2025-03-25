@@ -64,6 +64,7 @@ class ClickHouseWriterConfig:
     client: ClickHouseClient
     codec: Dict[str, Dict[str, str]] = field(default_factory=dict)
     order_by: Dict[str, List[str]] = field(default_factory=dict)
+    engine: str = "MergeTree()"
     skip_index: Dict[str, List[ClickHouseSkipIndex]] = field(default_factory=dict)
     anchor_table: Optional[str] = None
 
