@@ -6,6 +6,7 @@ from typing import Any, Dict, Optional
 
 import duckdb
 import polars as pl
+import pyarrow as pa
 from cherry_core import ingest
 from dotenv import load_dotenv
 
@@ -69,20 +70,16 @@ async def sync_data(
                     state_root=True,
                     receipts_root=True,
                     miner=True,
-                    # difficulty=True,
-                    # total_difficulty=True,
-                    # extra_data=True,
-                    # size=True,
-                    # gas_limit=True,
-                    # gas_used=True,
-                    # timestamp=True,
+                    difficulty=True,
+                    total_difficulty=True,
+                    extra_data=True,
+                    size=True,
+                    gas_limit=True,
+                    gas_used=True,
+                    timestamp=True,
                     uncles=True,
-                    # base_fee_per_gas=True,
-                    # # blob_gas_used=True,
-                    # # excess_blob_gas=True,
-                    # # parent_beacon_block_root=True,
+                    base_fee_per_gas=True,
                     withdrawals_root=True,
-                    # withdrawals=True,
                 ),
             ),
         ),
@@ -104,6 +101,14 @@ async def sync_data(
         # writer to be used, only need to change this parameter to write to some other output.
         writer=writer,
         steps=[
+            cc.Step(
+                name="i256_to_i128",
+                kind=cc.StepKind.CAST_BY_TYPE,
+                config=cc.CastByTypeConfig(
+                    from_type=pa.decimal256(76, 0),
+                    to_type=pa.decimal128(38, 0),
+                ),
+            ),
             # run our custom step to process traces into address appearances
             cc.Step(
                 kind=cc.StepKind.CUSTOM,
