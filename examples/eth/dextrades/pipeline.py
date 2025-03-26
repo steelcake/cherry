@@ -1,16 +1,23 @@
 """Pipeline configuration for DEX trades processing"""
 
 import os
+from pathlib import Path
 from typing import Any, Dict
 
 import polars as pl
 import pyarrow as pa
 from amount_usd import calculate_amount_usd
 from dexmetadata import fetch
+from dotenv import load_dotenv
 
 from cherry_etl import config as cc
 
-RPC_URL = os.getenv("RPC_URL", "https://ethereum-rpc.publicnode.com")
+# Load environment variables
+SCRIPT_DIR = Path(__file__).parent
+dotenv_path = SCRIPT_DIR / ".env"
+load_dotenv(dotenv_path=dotenv_path)
+
+RPC_URL = os.getenv("RPC_URL")
 
 
 # Data processing functions

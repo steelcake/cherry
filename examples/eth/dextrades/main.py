@@ -1,10 +1,11 @@
 """DEX trades data processing example using Delta Lake for storage"""
 
+import argparse
 import asyncio
-import logging
 import os
 import shutil
 from pathlib import Path
+from typing import Optional
 
 import cherry_core
 import polars as pl
@@ -18,24 +19,23 @@ from cherry_etl import run_pipeline
 
 # Configuration
 TABLE_NAME = "dex_trades"
-SCRIPT_DIR = Path.cwd()
-DELTA_PATH = str(SCRIPT_DIR / "data" / "deltalake")
-FROM_BLOCK = 18000000
-TO_BLOCK = FROM_BLOCK + 100
+SCRIPT_DIR = Path(__file__).parent
+DATA_PATH = str(Path.cwd() / "data" / "deltalake")
+DEFAULT_FROM_BLOCK = 18000000
+DEFAULT_TO_BLOCK = DEFAULT_FROM_BLOCK + 100
 
-# Setup
-load_dotenv()
+
+load_dotenv(dotenv_path=SCRIPT_DIR / ".env")
 
 pl.Config.set_tbl_cols(-1)
 
 # Create directories
-Path(DELTA_PATH).mkdir(parents=True, exist_ok=True)
+Path(DATA_PATH).mkdir(parents=True, exist_ok=True)
 
-# Provider URLs
-HYPERSYNC_PROVIDER_URL = os.environ.get("INDEXER_URL", "https://eth.hypersync.xyz")
-SQD_PROVIDER_URL = os.environ.get(
-    "INDEXER_URL", "https://portal.sqd.dev/datasets/ethereum-mainnet"
-)
+# Provider URLs from environment variables
+HYPERSYNC_PROVIDER_URL = os.getenv("HYPERSYNC_PROVIDER_URL")
+SQD_PROVIDER_URL = os.getenv("SQD_PROVIDER_URL")
+RPC_URL = os.getenv("RPC_URL")
 
 
 async def sync_data(
@@ -96,22 +96,23 @@ async def sync_data(
     await run_pipeline(pipeline_name=TABLE_NAME, pipeline=pipeline)
 
 
-async def main():
-    # Use Hypersync provider
-    provider_kind = ingest.ProviderKind.HYPERSYNC
-    provider_url = HYPERSYNC_PROVIDER_URL
-
+async def main(
+    provider_kind: ingest.ProviderKind,
+    provider_url: Optional[str],
+    from_block: int,
+    to_block: Optional[int],
+):
     # Clean up existing table before running
-    table_path = Path(f"{DELTA_PATH}/{TABLE_NAME}")
+    table_path = Path(f"{DATA_PATH}/{TABLE_NAME}")
     if table_path.exists():
         print(f"Removing existing table at {table_path}")
         shutil.rmtree(table_path)
 
     # Process data
-    await sync_data(DELTA_PATH, provider_kind, provider_url, FROM_BLOCK, TO_BLOCK)
+    await sync_data(DATA_PATH, provider_kind, provider_url, from_block, to_block)
 
     # Display results
-    table = DeltaTable(f"{DELTA_PATH}/{TABLE_NAME}").to_pyarrow_table()
+    table = DeltaTable(f"{DATA_PATH}/{TABLE_NAME}").to_pyarrow_table()
     df = pl.from_arrow(table)
     print(table.schema)
 
@@ -132,4 +133,34 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    parser = argparse.ArgumentParser(description="Dex trades")
+    parser.add_argument(
+        "--provider",
+        choices=["sqd", "hypersync"],
+        default="hypersync",
+        help="Specify the provider ('sqd' or 'hypersync', default: hypersync)",
+    )
+    parser.add_argument(
+        "--from_block",
+        type=int,
+        default=DEFAULT_FROM_BLOCK,
+        help=f"Specify the block to start from (default: {DEFAULT_FROM_BLOCK})",
+    )
+    parser.add_argument(
+        "--to_block",
+        type=int,
+        default=DEFAULT_TO_BLOCK,
+        help=f"Specify the block to stop at, inclusive (default: {DEFAULT_TO_BLOCK})",
+    )
+
+    args = parser.parse_args()
+
+    url = None
+    if args.provider == "hypersync":
+        provider_kind = ingest.ProviderKind.HYPERSYNC
+        url = HYPERSYNC_PROVIDER_URL
+    elif args.provider == "sqd":
+        provider_kind = ingest.ProviderKind.SQD
+        url = SQD_PROVIDER_URL
+
+    asyncio.run(main(provider_kind, url, args.from_block, args.to_block))

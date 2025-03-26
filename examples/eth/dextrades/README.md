@@ -13,6 +13,7 @@ Unlike [other](https://github.com/duneanalytics/spellbook/tree/main/dbt_subproje
 * uses a simple Python script that runs locally on your machine
 * doesnt require fancy [dbt pipelines](https://github.com/duneanalytics/spellbook/tree/main/dbt_subprojects/dex/models/trades) setup / datawarehouse infrastructure / [customized nodes](https://github.com/shadow-hq/shadow-reth)
 * is able to start streaming data without waiting for historical indexing to complete
+* wont cost you lots of 💸🤑
 
 ## Running the Example
 
