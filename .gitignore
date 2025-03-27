@@ -28,3 +28,6 @@ src/cherry*.egg-info/
 
 # ignore duckdb WAL file
 *.wal
+examples/eth/.DS_Store
+examples/.DS_Store
+.DS_Store
