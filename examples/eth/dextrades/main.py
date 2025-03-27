@@ -102,6 +102,13 @@ async def main(
     from_block: int,
     to_block: Optional[int],
 ):
+    # Ensure provider_url is not None
+    if provider_url is None:
+        raise ValueError("Provider URL cannot be None")
+
+    # Ensure to_block is not None, use from_block + 100 as default if it is
+    actual_to_block = to_block if to_block is not None else from_block + 100
+
     # Clean up existing table before running
     table_path = Path(f"{DATA_PATH}/{TABLE_NAME}")
     if table_path.exists():
@@ -109,11 +116,12 @@ async def main(
         shutil.rmtree(table_path)
 
     # Process data
-    await sync_data(DATA_PATH, provider_kind, provider_url, from_block, to_block)
+    await sync_data(DATA_PATH, provider_kind, provider_url, from_block, actual_to_block)
 
     # Display results
     table = DeltaTable(f"{DATA_PATH}/{TABLE_NAME}").to_pyarrow_table()
-    df = pl.from_arrow(table)
+    # Cast to DataFrame explicitly since we know it's a table
+    df = pl.DataFrame(pl.from_arrow(table))
     print(table.schema)
 
     print(
@@ -155,7 +163,10 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
+    # Initialize provider_kind at the top level to avoid the unbound error
+    provider_kind = ingest.ProviderKind.HYPERSYNC  # Default value
     url = None
+
     if args.provider == "hypersync":
         provider_kind = ingest.ProviderKind.HYPERSYNC
         url = HYPERSYNC_PROVIDER_URL

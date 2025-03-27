@@ -18,6 +18,8 @@ dotenv_path = SCRIPT_DIR / ".env"
 load_dotenv(dotenv_path=dotenv_path)
 
 RPC_URL = os.getenv("RPC_URL")
+if RPC_URL is None:
+    raise ValueError("RPC_URL environment variable is not set")
 
 
 # Data processing functions
@@ -53,6 +55,10 @@ def enrich_with_metadata(
     """Add token metadata for all pools"""
     # Get unique pool addresses
     pool_addresses = data["raw_joined"]["address"].unique().to_list()
+
+    # Ensure RPC_URL is set
+    if RPC_URL is None:
+        raise ValueError("RPC_URL environment variable is not set")
 
     # Fetch metadata with larger cache
     pools_list = fetch(
@@ -95,7 +101,7 @@ def format_dex_trades_table(
     """Format the final trades table according to the Dune schema"""
 
     return {
-        "dex_trades": data.get("dex_processed_with_prices").select(
+        "dex_trades": data["dex_processed_with_prices"].select(
             # Chain info
             blockchain=pl.lit(dex.blockchain),
             project=pl.lit(dex.project),
