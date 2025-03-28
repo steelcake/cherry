@@ -101,4 +101,22 @@ def test_hex_encode():
     for expected, name in zip(names, data.column("names").combine_chunks()):
         assert binascii.hexlify(expected.as_py()).decode("utf-8") == str(name)
 
-    return
+
+def test_u256_to_binary():
+    numbers = pa.array([1, 2], type=pa.decimal256(76, 0))
+    names = pa.array(["asd", "qwe"], type=pa.binary())
+
+    table = pa.Table.from_arrays([numbers, names], names=["numbers", "names"])
+
+    data = {"data": table}
+
+    data = cs.u256_to_binary.execute(
+        data,
+        cc.U256ToBinaryConfig(),
+    )
+
+    data = data["data"]
+
+    assert data.column("names").combine_chunks() == names
+
+    assert data.column("numbers").type == pa.binary()
