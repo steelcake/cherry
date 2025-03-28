@@ -33,6 +33,7 @@ class StepKind(str, Enum):
     HEX_ENCODE = "hex_encode"
     CAST_BY_TYPE = "cast_by_type"
     BASE58_ENCODE = "base58_encode"
+    U256_TO_BINARY = "u256_to_binary"
 
 
 @dataclass
@@ -138,6 +139,11 @@ class HexEncodeConfig:
 
 
 @dataclass
+class U256ToBinaryConfig:
+    tables: Optional[list[str]] = None
+
+
+@dataclass
 class Base58EncodeConfig:
     tables: Optional[list[str]] = None
 
@@ -164,6 +170,7 @@ class Step:
         | EvmDecodeEventsConfig
         | CastConfig
         | HexEncodeConfig
+        | U256ToBinaryConfig
         | CastByTypeConfig
         | Base58EncodeConfig
         | CustomStepConfig

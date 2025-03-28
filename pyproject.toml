@@ -28,8 +28,10 @@ dependencies = [
 dev = [
     "dotenv>=0.9.9",
     "pyright>=1.1.397",
+    "pytest>=8.3.5",
     "ruff>=0.9.7",
     "dexmetadata>=0.1.8",
+    "base58>=2.1.1",
 ]
 
 [build-system]

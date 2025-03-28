@@ -6,6 +6,7 @@ from . import (
     util,
     cast_by_type,
     base58_encode,
+    u256_to_binary,
 )
 
 __all__ = [
@@ -16,4 +17,5 @@ __all__ = [
     "util",
     "cast_by_type",
     "base58_encode",
+    "u256_to_binary",
 ]
