@@ -8,6 +8,10 @@ Cherry is a python library for building blockchain data pipelines.
 
 It is designed to make building production-ready blockchain data pipelines easy.
 
+## Getting Started
+
+See [getting started section](https://steelcake.github.io/cherry-docs/getting_started.html) of the docs.
+
 ## Features
 
 - Pure `python` library. Don't need yaml, SQL, toml etc. 
@@ -61,6 +65,7 @@ This repo uses `uv` for development.
 - Format the code with `uv run ruff format`
 - Lint the code with `uv run ruff check`
 - Run type checks with `uv run pyright`
+- Run the tests with `uv run pytest`
 
 Core libraries we use for ingesting/decoding/validating/transforming blockchain data are implemented in [cherry-core](https://github.com/steelcake/cherry-core) repo.
 
@@ -86,4 +91,5 @@ dual licensed as above, without any additional terms or conditions.
 [<img src="https://steelcake.com/envio-logo.png" width="150px" />](https://envio.dev)
 [<img src="https://steelcake.com/sqd-logo.png" width="165px" />](https://sqd.ai)
 [<img src="https://steelcake.com/space-operator-logo.webp" height="75px" />](https://linktr.ee/spaceoperator)
+
 
