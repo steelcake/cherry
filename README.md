@@ -1,8 +1,8 @@
-# Cherry
+# Introduction 
 
 [![PyPI](https://img.shields.io/badge/PyPI-lightgreen?style=for-the-badge&logo=pypi&labelColor=white)](https://pypi.org/project/cherry-etl/)
-[![Telegram](https://img.shields.io/badge/Telegram-darkgray?style=for-the-badge&logo=telegram)](https://t.me/cherryframework)
-[![Documentation](https://img.shields.io/badge/docs-blue?style=for-the-badge&logo=readthedocs)](https://steelcake.github.io/cherry-docs/)
+[![Telegram](https://img.shields.io/badge/Telegram-darkgray?style=for-the-badge&logo=telegram)](https://t.me/cherry_etl)
+[![Documentation](https://img.shields.io/badge/documentation-blue?style=for-the-badge&logo=readthedocs)](https://steelcake.github.io/cherry-docs/)
 
 Cherry is a python library for building blockchain data pipelines.
 
@@ -10,17 +10,16 @@ It is designed to make building production-ready blockchain data pipelines easy.
 
 ## Features
 
-- Don't need SQL or external config files. Only write `python`. Able to create `self-contained` python scripts and utilize the dynamic nature of python.
-- `High-performance` and `low-cost` proprietary data sources are available `without the downside of platform lock-in`. Just change two lines to switch between data providers.
-- Prebuilt functionality to `decode`, `validate`, `transform` blockchain data. All implemented in `rust` for performance. Including `UInt256`, `ethereum hex`, `solana base58` encoding/decoding functionality, and more.
-- Support for both `Ethereum (EVM)` and `Solana (SVM)` based blockchains. More to come.
-- Write data into `Clickhouse`, `Iceberg`, `Deltalake`, `DuckDB`, `Parquet` and any other supported platform. Can switch between writers without changing any other part of the pipeline.
-- `Schema inference`, don't need to manually create and manage database schemas, cherry figures out how it should create the tables so you don't have to.
+- Pure `python` library. Don't need yaml, SQL, toml etc. 
+- High-level `datasets` API and flexible pipeline API.
+- `High-performance`, `low-cost` and `uniform` data access. Ability to use advanced providers without platform lock-in.
+- Included functionality to `decode`, `validate`, `transform` blockchain data. All implemented in `rust` for performance. 
+- Write transformations using `polars`, `pyarrow`, `datafusion`, `pandas`, `duckdb` or any other `pyarrow` compatible library.
+- `Schema inference` automatically creates output tables. 
 - Keep datasets fresh with `continuous ingestion`.
-- `Fully parallelized and optimized architecture`. Next batch of data is being fetched while your pre-processing function is running, while the database writes are being executed in parallel. Don't need to hand optimize anything.
-- Write transformations in any `Arrow` compatible library, `polars`, `pandas`, `datafusion`, `duckdb` and so on.
-- Prebuilt library of transformations e.g. encode all binary columns to `ethereum prefixed-hex` format or `solana base58` format strings.
-- Prebuilt functionality to implement `crash-resistance`. Make your pipeline crash resistant so it doesn't lose data and starts from where it left off in case of a crash.
+- `Parallelized`, next batch of data is being fetched while your pre-processing function is running, while the database writes are being executed in parallel. Don't need to hand optimize anything.
+- Included library of transformations.
+- Included functionality to implement `crash-resistance`.
 
 ## Data providers
 
@@ -52,7 +51,7 @@ Set `RUST_LOG` environment variable according to [env_logger docs](https://docs.
 
 To run an example with trace level logging for rust modules:
 ```
-RUST_LOG=trace uv run examples/{example_name}/main.py --provider {sqd or hypersync}
+RUST_LOG=trace uv run examples/path/to/my/example
 ```
 
 ## Development
