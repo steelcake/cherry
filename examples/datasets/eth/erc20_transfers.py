@@ -15,7 +15,7 @@ from cherry_etl.pipeline import run_pipeline
 load_dotenv()
 
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO").upper())
-logger = logging.getLogger("examples.eth.all_contracts")
+logger = logging.getLogger("examples.eth.erc20_transfers")
 
 
 PROVIDER_URLS = {
@@ -46,10 +46,10 @@ async def sync_data(
     )
 
     # Create the pipeline using the all_contracts dataset
-    pipeline = datasets.evm.all_contracts(provider, writer, from_block, to_block)
+    pipeline = datasets.evm.erc20_transfers(provider, writer, from_block, to_block)
 
     # Run the pipeline
-    await run_pipeline(pipeline_name="all_contracts", pipeline=pipeline)
+    await run_pipeline(pipeline_name="erc20_transfers", pipeline=pipeline)
 
 
 async def main(
@@ -66,12 +66,12 @@ async def main(
     )
 
     # Optional: read result to show
-    data = connection.sql("SELECT * FROM contracts LIMIT 20")
+    data = connection.sql("SELECT * FROM erc20_transfers LIMIT 20")
     logger.info(data)
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="All contracts ever created")
+    parser = argparse.ArgumentParser(description="ERC20 transfers")
     parser.add_argument(
         "--provider",
         choices=["sqd", "hypersync"],
