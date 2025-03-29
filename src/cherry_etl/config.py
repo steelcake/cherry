@@ -8,7 +8,6 @@ from clickhouse_connect.driver.asyncclient import AsyncClient as ClickHouseClien
 from pyiceberg.catalog import Catalog as IcebergCatalog
 import deltalake
 import pyarrow as pa
-import pyarrow.compute as pa_compute
 import pyarrow.dataset as pa_dataset
 import pyarrow.fs as pa_fs
 import duckdb
@@ -129,7 +128,6 @@ class CastConfig:
     table_name: str
     mappings: Dict[str, pa.DataType]
     allow_cast_fail: bool = False
-    options: Optional[pa_compute.CastOptions] = None
 
 
 @dataclass
@@ -153,7 +151,6 @@ class CastByTypeConfig:
     from_type: pa.DataType
     to_type: pa.DataType
     allow_cast_fail: bool = False
-    options: Optional[pa_compute.CastOptions] = None
 
 
 @dataclass
