@@ -85,14 +85,15 @@ async def main(provider_kind: ingest.ProviderKind, url: Optional[str]):
             # Select the logs we are interested in
             logs=[
                 ingest.evm.LogRequest(
-                    address=[
-                        "0xdAC17F958D2ee523a2206206994597C13D831ec7",  # USDT
-                        "0xB8c77482e45F1F44dE1745F52C74426C631bDD52",  # BNB
-                        "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",  # USDC
-                        "0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84",  # stETH
-                        "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",  # Wrapped BTC
-                        "0x582d872A1B094FC48F5DE31D3B73F2D9bE47def1",  # Wrapped TON coin
-                    ],
+                    # Don't pass address filter to get all erc20 transfers
+                    # address=[
+                    #     "0xdAC17F958D2ee523a2206206994597C13D831ec7",  # USDT
+                    #     "0xB8c77482e45F1F44dE1745F52C74426C631bDD52",  # BNB
+                    #     "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",  # USDC
+                    #     "0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84",  # stETH
+                    #     "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",  # Wrapped BTC
+                    #     "0x582d872A1B094FC48F5DE31D3B73F2D9bE47def1",  # Wrapped TON coin
+                    # ],
                     topic0=[
                         evm_signature_to_topic0("Transfer(address,address,uint256)")
                     ],
@@ -135,6 +136,11 @@ async def main(provider_kind: ingest.ProviderKind, url: Optional[str]):
                 config=cc.EvmDecodeEventsConfig(
                     event_signature="Transfer(address indexed from, address indexed to, uint256 amount)",
                     output_table="transfers",
+                    # Write null if decoding fails instead of erroring out.
+                    #
+                    # This is needed if we are trying to decode all logs that match our topic0 without
+                    # filtering for contract address, because other events like NFT transfers also match our topic0
+                    allow_decode_fail=True,
                 ),
             ),
             # Cast all Decimal256 columns to Decimal128, we have to do this because polars doesn't support decimal256
@@ -143,6 +149,9 @@ async def main(provider_kind: ingest.ProviderKind, url: Optional[str]):
                 config=cc.CastByTypeConfig(
                     from_type=pa.decimal256(76, 0),
                     to_type=pa.decimal128(38, 0),
+                    # Allow invalid casts, some values might not fit in decimal128
+                    # better way of doing this would be to explicitly write null for values that didn't fit
+                    safe=False,
                 ),
             ),
             cc.Step(
