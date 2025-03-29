@@ -149,9 +149,8 @@ async def main(provider_kind: ingest.ProviderKind, url: Optional[str]):
                 config=cc.CastByTypeConfig(
                     from_type=pa.decimal256(76, 0),
                     to_type=pa.decimal128(38, 0),
-                    # Allow invalid casts, some values might not fit in decimal128
-                    # better way of doing this would be to explicitly write null for values that didn't fit
-                    safe=False,
+                    # Write null if the value doesn't fit in decimal128,
+                    allow_cast_fail=True,
                 ),
             ),
             cc.Step(

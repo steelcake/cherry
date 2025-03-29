@@ -128,7 +128,7 @@ class EvmDecodeEventsConfig:
 class CastConfig:
     table_name: str
     mappings: Dict[str, pa.DataType]
-    safe: Optional[bool] = None
+    allow_cast_fail: bool = False
     options: Optional[pa_compute.CastOptions] = None
 
 
@@ -152,7 +152,7 @@ class Base58EncodeConfig:
 class CastByTypeConfig:
     from_type: pa.DataType
     to_type: pa.DataType
-    safe: Optional[bool] = None
+    allow_cast_fail: bool = False
     options: Optional[pa_compute.CastOptions] = None
 
 
