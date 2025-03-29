@@ -16,7 +16,7 @@ import duckdb
 
 load_dotenv()
 
-logging.basicConfig(level=os.environ.get("LOGLEVEL", "DEBUG").upper())
+logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO").upper())
 logger = logging.getLogger(__name__)
 
 if not os.path.exists("data"):
@@ -55,11 +55,22 @@ def join_data(data: Dict[str, polars.DataFrame], _: Any) -> Dict[str, polars.Dat
     return {"transfers": out}
 
 
+async def print_last_processed_transfers(db: duckdb.DuckDBPyConnection):
+    while True:
+        await asyncio.sleep(5)
+
+        data = db.sql(
+            'SELECT block_number, transaction_hash, "from", "to", amount FROM transfers ORDER BY block_number, log_index DESC LIMIT 10'
+        )
+        logger.info("printing last 10 transfers:")
+        logger.info(data)
+
+
 async def main(provider_kind: ingest.ProviderKind, url: Optional[str]):
     # Start duckdb
-    connection = duckdb.connect(database=db_path)
+    connection = duckdb.connect(database=db_path).cursor()
 
-    from_block = get_start_block(connection)
+    from_block = get_start_block(connection.cursor())
     logger.info(f"starting to ingest from block {from_block}")
 
     provider = ingest.ProviderConfig(
@@ -94,6 +105,7 @@ async def main(provider_kind: ingest.ProviderKind, url: Optional[str]):
                 block=ingest.evm.BlockFields(number=True, timestamp=True),
                 log=ingest.evm.LogFields(
                     block_number=True,
+                    transaction_hash=True,
                     log_index=True,
                     address=True,
                     topic0=True,
@@ -155,6 +167,8 @@ async def main(provider_kind: ingest.ProviderKind, url: Optional[str]):
             ),
         ],
     )
+
+    asyncio.create_task(print_last_processed_transfers(connection.cursor()))
 
     await run_pipeline(pipeline=pipeline)
 
