@@ -13,8 +13,28 @@ TABLE_NAME = "erc20_transfers"
 
 
 def process_data(data: Dict[str, pl.DataFrame], _: Any) -> Dict[str, pl.DataFrame]:
-    logger.info(data.keys())
-    out = data["transactions"]
+    transactions = data["transactions"]
+    logs = data["logs"]
+
+    # Join transactions and logs on transaction_hash
+    joined = logs.join(
+        transactions, left_on="transaction_hash", right_on="hash", how="inner"
+    )
+
+    # Select and rename columns for the new table
+    out = joined.select(
+        [
+            pl.col("block_number"),
+            pl.col("block_hash"),
+            pl.col("transaction_index"),
+            pl.col("log_index"),
+            pl.col("transaction_hash"),
+            pl.col("address").alias("erc20"),
+            pl.col("from").alias("from_address"),
+            pl.col("to").alias("to_address"),
+            pl.col("value"),
+        ]
+    )
 
     return {"erc20_transfers": out}
 
@@ -38,13 +58,23 @@ def make_pipeline(
             logs=[
                 ingest.evm.LogRequest(
                     topic0=[
+                        # ERC20 transfer event signature hash - Transfer(address,address,uint256)
                         "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
                     ]
                 )
             ],
             fields=ingest.evm.Fields(
+                log=ingest.evm.LogFields(
+                    transaction_hash=True, log_index=True, address=True
+                ),
                 transaction=ingest.evm.TransactionFields(
-                    hash=True, from_=True, value=True
+                    hash=True,
+                    from_=True,
+                    to=True,
+                    value=True,
+                    block_number=True,
+                    block_hash=True,
+                    transaction_index=True,
                 ),
             ),
         ),
