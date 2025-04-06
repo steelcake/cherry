@@ -1,20 +1,28 @@
+import argparse
+import asyncio
 import logging
+import os
 from typing import Any, Dict, Optional
 
-import asyncio
-import argparse
+import duckdb
 import polars as pl
 import pyarrow as pa
 from cherry_core import ingest
 from dotenv import load_dotenv
-import duckdb
 
 from cherry_etl import config as cc
+from cherry_etl.pipeline import run_pipeline
 
 load_dotenv()
 
+logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO").upper())
+logger = logging.getLogger("examples.eth.reddit_deployer")
 
-logger = logging.getLogger(__name__)
+
+PROVIDER_URLS = {
+    ingest.ProviderKind.HYPERSYNC: "https://polygon.hypersync.xyz",
+    ingest.ProviderKind.SQD: "https://portal.sqd.dev/datasets/polygon-mainnet",
+}
 
 
 TABLE_NAME = "reddit_deployer_contracts"
@@ -23,21 +31,27 @@ CONTRACT_ADDRESS = "0x36FB3886CF3Fc4E44d8b99D9a8520425239618C2"
 
 
 def process_data(data: Dict[str, pl.DataFrame], _: Any) -> Dict[str, pl.DataFrame]:
-    out = data["traces"]
+    traces = data["traces"]
 
-    return {"reddit_deployer_contracts": out}
+    deployed_contracts = traces.filter(pl.col("address").is_not_null())
+
+    return {"deployed_contracts": deployed_contracts}
 
 
-async def main(provider_kind: ingest.ProviderKind, url: Optional[str]):
+async def main(
+    provider_kind: ingest.ProviderKind,
+    provider_url: Optional[str],
+    from_block: int,
+    to_block: Optional[int],
+):
     # Start duckdb
-    connection = duckdb.connect(database=db_path).cursor()
+    connection = duckdb.connect().cursor()
 
-    from_block = get_start_block(connection.cursor())
     logger.info(f"starting to ingest from block {from_block}")
 
     provider = ingest.ProviderConfig(
         kind=provider_kind,
-        url=url,
+        url=provider_url,
     )
 
     query = ingest.Query(
@@ -46,12 +60,16 @@ async def main(provider_kind: ingest.ProviderKind, url: Optional[str]):
             from_block=from_block,
             to_block=to_block,
             include_all_blocks=True,
-            transactions=[ingest.evm.TransactionRequest(from_=CONTRACT_ADDRESS)],
-            traces=[ingest.evm.TraceRequest(type_=["create"])],
+            transactions=[
+                ingest.evm.TransactionRequest(
+                    from_=[CONTRACT_ADDRESS], include_traces=True
+                )
+            ],
             fields=ingest.evm.Fields(
                 trace=ingest.evm.TraceFields(
-                    address=True, block_number=True, transaction_hash=True
-                )
+                    address=True,
+                    block_number=True,
+                ),
             ),
         ),
     )
@@ -89,26 +107,31 @@ async def main(provider_kind: ingest.ProviderKind, url: Optional[str]):
         ],
     )
 
-    await run_pipeline(pipeline=pipeline)
+    await run_pipeline(pipeline=pipeline, pipeline_name="reddit deployer")
+
+    data = connection.sql("SELECT * FROM deployed_contracts")
+    logger.info(data)
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Reddit deployer contract")
-
+    parser = argparse.ArgumentParser(description="Reddit contract deployer")
     parser.add_argument(
-        "--provider",
-        choices=["sqd", "hypersync"],
+        "--from_block",
         required=True,
-        help="Specify the provider ('sqd' or 'hypersync')",
+        help="Specify the block to start from",
+    )
+    parser.add_argument(
+        "--to_block",
+        required=False,
+        help="Specify the block to stop at, inclusive",
     )
 
     args = parser.parse_args()
 
-    url = None
+    provider = "sqd"
+    url = PROVIDER_URLS[provider]
 
-    if args.provider == ingest.ProviderKind.HYPERSYNC:
-        url = "https://polygon.hypersync.xyz"
-    elif args.provider == ingest.ProviderKind.SQD:
-        url = "https://portal.sqd.dev/datasets/polygon-mainnet"
+    from_block = int(args.from_block)
+    to_block = int(args.to_block) if args.to_block is not None else None
 
-    asyncio.run(main(args.provider, url))
+    asyncio.run(main(provider, url, from_block, to_block))
