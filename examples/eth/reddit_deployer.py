@@ -128,7 +128,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    provider = "sqd"
+    provider = ingest.ProviderKind.SQD
     url = PROVIDER_URLS[provider]
 
     from_block = int(args.from_block)
