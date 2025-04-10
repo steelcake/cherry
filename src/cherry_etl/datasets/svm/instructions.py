@@ -6,12 +6,16 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 def process_data(data: Dict[str, pl.DataFrame], _: Any) -> Dict[str, pl.DataFrame]:
     df = data["instructions"]
-    
-    processed_df = df.filter(pl.col("program_id") == 'JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4')
+
+    processed_df = df.filter(
+        pl.col("program_id") == "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4"
+    )
 
     return {"instructions": processed_df}
+
 
 def make_pipeline(
     provider: ingest.ProviderConfig,
@@ -60,11 +64,7 @@ def make_pipeline(
         query=query,
         writer=writer,
         steps=[
-            cc.Step(
-                kind=cc.StepKind.BASE58_ENCODE,
-                config=cc.Base58EncodeConfig(
-                )
-            ),
+            cc.Step(kind=cc.StepKind.BASE58_ENCODE, config=cc.Base58EncodeConfig()),
             cc.Step(
                 kind=cc.StepKind.CUSTOM,
                 config=cc.CustomStepConfig(

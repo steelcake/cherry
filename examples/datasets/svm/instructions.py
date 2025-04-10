@@ -15,6 +15,7 @@ from cherry_etl.pipeline import run_pipeline
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO").upper())
 logger = logging.getLogger("examples.svm.instructions")
 
+
 async def sync_data(
     connection: duckdb.DuckDBPyConnection,
     provider_kind: ingest.ProviderKind,
@@ -29,7 +30,6 @@ async def sync_data(
         logger.info(f"starting to ingest from block {from_block}")
     else:
         logger.info(f"starting to ingest from block {from_block} to {to_block}")
-
 
     provider = ingest.ProviderConfig(
         kind=provider_kind,
@@ -68,7 +68,7 @@ async def main(
     data = connection.sql("SELECT * FROM instructions LIMIT 20")
     data.write_parquet("out.parquet")
     logger.info(f"\n{data}")
-    
+
     # Close the connection properly
     connection.close()
 
