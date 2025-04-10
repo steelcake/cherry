@@ -10,6 +10,9 @@ from cherry_core import ingest
 from cherry_etl import config as cc
 from cherry_etl import datasets
 from cherry_etl.pipeline import run_pipeline
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO").upper())
@@ -65,8 +68,8 @@ async def main(
     )
 
     # Optional: read result to show
-    data = connection.sql("SELECT * FROM instructions LIMIT 20")
-    data.write_parquet("out.parquet")
+    data = connection.sql("SELECT * FROM decoded_instructions LIMIT 20")
+    data.write_parquet("decoded_instructions_out.parquet")
     logger.info(f"\n{data}")
 
     # Close the connection properly
