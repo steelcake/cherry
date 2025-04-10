@@ -4,6 +4,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Callable
 
 from cherry_core.ingest import ProviderConfig, Query
+from cherry_core.svm_decode import InstructionSignature
 from clickhouse_connect.driver.asyncclient import AsyncClient as ClickHouseClient
 from pyiceberg.catalog import Catalog as IcebergCatalog
 import deltalake
@@ -33,7 +34,7 @@ class StepKind(str, Enum):
     CAST_BY_TYPE = "cast_by_type"
     BASE58_ENCODE = "base58_encode"
     U256_TO_BINARY = "u256_to_binary"
-
+    SVM_DECODE_INSTRUCTIONS = "svm_decode_instructions"
 
 @dataclass
 class IcebergWriterConfig:
@@ -122,6 +123,14 @@ class EvmDecodeEventsConfig:
     output_table: str = "decoded_logs"
     hstack: bool = True
 
+@ dataclass
+class SvmDecodeInstructionsConfig:
+    instruction_signature: InstructionSignature
+    allow_decode_fail: bool = False
+    input_table: str = "instructions"
+    output_table: str = "decoded_instructions"
+    hstack: bool = True
+
 
 @dataclass
 class CastConfig:
@@ -170,6 +179,7 @@ class Step:
         | U256ToBinaryConfig
         | CastByTypeConfig
         | Base58EncodeConfig
+        | SvmDecodeInstructionsConfig
         | CustomStepConfig
     )
     name: Optional[str] = None
