@@ -91,7 +91,8 @@ async def main(
 
                 di.block_slot AS block_slot,
                 di.transaction_index AS transaction_index,
-                di.instruction_address AS instruction_address
+                di.instruction_address AS instruction_address,
+                di.timestamp AS block_timestamp
             FROM decoded_instructions di
             LEFT JOIN solana_amm sa ON di.amm = sa.amm_address
             LEFT JOIN solana_tokens it ON di.inputmint = it.token_address
@@ -122,7 +123,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    url = "https://portal.sqd.dev/datasets/solana-mainnet"
+    url = "https://portal.sqd.dev/datasets/solana-beta"
 
     from_block = int(args.from_block)
     to_block = int(args.to_block) if args.to_block is not None else None
