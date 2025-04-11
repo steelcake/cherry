@@ -59,6 +59,7 @@ def make_pipeline(
                     has_dropped_log_messages=True,
                 ),
             ),
+            instructions=[ingest.svm.InstructionRequest()]
         ),
     )
 
