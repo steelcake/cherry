@@ -68,8 +68,7 @@ async def main(
     )
 
     # Optional: read result to show
-    data = connection.sql("SELECT * FROM decoded_instructions LIMIT 20")
-    data.write_parquet("decoded_instructions_out.parquet")
+    data = connection.sql("SELECT * FROM decoded_instructions LIMIT  3")
     logger.info(f"\n{data}")
 
     # Close the connection properly

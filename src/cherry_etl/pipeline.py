@@ -13,6 +13,7 @@ from .config import (
     StepKind,
     U256ToBinaryConfig,
     SvmDecodeInstructionsConfig,
+    JoinBlockDataConfig,
 )
 from typing import Dict, List, Optional
 from cherry_core.ingest import start_stream
@@ -71,6 +72,9 @@ async def process_steps(
                 step.config.runner, pl_data, step.config.context
             )
             data = pl_data_to_pyarrow(pl_data)
+        elif step.kind == StepKind.JOIN_BLOCK_DATA:
+            assert isinstance(step.config, JoinBlockDataConfig)
+            data = step_def.join_block_data.execute(data, step.config)
         else:
             raise Exception(f"Unknown step kind: {step.kind}")
 

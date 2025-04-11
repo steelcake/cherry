@@ -35,6 +35,8 @@ class StepKind(str, Enum):
     BASE58_ENCODE = "base58_encode"
     U256_TO_BINARY = "u256_to_binary"
     SVM_DECODE_INSTRUCTIONS = "svm_decode_instructions"
+    JOIN_BLOCK_DATA = "join_block_data"
+
 
 @dataclass
 class IcebergWriterConfig:
@@ -108,6 +110,13 @@ class Writer:
 
 
 @dataclass
+class JoinBlockDataConfig:
+    tables: Optional[list[str]] = None
+    join_left_on: Optional[str] = "block_hash"
+    join_blocks_on: Optional[str] = "hash"
+
+
+@dataclass
 class EvmValidateBlockDataConfig:
     blocks: str = "blocks"
     transactions: str = "transactions"
@@ -123,7 +132,8 @@ class EvmDecodeEventsConfig:
     output_table: str = "decoded_logs"
     hstack: bool = True
 
-@ dataclass
+
+@dataclass
 class SvmDecodeInstructionsConfig:
     instruction_signature: InstructionSignature
     allow_decode_fail: bool = False
@@ -181,6 +191,7 @@ class Step:
         | Base58EncodeConfig
         | SvmDecodeInstructionsConfig
         | CustomStepConfig
+        | JoinBlockDataConfig
     )
     name: Optional[str] = None
 
