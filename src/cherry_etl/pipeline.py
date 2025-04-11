@@ -12,6 +12,7 @@ from .config import (
     Step,
     StepKind,
     U256ToBinaryConfig,
+    SvmDecodeInstructionsConfig,
 )
 from typing import Dict, List, Optional
 from cherry_core.ingest import start_stream
@@ -43,6 +44,9 @@ async def process_steps(
         elif step.kind == StepKind.EVM_DECODE_EVENTS:
             assert isinstance(step.config, EvmDecodeEventsConfig)
             data = step_def.evm_decode_events.execute(data, step.config)
+        elif step.kind == StepKind.SVM_DECODE_INSTRUCTIONS:
+            assert isinstance(step.config, SvmDecodeInstructionsConfig)
+            data = step_def.svm_decode_instructions.execute(data, step.config)
         elif step.kind == StepKind.CAST:
             assert isinstance(step.config, CastConfig)
             data = step_def.cast.execute(data, step.config)
