@@ -1,7 +1,7 @@
 from typing import Dict
 from copy import deepcopy
 
-from cherry_core import svm_decode_instructions
+from cherry_core import svm_decode_instructions, instruction_signature_to_arrow_schema
 from ..config import SvmDecodeInstructionsConfig
 import pyarrow as pa
 
@@ -17,16 +17,15 @@ def execute(
     output_batches = []
 
     for batch in input_batches:
-        batch = svm_decode_instructions(config.instruction_signature, batch, config.allow_decode_fail)
         output_batches.append(
-            # svm_decode_instructions(config.instruction_signature, batch, config.allow_decode_fail)
-            batch
+            svm_decode_instructions(
+                config.instruction_signature, batch, config.allow_decode_fail
+            )
         )
 
     output_table = pa.Table.from_batches(
         output_batches,
-        # Hacking with the schema from the last batch
-        schema=batch.schema,
+        schema=instruction_signature_to_arrow_schema(config.instruction_signature),
     )
 
     if config.hstack:

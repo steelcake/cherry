@@ -8,6 +8,7 @@ from . import (
     base58_encode,
     u256_to_binary,
     svm_decode_instructions,
+    join_block_data,
 )
 
 __all__ = [
@@ -20,4 +21,5 @@ __all__ = [
     "base58_encode",
     "u256_to_binary",
     "svm_decode_instructions",
+    "join_block_data",
 ]
