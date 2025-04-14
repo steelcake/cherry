@@ -20,7 +20,7 @@ from cherry_core.ingest import start_stream
 import pyarrow as pa
 from .writers.writer import create_writer
 from . import steps as step_def
-import polars as pl
+from . import utils
 from copy import deepcopy
 
 logger = logging.getLogger(__name__)
@@ -67,11 +67,11 @@ async def process_steps(
             data = step_def.cast_by_type.execute(data, step.config)
         elif step.kind == StepKind.CUSTOM:
             assert isinstance(step.config, CustomStepConfig)
-            pl_data = pyarrow_data_to_pl(data)
+            pl_data = utils.pyarrow_data_to_pl(data)
             pl_data = await asyncio.to_thread(
                 step.config.runner, pl_data, step.config.context
             )
-            data = pl_data_to_pyarrow(pl_data)
+            data = utils.pl_data_to_pyarrow(pl_data)
         elif step.kind == StepKind.JOIN_BLOCK_DATA:
             assert isinstance(step.config, JoinBlockDataConfig)
             data = step_def.join_block_data.execute(data, step.config)
@@ -79,38 +79,6 @@ async def process_steps(
             raise Exception(f"Unknown step kind: {step.kind}")
 
     return data
-
-
-def pyarrow_data_to_pl(data: Dict[str, pa.Table]) -> Dict[str, pl.DataFrame]:
-    new_data = {}
-
-    for table_name, table_data in data.items():
-        new_data[table_name] = pl.from_arrow(table_data)
-
-    return new_data
-
-
-def pl_data_to_pyarrow(data: Dict[str, pl.DataFrame]) -> Dict[str, pa.Table]:
-    new_data = {}
-
-    for table_name, table_data in data.items():
-        new_data[table_name] = pyarrow_large_binary_to_binary(table_data.to_arrow())
-
-    return new_data
-
-
-def pyarrow_large_binary_to_binary(table: pa.Table) -> pa.Table:
-    columns = []
-    for column in table.columns:
-        if column.type == pa.large_binary():
-            columns.append(column.cast(pa.binary(), safe=True))
-        elif column.type == pa.large_string():
-            columns.append(column.cast(pa.string(), safe=True))
-        else:
-            columns.append(column)
-
-    return pa.Table.from_arrays(columns, names=table.column_names)
-
 
 async def run_pipeline(pipeline: Pipeline, pipeline_name: Optional[str] = None):
     logger.info(f"Running pipeline: {pipeline_name}")
@@ -120,6 +88,7 @@ async def run_pipeline(pipeline: Pipeline, pipeline_name: Optional[str] = None):
     writer = create_writer(pipeline.writer)
 
     while True:
+        logger.info("Waiting for data")
         data = await stream.next()
         if data is None:
             break

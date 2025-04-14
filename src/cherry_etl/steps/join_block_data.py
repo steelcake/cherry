@@ -2,6 +2,8 @@ from typing import Dict
 from copy import deepcopy
 
 from cherry_core import svm_decode_instructions, instruction_signature_to_arrow_schema
+
+from .. import utils
 from ..config import SvmDecodeInstructionsConfig
 import pyarrow as pa
 import polars as pl
@@ -16,6 +18,7 @@ def execute(
 
     blocks_df = pl.from_arrow(data["blocks"])
 
+    joined_data = {}
     for table_name in table_names:
         if table_name == "blocks":
             continue
@@ -27,6 +30,8 @@ def execute(
             right_on=config.join_blocks_on,
             how="left",
         )
-        data[table_name] = joined_df.to_arrow()
+        joined_data[table_name] = joined_df
+
+    data = utils.pl_data_to_pyarrow(joined_data)
 
     return data
