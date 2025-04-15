@@ -12,7 +12,6 @@ def execute(
     data: Dict[str, pa.Table], config: JoinBlockDataConfig
 ) -> Dict[str, pa.Table]:
     data = deepcopy(data)
-    print(data.keys())
     table_names = data.keys() if config.tables is None else config.tables
 
     blocks_df: DataFrame = pl.DataFrame(pl.from_arrow(data["blocks"]))
