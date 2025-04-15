@@ -4,23 +4,31 @@ from typing import Dict
 
 
 def pyarrow_data_to_pl(data: Dict[str, pa.Table]) -> Dict[str, pl.DataFrame]:
-    """Convert a dictionary of pyarrow Tables to polars DataFrames."""
-    return {k: pl.from_arrow(v) for k, v in data.items()}
+    new_data = {}
+
+    for table_name, table_data in data.items():
+        new_data[table_name] = pl.from_arrow(table_data)
+
+    return new_data
 
 
 def pl_data_to_pyarrow(data: Dict[str, pl.DataFrame]) -> Dict[str, pa.Table]:
-    """Convert a dictionary of polars DataFrames to pyarrow Tables."""
-    return {k: v.to_arrow() for k, v in data.items()}
+    new_data = {}
+
+    for table_name, table_data in data.items():
+        new_data[table_name] = pyarrow_large_binary_to_binary(table_data.to_arrow())
+
+    return new_data
 
 
 def pyarrow_large_binary_to_binary(table: pa.Table) -> pa.Table:
-    """Convert large binary columns to binary columns in a pyarrow Table."""
-    schema = table.schema
-    new_fields = []
-    for field in schema:
-        if field.type == pa.large_binary():
-            new_fields.append(pa.field(field.name, pa.binary()))
+    columns = []
+    for column in table.columns:
+        if column.type == pa.large_binary():
+            columns.append(column.cast(pa.binary(), safe=True))
+        elif column.type == pa.large_string():
+            columns.append(column.cast(pa.string(), safe=True))
         else:
-            new_fields.append(field)
-    new_schema = pa.schema(new_fields)
-    return table.cast(new_schema) 
+            columns.append(column)
+
+    return pa.Table.from_arrays(columns, names=table.column_names)
