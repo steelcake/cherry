@@ -65,8 +65,12 @@ async def main(
     )
 
     # DB Operations - Create tables
-    connection.sql("CREATE OR REPLACE TABLE solana_amm AS SELECT * FROM read_csv('examples/database/jup_swaps/solana_amm.csv');")
-    connection.sql("CREATE OR REPLACE TABLE solana_tokens AS SELECT * FROM read_csv('examples/database/jup_swaps/solana_tokens.csv');")
+    connection.sql(
+        "CREATE OR REPLACE TABLE solana_amm AS SELECT * FROM read_csv('examples/database/jup_swaps/solana_amm.csv');"
+    )
+    connection.sql(
+        "CREATE OR REPLACE TABLE solana_tokens AS SELECT * FROM read_csv('examples/database/jup_swaps/solana_tokens.csv');"
+    )
     # DB Operations - Data Transformation
     connection.sql("""
         CREATE OR REPLACE TABLE jup_swaps AS            
@@ -123,9 +127,10 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    url = "https://portal.sqd.dev/datasets/solana-beta"
+    provider_kind = ingest.ProviderKind.SQD
+    provider_url = "https://portal.sqd.dev/datasets/solana-mainnet"
 
     from_block = int(args.from_block)
     to_block = int(args.to_block) if args.to_block is not None else None
 
-    asyncio.run(main("sqd", url, from_block, to_block))
+    asyncio.run(main(provider_kind, provider_url, from_block, to_block))
