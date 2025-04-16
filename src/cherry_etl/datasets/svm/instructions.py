@@ -14,9 +14,6 @@ def process_data(data: Dict[str, pl.DataFrame], _: Any) -> Dict[str, pl.DataFram
 
     processed_df = df.filter(
         pl.col("data").bin.starts_with(base58.b58decode("VBuTFX8Ey5wmpzJ9WerNBK"))
-        & pl.col("program_id").bin.starts_with(
-            base58.b58decode("JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4")
-        )
     )
     data["instructions"] = processed_df
 
@@ -66,7 +63,10 @@ def make_pipeline(
                     timestamp=True,
                 ),
             ),
-            instructions=[ingest.svm.InstructionRequest()],
+            instructions=[ingest.svm.InstructionRequest(
+                program_id=["JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4"],
+                d8=["fBXSauZxba4"]
+            )],
         ),
     )
 
