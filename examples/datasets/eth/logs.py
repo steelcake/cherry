@@ -2,6 +2,8 @@ import argparse
 import asyncio
 import logging
 import os
+import requests
+
 from typing import Optional
 
 import duckdb
@@ -58,6 +60,13 @@ async def main(
     from_block: int,
     to_block: Optional[int],
 ):
+    
+    url = "https://github.com/yulesa/glaciers/raw/refs/heads/master/ABIs/ethereum__events__abis.parquet"
+    response = requests.get(url)
+
+    with open("ethereum__events__abis.parquet", "wb") as file:
+        file.write(response.content)
+
     connection = duckdb.connect()
 
     # sync the data into duckdb
