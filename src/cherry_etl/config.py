@@ -4,6 +4,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Callable
 
 from cherry_core.ingest import ProviderConfig, Query
+from cherry_core.svm_decode import InstructionSignature
 from clickhouse_connect.driver.asyncclient import AsyncClient as ClickHouseClient
 from pyiceberg.catalog import Catalog as IcebergCatalog
 import deltalake
@@ -33,6 +34,8 @@ class StepKind(str, Enum):
     CAST_BY_TYPE = "cast_by_type"
     BASE58_ENCODE = "base58_encode"
     U256_TO_BINARY = "u256_to_binary"
+    SVM_DECODE_INSTRUCTIONS = "svm_decode_instructions"
+    JOIN_BLOCK_DATA = "join_block_data"
 
 
 @dataclass
@@ -107,6 +110,13 @@ class Writer:
 
 
 @dataclass
+class JoinBlockDataConfig:
+    tables: Optional[list[str]] = None
+    join_left_on: Optional[str] = "block_hash"
+    join_blocks_on: Optional[str] = "hash"
+
+
+@dataclass
 class EvmValidateBlockDataConfig:
     blocks: str = "blocks"
     transactions: str = "transactions"
@@ -120,6 +130,15 @@ class EvmDecodeEventsConfig:
     allow_decode_fail: bool = False
     input_table: str = "logs"
     output_table: str = "decoded_logs"
+    hstack: bool = True
+
+
+@dataclass
+class SvmDecodeInstructionsConfig:
+    instruction_signature: InstructionSignature
+    allow_decode_fail: bool = False
+    input_table: str = "instructions"
+    output_table: str = "decoded_instructions"
     hstack: bool = True
 
 
@@ -170,7 +189,9 @@ class Step:
         | U256ToBinaryConfig
         | CastByTypeConfig
         | Base58EncodeConfig
+        | SvmDecodeInstructionsConfig
         | CustomStepConfig
+        | JoinBlockDataConfig
     )
     name: Optional[str] = None
 
