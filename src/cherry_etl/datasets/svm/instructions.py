@@ -1,10 +1,9 @@
-from typing import Any, Dict, Optional, Union
+from typing import Dict, Optional, Union
 from cherry_core import ingest
 from cherry_core.svm_decode import InstructionSignature
 from cherry_etl import config as cc
 import polars as pl
 import logging
-import base58
 
 logger = logging.getLogger(__name__)
 

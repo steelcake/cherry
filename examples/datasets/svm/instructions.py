@@ -121,6 +121,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
+    # Hardcoded values while there is only one provider
     provider_kind = ingest.ProviderKind.SQD
     provider_url = "https://portal.sqd.dev/datasets/solana-mainnet"
 
