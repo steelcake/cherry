@@ -10,14 +10,15 @@ from cherry_etl import config as cc
 
 logger = logging.getLogger(__name__)
 
+
 def process_data(data: Dict[str, pl.DataFrame], _: Any) -> Dict[str, pl.DataFrame]:
     logs_df = data["logs"]
-    abi_db_path = "examples/datasets/eth/ethereum__events__abis.parquet"
+    abi_db_path = "ethereum__events__abis.parquet"
     decoder_type = "log"
 
     # gl.set_config(field="decoder.output_hex_string_encoding", value=True)
     decoded_df = gl.decode_df(decoder_type, logs_df, abi_db_path)
-    data["decoded_logs"] = decoded_df
+    data["decoded_logs"] = pl.DataFrame(decoded_df)
 
     return data
 
@@ -36,13 +37,13 @@ def make_pipeline(
         params=ingest.evm.Query(
             from_block=from_block,
             to_block=to_block,
-            include_all_blocks=False,
+            include_all_blocks=True,
             fields=ingest.evm.Fields(
                 block=ingest.evm.BlockFields(
                     hash=True,
                     timestamp=True,
                 ),
-                log= ingest.evm.LogFields(
+                log=ingest.evm.LogFields(
                     address=True,
                     data=True,
                     topic0=True,
@@ -66,9 +67,7 @@ def make_pipeline(
                 ),
             ),
             logs=[ingest.evm.LogRequest()],
-            transactions=[ingest.evm.TransactionRequest(
-                from_=['0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045']
-            )],
+            transactions=[ingest.evm.TransactionRequest()],
         ),
     )
 

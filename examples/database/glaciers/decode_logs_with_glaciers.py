@@ -60,14 +60,16 @@ async def main(
     from_block: int,
     to_block: Optional[int],
 ):
-    
     url = "https://github.com/yulesa/glaciers/raw/refs/heads/master/ABIs/ethereum__events__abis.parquet"
-    response = requests.get(url)
 
-    with open("ethereum__events__abis.parquet", "wb") as file:
-        file.write(response.content)
+    if not os.path.exists("examples/database/glaciers/ethereum__events__abis.parquet"):
+        response = requests.get(url)
+        with open(
+            "examples/database/glaciers/ethereum__events__abis.parquet", "wb"
+        ) as file:
+            file.write(response.content)
 
-    connection = duckdb.connect()
+    connection = duckdb.connect("examples/database/glaciers/glaciers_decoded_logs.db")
 
     # sync the data into duckdb
     await sync_data(
@@ -75,8 +77,9 @@ async def main(
     )
 
     # Optional: read result to show
-    data = connection.sql("SELECT * FROM decoded_logs")
-    data.write_parquet("logs.parquet")
+    data = connection.sql(
+        "SELECT name, FIRST(event_values), FIRST(event_keys), FIRST(event_json), FIRST(transaction_hash), COUNT(*) AS evt_count FROM decoded_logs GROUP BY name ORDER BY evt_count DESC"
+    )
     logger.info(f"\n{data}")
 
 
