@@ -63,10 +63,12 @@ def make_pipeline(
                     timestamp=True,
                 ),
             ),
-            instructions=[ingest.svm.InstructionRequest(
-                program_id=["JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4"],
-                d8=["fBXSauZxba4"]
-            )],
+            instructions=[
+                ingest.svm.InstructionRequest(
+                    program_id=["JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4"],
+                    d8=["fBXSauZxba4"],
+                )
+            ],
         ),
     )
 
