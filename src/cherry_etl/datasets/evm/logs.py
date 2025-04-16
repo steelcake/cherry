@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 def process_data(data: Dict[str, pl.DataFrame], _: Any) -> Dict[str, pl.DataFrame]:
     logs_df = data["logs"]
-    abi_db_path = "ethereum__events__abis.parquet"
+    abi_db_path = "examples/database/glaciers/ethereum__events__abis.parquet"
     decoder_type = "log"
 
     # gl.set_config(field="decoder.output_hex_string_encoding", value=True)
@@ -90,6 +90,7 @@ def make_pipeline(
                     runner=process_data,
                 ),
             ),
+            cc.Step(kind=cc.StepKind.JOIN_BLOCK_DATA, config=cc.JoinBlockDataConfig()),
             cc.Step(
                 kind=cc.StepKind.HEX_ENCODE,
                 config=cc.HexEncodeConfig(),
