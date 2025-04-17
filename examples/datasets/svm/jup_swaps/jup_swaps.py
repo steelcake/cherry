@@ -11,13 +11,10 @@ from cherry_etl import config as cc
 from cherry_etl import datasets
 from cherry_etl.pipeline import run_pipeline
 from cherry_core.svm_decode import InstructionSignature, ParamInput, DynType, FixedArray
-from dotenv import load_dotenv
-
-load_dotenv()
 
 
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO").upper())
-logger = logging.getLogger("examples.svm.instructions")
+logger = logging.getLogger("examples.svm.jup_aggregator_swaps")
 
 
 async def sync_data(
@@ -46,6 +43,7 @@ async def sync_data(
             connection=connection.cursor(),
         ),
     )
+
     # Hardcoded values for the example
     program_id = "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4"
     instruction_signature = InstructionSignature(
@@ -91,16 +89,56 @@ async def main(
     to_block: Optional[int],
 ):
     # Connect to a persistent database file
-    connection = duckdb.connect()
+    connection = duckdb.connect("examples/database/jup_swaps/jup_swaps.db")
 
     # sync the data into duckdb
     await sync_data(
         connection.cursor(), provider_kind, provider_url, from_block, to_block
     )
 
-    # Optional: read result to show
-    data = connection.sql("SELECT * FROM decoded_instructions LIMIT  3")
+    # DB Operations - Create tables
+    connection.sql(
+        "CREATE OR REPLACE TABLE solana_amm AS SELECT * FROM read_csv('examples/database/jup_swaps/solana_amm.csv');"
+    )
+    connection.sql(
+        "CREATE OR REPLACE TABLE solana_tokens AS SELECT * FROM read_csv('examples/database/jup_swaps/solana_tokens.csv');"
+    )
+    # DB Operations - Data Transformation
+    connection.sql("""
+        CREATE OR REPLACE TABLE jup_swaps AS            
+            SELECT
+                di.amm AS amm,
+                sa.amm_name AS amm_name,
+                case when di.inputmint > di.outputmint then it.token_symbol || '-' || ot.token_symbol
+                    else ot.token_symbol || '-' || it.token_symbol
+                    end as token_pair,
+                    
+                it.token_symbol as input_token,
+                di.inputmint AS input_token_address,
+                di.inputamount AS input_amount_raw,
+                it.token_decimals AS input_token_decimals,
+                di.inputamount / 10^it.token_decimals AS input_amount,
+                
+                ot.token_symbol as output_token,
+                di.outputmint AS output_token_address,
+                di.outputamount AS output_amount_raw,
+                ot.token_decimals AS output_token_decimals,
+                di.outputamount / 10^ot.token_decimals AS output_amount,
+
+                di.block_slot AS block_slot,
+                di.transaction_index AS transaction_index,
+                di.instruction_address AS instruction_address,
+                di.timestamp AS block_timestamp
+            FROM decoded_instructions di
+            LEFT JOIN solana_amm sa ON di.amm = sa.amm_address
+            LEFT JOIN solana_tokens it ON di.inputmint = it.token_address
+            LEFT JOIN solana_tokens ot ON di.outputmint = ot.token_address;
+                          """)
+    connection.sql("COPY jup_swaps TO 'jup_swaps.parquet' (FORMAT PARQUET)")
+    data = connection.sql("SELECT * FROM jup_swaps LIMIT 3")
     logger.info(f"\n{data}")
+
+    # DB Operations - Show table
 
     # Close the connection properly
     connection.close()
@@ -121,7 +159,6 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # Hardcoded values while there is only one provider
     provider_kind = ingest.ProviderKind.SQD
     provider_url = "https://portal.sqd.dev/datasets/solana-mainnet"
 

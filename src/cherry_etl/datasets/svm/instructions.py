@@ -1,62 +1,19 @@
-from typing import Any, Dict, Optional
+from typing import Dict, Optional, Union
 from cherry_core import ingest
-from cherry_core.svm_decode import InstructionSignature, ParamInput, DynType
+from cherry_core.svm_decode import InstructionSignature
 from cherry_etl import config as cc
 import polars as pl
 import logging
-import base58
 
 logger = logging.getLogger(__name__)
 
 
-def process_data(data: Dict[str, pl.DataFrame], _: Any) -> Dict[str, pl.DataFrame]:
+def process_data(
+    data: Dict[str, pl.DataFrame], discriminator: Union[bytes, None]
+) -> Dict[str, pl.DataFrame]:
     df = data["instructions"]
 
-    processed_df = df.filter(
-        pl.col("data").bin.starts_with(
-            bytes(
-                [228, 69, 165, 46, 81, 203, 154, 29, 64, 198, 205, 232, 38, 8, 113, 226]
-            )
-        )
-        & pl.col("program_id").bin.starts_with(
-            bytes(
-                [
-                    4,
-                    121,
-                    213,
-                    91,
-                    242,
-                    49,
-                    192,
-                    110,
-                    238,
-                    116,
-                    197,
-                    110,
-                    206,
-                    104,
-                    21,
-                    7,
-                    253,
-                    177,
-                    178,
-                    222,
-                    163,
-                    244,
-                    142,
-                    81,
-                    2,
-                    177,
-                    205,
-                    162,
-                    86,
-                    188,
-                    19,
-                    143,
-                ]
-            )
-        )
-    )
+    processed_df = df.filter(pl.col("data").bin.starts_with(discriminator))
     data["instructions"] = processed_df
 
     return data
@@ -65,11 +22,51 @@ def process_data(data: Dict[str, pl.DataFrame], _: Any) -> Dict[str, pl.DataFram
 def make_pipeline(
     provider: ingest.ProviderConfig,
     writer: cc.Writer,
+    program_id: str,
+    instruction_signature: InstructionSignature,
     from_block: int = 0,
     to_block: Optional[int] = None,
 ) -> cc.Pipeline:
     if to_block is not None and from_block > to_block:
         raise Exception("block range is invalid")
+
+    discriminator = instruction_signature.discriminator
+    if isinstance(discriminator, str):
+        discriminator = bytes.fromhex(discriminator.strip("0x"))
+    elif isinstance(discriminator, bytes):
+        pass
+    else:
+        raise TypeError(
+            f"discriminator must be bytes or str, got {type(discriminator)}"
+        )
+
+    if len(discriminator) == 1:
+        instruction_request = ingest.svm.InstructionRequest(
+            program_id=[program_id],
+            d1=[discriminator],
+        )
+    elif len(discriminator) == 2:
+        instruction_request = ingest.svm.InstructionRequest(
+            program_id=[program_id],
+            d2=[discriminator],
+        )
+    elif len(discriminator) == 4:
+        instruction_request = ingest.svm.InstructionRequest(
+            program_id=[program_id],
+            d4=[discriminator],
+        )
+    elif len(discriminator) == 8:
+        instruction_request = ingest.svm.InstructionRequest(
+            program_id=[program_id],
+            d8=[discriminator],
+        )
+    elif len(discriminator) > 8:
+        instruction_request = ingest.svm.InstructionRequest(
+            program_id=[program_id],
+            d8=[discriminator[:8]],
+        )
+    else:
+        raise Exception(f"Unsupported discriminator length: {len(discriminator)}")
 
     query = ingest.Query(
         kind=ingest.QueryKind.SVM,
@@ -105,7 +102,7 @@ def make_pipeline(
                     timestamp=True,
                 ),
             ),
-            instructions=[ingest.svm.InstructionRequest()],
+            instructions=[instruction_request],
         ),
     )
 
@@ -118,58 +115,13 @@ def make_pipeline(
                 kind=cc.StepKind.CUSTOM,
                 config=cc.CustomStepConfig(
                     runner=process_data,
+                    context=discriminator,
                 ),
             ),
             cc.Step(
                 kind=cc.StepKind.SVM_DECODE_INSTRUCTIONS,
                 config=cc.SvmDecodeInstructionsConfig(
-                    instruction_signature=InstructionSignature(
-                        discriminator=base58.b58encode(
-                            bytes(
-                                [
-                                    228,
-                                    69,
-                                    165,
-                                    46,
-                                    81,
-                                    203,
-                                    154,
-                                    29,
-                                    64,
-                                    198,
-                                    205,
-                                    232,
-                                    38,
-                                    8,
-                                    113,
-                                    226,
-                                ]
-                            )
-                        ).decode(),
-                        params=[
-                            ParamInput(
-                                name="Amm",
-                                param_type=DynType.FixedArray(DynType.U8, 32),
-                            ),
-                            ParamInput(
-                                name="InputMint",
-                                param_type=DynType.FixedArray(DynType.U8, 32),
-                            ),
-                            ParamInput(
-                                name="InputAmount",
-                                param_type=DynType.U64,
-                            ),
-                            ParamInput(
-                                name="OutputMint",
-                                param_type=DynType.FixedArray(DynType.U8, 32),
-                            ),
-                            ParamInput(
-                                name="OutputAmount",
-                                param_type=DynType.U64,
-                            ),
-                        ],
-                        accounts_names=[],
-                    ),
+                    instruction_signature=instruction_signature,
                     hstack=True,
                     allow_decode_fail=True,
                 ),
