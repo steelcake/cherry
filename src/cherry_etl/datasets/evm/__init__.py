@@ -3,6 +3,7 @@ from .all_contracts import make_pipeline as all_contracts
 from .blocks import make_pipeline as blocks
 from .erc20_transfers import make_pipeline as erc20_transfers
 from .glaciers import make_pipeline as glaciers
+from .logs import make_pipeline as logs
 
 __all__ = [
     "address_appearances",
@@ -10,4 +11,5 @@ __all__ = [
     "blocks",
     "erc20_transfers",
     "glaciers",
+    "logs",
 ]
