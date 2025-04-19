@@ -1,4 +1,4 @@
 # from . import iceberg, clickhouse
-from . import clickhouse, delta_lake, iceberg
+from . import clickhouse, delta_lake, iceberg, chdb
 
-__all__ = ["iceberg", "clickhouse", "delta_lake"]
+__all__ = ["iceberg", "clickhouse", "delta_lake", "chdb"]

@@ -23,6 +23,7 @@ class WriterKind(str, Enum):
     DELTA_LAKE = "delta_lake"
     PYARROW_DATASET = "pyarrow_dataset"
     DUCKDB = "duckdb"
+    CHDB = "chdb"
 
 
 class StepKind(str, Enum):
@@ -98,6 +99,12 @@ class DuckdbWriterConfig:
 
 
 @dataclass
+class ChdbWriterConfig:
+    db_path: str
+    engine: str = "MergeTree()"
+
+
+@dataclass
 class Writer:
     kind: WriterKind
     config: (
@@ -106,6 +113,7 @@ class Writer:
         | DeltaLakeWriterConfig
         | PyArrowDatasetWriterConfig
         | DuckdbWriterConfig
+        | ChdbWriterConfig
     )
 
 

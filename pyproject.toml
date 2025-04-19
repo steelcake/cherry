@@ -22,6 +22,7 @@ dependencies = [
     "pyarrow-stubs>=17.17",
     "polars>=1.25.2",
     "duckdb>=1.2.1",
+    "chdb",
 ]
 
 [dependency-groups]
@@ -32,6 +33,7 @@ dev = [
     "ruff>=0.9.7",
     "dexmetadata>=0.1.8",
     "base58>=2.1.1",
+    "pytest-asyncio",
 ]
 
 [build-system]
