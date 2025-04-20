@@ -10,6 +10,7 @@ from cherry_core import ingest
 from cherry_etl import config as cc
 from cherry_etl import datasets
 from cherry_etl.pipeline import run_pipeline
+from cherry_core.svm_decode import InstructionSignature, ParamInput, DynType, FixedArray
 
 
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO").upper())
@@ -43,8 +44,39 @@ async def sync_data(
         ),
     )
 
+    # Hardcoded values for the example
+    program_id = "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4"
+    instruction_signature = InstructionSignature(
+        discriminator="0xe445a52e51cb9a1d40c6cde8260871e2",
+        params=[
+            ParamInput(
+                name="Amm",
+                param_type=FixedArray(DynType.U8, 32),
+            ),
+            ParamInput(
+                name="InputMint",
+                param_type=FixedArray(DynType.U8, 32),
+            ),
+            ParamInput(
+                name="InputAmount",
+                param_type=DynType.U64,
+            ),
+            ParamInput(
+                name="OutputMint",
+                param_type=FixedArray(DynType.U8, 32),
+            ),
+            ParamInput(
+                name="OutputAmount",
+                param_type=DynType.U64,
+            ),
+        ],
+        accounts_names=[],
+    )
+
     # Create the pipeline using the blocks dataset
-    pipeline = datasets.svm.instructions(provider, writer, from_block, to_block)
+    pipeline = datasets.svm.instructions(
+        provider, writer, program_id, instruction_signature, from_block, to_block
+    )
 
     # Run the pipeline
     await run_pipeline(pipeline_name="instructions", pipeline=pipeline)
@@ -57,7 +89,7 @@ async def main(
     to_block: Optional[int],
 ):
     # Connect to a persistent database file
-    connection = duckdb.connect("examples/database/jup_swaps/jup_swaps.db")
+    connection = duckdb.connect("examples/datasets/svm/solana_swaps/solana_swaps.db")
 
     # sync the data into duckdb
     await sync_data(
@@ -65,8 +97,12 @@ async def main(
     )
 
     # DB Operations - Create tables
-    connection.sql("CREATE OR REPLACE TABLE solana_amm AS SELECT * FROM read_csv('examples/database/jup_swaps/solana_amm.csv');")
-    connection.sql("CREATE OR REPLACE TABLE solana_tokens AS SELECT * FROM read_csv('examples/database/jup_swaps/solana_tokens.csv');")
+    connection.sql(
+        "CREATE OR REPLACE TABLE solana_amm AS SELECT * FROM read_csv('examples/datasets/svm/solana_swaps/solana_amm.csv');"
+    )
+    connection.sql(
+        "CREATE OR REPLACE TABLE solana_tokens AS SELECT * FROM read_csv('examples/datasets/svm/solana_swaps/solana_tokens.csv');"
+    )
     # DB Operations - Data Transformation
     connection.sql("""
         CREATE OR REPLACE TABLE jup_swaps AS            
@@ -123,9 +159,10 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    url = "https://portal.sqd.dev/datasets/solana-beta"
+    provider_kind = ingest.ProviderKind.SQD
+    provider_url = "https://portal.sqd.dev/datasets/solana-mainnet"
 
     from_block = int(args.from_block)
     to_block = int(args.to_block) if args.to_block is not None else None
 
-    asyncio.run(main("sqd", url, from_block, to_block))
+    asyncio.run(main(provider_kind, provider_url, from_block, to_block))

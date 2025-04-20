@@ -14,7 +14,7 @@ from cherry_core.svm_decode import InstructionSignature, ParamInput, DynType, Va
 
 
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO").upper())
-logger = logging.getLogger("examples.svm.jup_aggregator_swaps")
+logger = logging.getLogger("examples.svm.orca_swaps")
 
 
 async def sync_data(
@@ -136,7 +136,7 @@ async def main(
     to_block: Optional[int],
 ):
     # Connect to a persistent database file
-    connection = duckdb.connect("examples/datasets/svm/jup_swaps/jup_swaps.db")
+    connection = duckdb.connect("examples/datasets/svm/solana_swaps/solana_swaps.db")
 
     # sync the data into duckdb
     await sync_data(
@@ -145,7 +145,7 @@ async def main(
 
     # DB Operations - Create tables
     connection.sql(
-        "CREATE OR REPLACE TABLE solana_tokens AS SELECT * FROM read_csv('examples/datasets/svm/jup_swaps/solana_tokens.csv');"
+        "CREATE OR REPLACE TABLE solana_tokens AS SELECT * FROM read_csv('examples/datasets/svm/solana_swaps/solana_tokens.csv');"
     )
     # DB Operations - Data Transformation
     data =connection.sql("""
