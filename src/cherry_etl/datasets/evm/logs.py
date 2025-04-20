@@ -8,6 +8,7 @@ from cherry_etl import config as cc
 
 logger = logging.getLogger(__name__)
 
+
 def make_pipeline(
     provider: ingest.ProviderConfig,
     writer: cc.Writer,
@@ -22,6 +23,17 @@ def make_pipeline(
 ) -> cc.Pipeline:
     if to_block is not None and from_block > to_block:
         raise Exception("block range is invalid")
+    
+    if not isinstance(address, list):
+        raise TypeError("address must be a list")
+    if not isinstance(topic0, list):
+        raise TypeError("topic0 must be a list")
+    if not isinstance(topic1, list):
+        raise TypeError("topic1 must be a list")
+    if not isinstance(topic2, list):
+        raise TypeError("topic2 must be a list")
+    if not isinstance(topic3, list):
+        raise TypeError("topic3 must be a list")
 
     query = ingest.Query(
         kind=ingest.QueryKind.EVM,
@@ -49,14 +61,16 @@ def make_pipeline(
                     removed=True,
                 ),
             ),
-            logs=[ingest.evm.LogRequest(
-                include_blocks=True,
-                address=address,
-                topic0=topic0,
-                topic1=topic1,
-                topic2=topic2,
-                topic3=topic3,
-            )],
+            logs=[
+                ingest.evm.LogRequest(
+                    include_blocks=True,
+                    address=address,
+                    topic0=topic0,
+                    topic1=topic1,
+                    topic2=topic2,
+                    topic3=topic3,
+                )
+            ],
         ),
     )
 

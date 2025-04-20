@@ -50,7 +50,9 @@ async def sync_data(
     topic0 = ["0x0d3648bd0f6ba80134a33ba9275ac585d9d315f0ad8355cddefde31afa28d0e9"]
 
     # Create the pipeline using the all_contracts dataset
-    pipeline = datasets.evm.logs(provider, writer, event_full_signature, from_block, to_block, address, topic0)
+    pipeline = datasets.evm.logs(
+        provider, writer, event_full_signature, from_block, to_block, address, topic0
+    )
 
     # Run the pipeline
     await run_pipeline(pipeline_name="logs", pipeline=pipeline)
