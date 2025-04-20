@@ -9,6 +9,7 @@ from . import (
     u256_to_binary,
     svm_decode_instructions,
     join_block_data,
+    join_svm_transaction_data,
 )
 
 __all__ = [
@@ -22,4 +23,5 @@ __all__ = [
     "u256_to_binary",
     "svm_decode_instructions",
     "join_block_data",
+    "join_svm_transaction_data",
 ]

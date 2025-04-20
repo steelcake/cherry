@@ -44,26 +44,31 @@ def make_pipeline(
         instruction_request = ingest.svm.InstructionRequest(
             program_id=[program_id],
             d1=[discriminator],
+            include_transactions=True,
         )
     elif len(discriminator) == 2:
         instruction_request = ingest.svm.InstructionRequest(
             program_id=[program_id],
             d2=[discriminator],
+            include_transactions=True,
         )
     elif len(discriminator) == 4:
         instruction_request = ingest.svm.InstructionRequest(
             program_id=[program_id],
             d4=[discriminator],
+            include_transactions=True,
         )
     elif len(discriminator) == 8:
         instruction_request = ingest.svm.InstructionRequest(
             program_id=[program_id],
             d8=[discriminator],
+            include_transactions=True,
         )
     elif len(discriminator) > 8:
         instruction_request = ingest.svm.InstructionRequest(
             program_id=[program_id],
             d8=[discriminator[:8]],
+            include_transactions=True,
         )
     else:
         raise Exception(f"Unsupported discriminator length: {len(discriminator)}")
@@ -101,6 +106,12 @@ def make_pipeline(
                     hash=True,
                     timestamp=True,
                 ),
+                transaction=ingest.svm.TransactionFields(
+                    block_slot=True,
+                    block_hash=True,
+                    transaction_index=True,
+                    signature=True,
+                ),
             ),
             instructions=[instruction_request],
         ),
@@ -126,6 +137,7 @@ def make_pipeline(
                     allow_decode_fail=True,
                 ),
             ),
+            cc.Step(kind=cc.StepKind.JOIN_SVM_TRANSACTION_DATA, config=cc.JoinSvmTransactionDataConfig()),
             cc.Step(kind=cc.StepKind.JOIN_BLOCK_DATA, config=cc.JoinBlockDataConfig()),
             cc.Step(kind=cc.StepKind.BASE58_ENCODE, config=cc.Base58EncodeConfig()),
         ],

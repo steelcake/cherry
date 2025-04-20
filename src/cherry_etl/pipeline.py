@@ -14,6 +14,7 @@ from .config import (
     U256ToBinaryConfig,
     SvmDecodeInstructionsConfig,
     JoinBlockDataConfig,
+    JoinSvmTransactionDataConfig,
 )
 from typing import Dict, List, Optional
 from cherry_core.ingest import start_stream
@@ -75,6 +76,9 @@ async def process_steps(
         elif step.kind == StepKind.JOIN_BLOCK_DATA:
             assert isinstance(step.config, JoinBlockDataConfig)
             data = step_def.join_block_data.execute(data, step.config)
+        elif step.kind == StepKind.JOIN_SVM_TRANSACTION_DATA:
+            assert isinstance(step.config, JoinSvmTransactionDataConfig)
+            data = step_def.join_svm_transaction_data.execute(data, step.config)
         else:
             raise Exception(f"Unknown step kind: {step.kind}")
 

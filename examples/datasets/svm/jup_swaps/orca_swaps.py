@@ -74,27 +74,29 @@ async def sync_data(
                 param_type=DynType.Struct([
                     Field(
                         name="slices",
-                        element_type=DynType.Struct([
-                            Field(
-                                name="accountsType",
-                                element_type=DynType.Enum([
-                                    Variant("TransferHookA", None),
-                                    Variant("TransferHookB", None),
-                                    Variant("TransferHookReward", None),
-                                    Variant("TransferHookInput", None),
-                                    Variant("TransferHookIntermediate", None),
-                                    Variant("TransferHookOutput", None),
-                                    Variant("SupplementalTickArrays", None),
-                                    Variant("SupplementalTickArraysOne", None),
-                                    Variant("SupplementalTickArraysTwo", None),
-                                ])
-                            ),
-                            Field(
-                                name="length",
-                                element_type=DynType.U8
+                        element_type=DynType.Option(
+                            DynType.Struct([
+                                Field(
+                                    name="accountsType",
+                                    element_type=DynType.Enum([
+                                        Variant("TransferHookA", None),
+                                        Variant("TransferHookB", None),
+                                        Variant("TransferHookReward", None),
+                                        Variant("TransferHookInput", None),
+                                        Variant("TransferHookIntermediate", None),
+                                        Variant("TransferHookOutput", None),
+                                        Variant("SupplementalTickArrays", None),
+                                        Variant("SupplementalTickArraysOne", None),
+                                        Variant("SupplementalTickArraysTwo", None),
+                                    ])
+                                ),
+                                Field(
+                                    name="length",
+                                    element_type=DynType.U8
 
-                            )
-                        ]),
+                                )
+                            ])
+                        ),
                     ),
                 ])
             ),

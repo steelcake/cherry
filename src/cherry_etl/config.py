@@ -36,6 +36,7 @@ class StepKind(str, Enum):
     U256_TO_BINARY = "u256_to_binary"
     SVM_DECODE_INSTRUCTIONS = "svm_decode_instructions"
     JOIN_BLOCK_DATA = "join_block_data"
+    JOIN_SVM_TRANSACTION_DATA = "join_svm_transaction_data"
 
 
 @dataclass
@@ -112,8 +113,15 @@ class Writer:
 @dataclass
 class JoinBlockDataConfig:
     tables: Optional[list[str]] = None
-    join_left_on: Optional[str] = "block_hash"
-    join_blocks_on: Optional[str] = "hash"
+    join_left_on: list[str] = field(default_factory=lambda: ["block_hash"])
+    join_blocks_on: list[str] = field(default_factory=lambda: ["hash"])
+
+
+@dataclass
+class JoinSvmTransactionDataConfig:
+    tables: Optional[list[str]] = None
+    join_left_on: list[str] = field(default_factory=lambda: ["block_slot", "block_hash", "transaction_index"])
+    join_transactions_on: list[str] = field(default_factory=lambda: ["block_slot", "block_hash", "transaction_index"])
 
 
 @dataclass
