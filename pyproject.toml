@@ -22,8 +22,10 @@ dependencies = [
     "pyarrow-stubs>=17.17",
     "polars>=1.25.2",
     "duckdb>=1.2.1",
-    "chdb",
 ]
+
+[project.optional-dependencies]
+chdb = ["chdb>=3.1.2"]
 
 [dependency-groups]
 dev = [
@@ -39,4 +41,3 @@ dev = [
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
-
