@@ -23,7 +23,7 @@ def make_pipeline(
 ) -> cc.Pipeline:
     if to_block is not None and from_block > to_block:
         raise Exception("block range is invalid")
-    
+
     if not isinstance(address, list):
         raise TypeError("address must be a list")
     if not isinstance(topic0, list):
