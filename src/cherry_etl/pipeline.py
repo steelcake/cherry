@@ -14,6 +14,7 @@ from .config import (
     U256ToBinaryConfig,
     SvmDecodeInstructionsConfig,
     JoinBlockDataConfig,
+    GlaciersEventsConfig,
 )
 from typing import Dict, List, Optional
 from cherry_core.ingest import start_stream
@@ -45,6 +46,9 @@ async def process_steps(
         elif step.kind == StepKind.EVM_DECODE_EVENTS:
             assert isinstance(step.config, EvmDecodeEventsConfig)
             data = step_def.evm_decode_events.execute(data, step.config)
+        elif step.kind == StepKind.GLACIERS_EVENTS:
+            assert isinstance(step.config, GlaciersEventsConfig)
+            data = step_def.glaciers_events.execute(data, step.config)
         elif step.kind == StepKind.SVM_DECODE_INSTRUCTIONS:
             assert isinstance(step.config, SvmDecodeInstructionsConfig)
             data = step_def.svm_decode_instructions.execute(data, step.config)

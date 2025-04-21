@@ -36,6 +36,7 @@ class StepKind(str, Enum):
     U256_TO_BINARY = "u256_to_binary"
     SVM_DECODE_INSTRUCTIONS = "svm_decode_instructions"
     JOIN_BLOCK_DATA = "join_block_data"
+    GLACIERS_EVENTS = "glaciers_events"
 
 
 @dataclass
@@ -134,6 +135,14 @@ class EvmDecodeEventsConfig:
 
 
 @dataclass
+class GlaciersEventsConfig:
+    abi_db_path: str
+    decoder_type: str = "log"
+    input_table: str = "logs"
+    output_table: str = "decoded_logs"
+
+
+@dataclass
 class SvmDecodeInstructionsConfig:
     instruction_signature: InstructionSignature
     allow_decode_fail: bool = False
@@ -192,6 +201,7 @@ class Step:
         | SvmDecodeInstructionsConfig
         | CustomStepConfig
         | JoinBlockDataConfig
+        | GlaciersEventsConfig
     )
     name: Optional[str] = None
 
