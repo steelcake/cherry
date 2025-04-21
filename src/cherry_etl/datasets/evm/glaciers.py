@@ -1,9 +1,7 @@
 import logging
-from typing import Any, Dict, Optional
+from typing import Optional
 
 import pyarrow as pa
-import glaciers as gl
-import polars as pl
 from cherry_core import ingest
 
 from cherry_etl import config as cc
@@ -11,21 +9,10 @@ from cherry_etl import config as cc
 logger = logging.getLogger(__name__)
 
 
-def process_data(data: Dict[str, pl.DataFrame], _: Any) -> Dict[str, pl.DataFrame]:
-    logs_df = data["logs"]
-    abi_db_path = "examples/datasets/eth/glaciers/ethereum__events__abis.parquet"
-    decoder_type = "log"
-
-    # gl.set_config(field="decoder.output_hex_string_encoding", value=True)
-    decoded_df = gl.decode_df(decoder_type, logs_df, abi_db_path)
-    data["decoded_logs"] = pl.DataFrame(decoded_df)
-
-    return data
-
-
 def make_pipeline(
     provider: ingest.ProviderConfig,
     writer: cc.Writer,
+    abi_db_path: str,
     from_block: int = 0,
     to_block: Optional[int] = None,
 ) -> cc.Pipeline:
@@ -85,9 +72,9 @@ def make_pipeline(
                 ),
             ),
             cc.Step(
-                kind=cc.StepKind.CUSTOM,
-                config=cc.CustomStepConfig(
-                    runner=process_data,
+                kind=cc.StepKind.GLACIERS_EVENTS,
+                config=cc.GlaciersEventsConfig(
+                    abi_db_path=abi_db_path,
                 ),
             ),
             cc.Step(kind=cc.StepKind.JOIN_BLOCK_DATA, config=cc.JoinBlockDataConfig()),

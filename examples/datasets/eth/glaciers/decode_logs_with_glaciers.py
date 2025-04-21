@@ -26,8 +26,9 @@ PROVIDER_URLS = {
 async def sync_data(
     connection: duckdb.DuckDBPyConnection,
     provider_kind: ingest.ProviderKind,
-    provider_url: Optional[str],
+    abi_db_path: str,
     from_block: int,
+    provider_url: Optional[str],
     to_block: Optional[int],
 ):
     if to_block is not None:
@@ -48,7 +49,9 @@ async def sync_data(
     )
 
     # Create the pipeline using the logs dataset
-    pipeline = datasets.evm.glaciers(provider, writer, from_block, to_block)
+    pipeline = datasets.evm.glaciers(
+        provider, writer, abi_db_path, from_block, to_block
+    )
 
     # Run the pipeline
     await run_pipeline(pipeline_name="glaciers", pipeline=pipeline)
@@ -56,19 +59,16 @@ async def sync_data(
 
 async def main(
     provider_kind: ingest.ProviderKind,
-    provider_url: Optional[str],
     from_block: int,
+    provider_url: Optional[str],
     to_block: Optional[int],
 ):
     url = "https://github.com/yulesa/glaciers/raw/refs/heads/master/ABIs/ethereum__events__abis.parquet"
+    abi_db_path = "examples/datasets/eth/glaciers/ethereum__events__abis.parquet"
 
-    if not os.path.exists(
-        "examples/datasets/eth/glaciers/ethereum__events__abis.parquet"
-    ):
+    if not os.path.exists(abi_db_path):
         response = requests.get(url)
-        with open(
-            "examples/datasets/eth/glaciers/ethereum__events__abis.parquet", "wb"
-        ) as file:
+        with open(abi_db_path, "wb") as file:
             file.write(response.content)
 
     connection = duckdb.connect(
@@ -77,7 +77,12 @@ async def main(
 
     # sync the data into duckdb
     await sync_data(
-        connection.cursor(), provider_kind, provider_url, from_block, to_block
+        connection=connection.cursor(),
+        provider_kind=provider_kind,
+        abi_db_path=abi_db_path,
+        from_block=from_block,
+        provider_url=provider_url,
+        to_block=to_block,
     )
 
     # Optional: read result to show
@@ -202,4 +207,4 @@ if __name__ == "__main__":
     from_block = int(args.from_block)
     to_block = int(args.to_block) if args.to_block is not None else None
 
-    asyncio.run(main(args.provider, url, from_block, to_block))
+    asyncio.run(main(args.provider, from_block, url, to_block))
