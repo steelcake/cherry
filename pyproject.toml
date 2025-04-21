@@ -10,7 +10,7 @@ authors = [
   { name = "Enes Topuz", email = "tpzenes@gmail.com" },
   { name = "Ozgur Akkurt", email = "oezgurmakkurt@gmail.com" },
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "cherry-core>=0.5.0",
     "pyarrow>=19.0.1",
@@ -22,6 +22,7 @@ dependencies = [
     "pyarrow-stubs>=17.17",
     "polars>=1.25.2",
     "duckdb>=1.2.1",
+    "glaciers>=2.0.1",
 ]
 
 [project.optional-dependencies]
