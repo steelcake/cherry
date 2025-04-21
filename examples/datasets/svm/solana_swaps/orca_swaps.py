@@ -112,11 +112,6 @@ async def sync_data(
             "tokenOwnerAccountA",
             "tokenVaultA",
             "tokenOwnerAccountB",
-            "tokenVaultB",
-            "tickArray0",
-            "tickArray1",
-            "tickArray2",
-            "oracle",
         ],
     )
 
@@ -148,12 +143,40 @@ async def main(
         "CREATE OR REPLACE TABLE solana_tokens AS SELECT * FROM read_csv('examples/datasets/svm/solana_swaps/solana_tokens.csv');"
     )
     # DB Operations - Data Transformation
-    data =connection.sql("""
-            SELECT *
-            FROM instructions;
+    
+    data = connection.sql("""
+        CREATE OR REPLACE TABLE orca_swaps AS  
+            SELECT
+                di.program_id AS amm,
+                'Orca Whirlpool' AS amm_name,
+                'v2' AS amm_version,
+
+                case when di.tokenMintB > di.tokenMintA then it.token_symbol || '-' || ot.token_symbol
+                    else ot.token_symbol || '-' || it.token_symbol
+                    end as token_pair,
+                it.token_symbol as token_sold_symbol,
+                di.tokenMintB as token_sold_address,
+                di.amount as token_sold_amount_raw,
+                it.token_decimals as token_sold_decimals,
+                di.amount / 10^it.token_decimals as token_sold_amount,
+
+                ot.token_symbol as token_bought_symbol,
+                di.tokenMintA as token_bought_address,
+                -- di.tokenAmountA as token_bought_amount_raw,
+                ot.token_decimals as token_bought_decimals,
+                -- di.tokenAmountA / 10^ot.token_decimals as token_bought_amount,
+
+                di.block_slot AS block_slot,
+                di.transaction_index AS transaction_index,
+                di.instruction_address AS instruction_address,
+                di.timestamp AS block_timestamp,
+                di.signature AS signature
+            FROM decoded_instructions di
+            LEFT JOIN solana_tokens it ON di.tokenMintB = it.token_address
+            LEFT JOIN solana_tokens ot ON di.tokenMintA = ot.token_address;
                           """)
-    # connection.sql("COPY jup_swaps TO 'jup_swaps.parquet' (FORMAT PARQUET)")
-    # data = connection.sql("SELECT * FROM jup_swaps LIMIT 3")
+    connection.sql("COPY orca_swaps TO 'orca_swaps.parquet' (FORMAT PARQUET)")
+    data = connection.sql("SELECT * FROM orca_swaps LIMIT 3")
     logger.info(f"\n{data}")
 
     # DB Operations - Show table
