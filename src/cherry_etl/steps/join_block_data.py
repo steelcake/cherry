@@ -16,7 +16,9 @@ def execute(
 
     blocks_df: DataFrame = pl.DataFrame(pl.from_arrow(data["blocks"]))
 
-    missing_columns = [col for col in config.join_blocks_on if col not in blocks_df.columns]
+    missing_columns = [
+        col for col in config.join_blocks_on if col not in blocks_df.columns
+    ]
     if missing_columns:
         raise ValueError(
             f"Join columns {missing_columns} not found in blocks table. Available columns: {blocks_df.columns}"
@@ -29,7 +31,9 @@ def execute(
         table = data[table_name]
         table_df: DataFrame = pl.DataFrame(pl.from_arrow(table))
 
-        missing_columns = [col for col in config.join_left_on if col not in table_df.columns]
+        missing_columns = [
+            col for col in config.join_left_on if col not in table_df.columns
+        ]
         if missing_columns:
             raise ValueError(
                 f"Join columns {missing_columns} not found in table '{table_name}'. Available columns: {table_df.columns}"

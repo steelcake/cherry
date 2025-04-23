@@ -16,7 +16,9 @@ def execute(
 
     transactions_df: DataFrame = pl.DataFrame(pl.from_arrow(data["transactions"]))
 
-    missing_columns = [col for col in config.join_transactions_on if col not in transactions_df.columns]
+    missing_columns = [
+        col for col in config.join_transactions_on if col not in transactions_df.columns
+    ]
     if missing_columns:
         raise ValueError(
             f"Join columns {missing_columns} not found in transactions table. Available columns: {transactions_df.columns}"
@@ -30,7 +32,9 @@ def execute(
         table = data[table_name]
         table_df: DataFrame = pl.DataFrame(pl.from_arrow(table))
 
-        missing_columns = [col for col in config.join_left_on if col not in table_df.columns]
+        missing_columns = [
+            col for col in config.join_left_on if col not in table_df.columns
+        ]
         if missing_columns:
             raise ValueError(
                 f"Join columns {missing_columns} not found in table '{table_name}'. Available columns: {table_df.columns}"
@@ -47,5 +51,5 @@ def execute(
     joined_data = utils.pl_data_to_pyarrow(joined_data)
 
     data.update(joined_data)
-    
+
     return data

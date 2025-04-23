@@ -13,6 +13,7 @@ from .config import (
     StepKind,
     U256ToBinaryConfig,
     SvmDecodeInstructionsConfig,
+    SvmDecodeLogsConfig,
     JoinBlockDataConfig,
     JoinSvmTransactionDataConfig,
     GlaciersEventsConfig,
@@ -53,6 +54,9 @@ async def process_steps(
         elif step.kind == StepKind.SVM_DECODE_INSTRUCTIONS:
             assert isinstance(step.config, SvmDecodeInstructionsConfig)
             data = step_def.svm_decode_instructions.execute(data, step.config)
+        elif step.kind == StepKind.SVM_DECODE_LOGS:
+            assert isinstance(step.config, SvmDecodeLogsConfig)
+            data = step_def.svm_decode_logs.execute(data, step.config)
         elif step.kind == StepKind.CAST:
             assert isinstance(step.config, CastConfig)
             data = step_def.cast.execute(data, step.config)

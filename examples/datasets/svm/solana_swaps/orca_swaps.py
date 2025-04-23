@@ -10,7 +10,14 @@ from cherry_core import ingest
 from cherry_etl import config as cc
 from cherry_etl import datasets
 from cherry_etl.pipeline import run_pipeline
-from cherry_core.svm_decode import InstructionSignature, ParamInput, DynType, Variant, Field
+from cherry_core.svm_decode import (
+    InstructionSignature,
+    ParamInput,
+    DynType,
+    Variant,
+    Field,
+    LogSignature,
+)
 
 
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO").upper())
@@ -71,34 +78,46 @@ async def sync_data(
             ),
             ParamInput(
                 name="remainingAccountsInfo",
-                param_type=DynType.Struct([
-                    Field(
-                        name="slices",
-                        element_type=DynType.Option(
-                            DynType.Struct([
-                                Field(
-                                    name="accountsType",
-                                    element_type=DynType.Enum([
-                                        Variant("TransferHookA", None),
-                                        Variant("TransferHookB", None),
-                                        Variant("TransferHookReward", None),
-                                        Variant("TransferHookInput", None),
-                                        Variant("TransferHookIntermediate", None),
-                                        Variant("TransferHookOutput", None),
-                                        Variant("SupplementalTickArrays", None),
-                                        Variant("SupplementalTickArraysOne", None),
-                                        Variant("SupplementalTickArraysTwo", None),
-                                    ])
-                                ),
-                                Field(
-                                    name="length",
-                                    element_type=DynType.U8
-
+                param_type=DynType.Struct(
+                    [
+                        Field(
+                            name="slices",
+                            element_type=DynType.Option(
+                                DynType.Struct(
+                                    [
+                                        Field(
+                                            name="accountsType",
+                                            element_type=DynType.Enum(
+                                                [
+                                                    Variant("TransferHookA", None),
+                                                    Variant("TransferHookB", None),
+                                                    Variant("TransferHookReward", None),
+                                                    Variant("TransferHookInput", None),
+                                                    Variant(
+                                                        "TransferHookIntermediate", None
+                                                    ),
+                                                    Variant("TransferHookOutput", None),
+                                                    Variant(
+                                                        "SupplementalTickArrays", None
+                                                    ),
+                                                    Variant(
+                                                        "SupplementalTickArraysOne",
+                                                        None,
+                                                    ),
+                                                    Variant(
+                                                        "SupplementalTickArraysTwo",
+                                                        None,
+                                                    ),
+                                                ]
+                                            ),
+                                        ),
+                                        Field(name="length", element_type=DynType.U8),
+                                    ]
                                 )
-                            ])
+                            ),
                         ),
-                    ),
-                ])
+                    ]
+                ),
             ),
         ],
         accounts_names=[
@@ -115,9 +134,64 @@ async def sync_data(
         ],
     )
 
+    log_signature = LogSignature(
+        params=[
+            ParamInput(
+                name="whirlpool",
+                param_type=DynType.FixedArray(DynType.U8, 32),
+            ),
+            ParamInput(
+                name="a_to_b",
+                param_type=DynType.Bool,
+            ),
+            ParamInput(
+                name="pre_sqrt_price",
+                param_type=DynType.U128,
+            ),
+            ParamInput(
+                name="post_sqrt_price",
+                param_type=DynType.U128,
+            ),
+            ParamInput(
+                name="x",
+                param_type=DynType.U64,
+            ),
+            ParamInput(
+                name="input_amount",
+                param_type=DynType.U64,
+            ),
+            ParamInput(
+                name="output_amount",
+                param_type=DynType.U64,
+            ),
+            ParamInput(
+                name="input_transfer_fee",
+                param_type=DynType.U64,
+            ),
+            ParamInput(
+                name="output_transfer_fee",
+                param_type=DynType.U64,
+            ),
+            ParamInput(
+                name="lp_fee",
+                param_type=DynType.U64,
+            ),
+            ParamInput(
+                name="protocol_fee",
+                param_type=DynType.U64,
+            ),
+        ],
+    )
+
     # Create the pipeline using the blocks dataset
     pipeline = datasets.svm.instructions(
-        provider, writer, program_id, instruction_signature, from_block, to_block
+        provider,
+        writer,
+        program_id,
+        instruction_signature,
+        from_block,
+        to_block,
+        log_signature,
     )
 
     # Run the pipeline
@@ -142,8 +216,12 @@ async def main(
     connection.sql(
         "CREATE OR REPLACE TABLE solana_tokens AS SELECT * FROM read_csv('examples/datasets/svm/solana_swaps/solana_tokens.csv');"
     )
+
+    connection.sql("COPY decoded_logs TO 'decoded_logs.parquet' (FORMAT PARQUET)")
+    connection.sql(
+        "COPY decoded_instructions TO 'decoded_instructions.parquet' (FORMAT PARQUET)"
+    )
     # DB Operations - Data Transformation
-    
     data = connection.sql("""
         CREATE OR REPLACE TABLE orca_swaps AS  
             SELECT
