@@ -52,6 +52,7 @@ async def sync_data(
     )
 
     # Hardcoded values for the example
+    dataset_name = "orca_swaps"
     program_id = "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc"
     instruction_signature = InstructionSignature(
         discriminator="0x2b04ed0b1ac91e62",
@@ -184,13 +185,14 @@ async def sync_data(
     )
 
     # Create the pipeline using the blocks dataset
-    pipeline = datasets.svm.instructions(
+    pipeline = datasets.svm.swaps_instructions(
         provider,
         writer,
         program_id,
         instruction_signature,
         from_block,
         to_block,
+        dataset_name,
         log_signature,
     )
 
@@ -247,8 +249,8 @@ async def main(
                 di.instruction_address AS instruction_address,
                 di.timestamp AS block_timestamp,
                 di.signature AS signature
-            FROM decoded_instructions di
-            LEFT JOIN decoded_logs dl 
+            FROM orca_swaps_decoded_instructions di
+            LEFT JOIN orca_swaps_decoded_logs dl 
                 ON dl.kind = 'data'
                 AND di.block_hash = dl.block_hash
                 AND di.instruction_address = dl.instruction_address

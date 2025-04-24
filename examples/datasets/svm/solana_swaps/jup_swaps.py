@@ -45,6 +45,7 @@ async def sync_data(
     )
 
     # Hardcoded values for the example
+    dataset_name = "jup_swaps"
     program_id = "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4"
     instruction_signature = InstructionSignature(
         discriminator="0xe445a52e51cb9a1d40c6cde8260871e2",
@@ -74,12 +75,18 @@ async def sync_data(
     )
 
     # Create the pipeline using the blocks dataset
-    pipeline = datasets.svm.instructions(
-        provider, writer, program_id, instruction_signature, from_block, to_block
+    pipeline = datasets.svm.swaps_instructions(
+        provider,
+        writer,
+        program_id,
+        instruction_signature,
+        from_block,
+        to_block,
+        dataset_name,
     )
 
     # Run the pipeline
-    await run_pipeline(pipeline_name="instructions", pipeline=pipeline)
+    await run_pipeline(pipeline_name="swaps_instructions", pipeline=pipeline)
 
 
 async def main(
@@ -129,7 +136,7 @@ async def main(
                 di.transaction_index AS transaction_index,
                 di.instruction_address AS instruction_address,
                 di.timestamp AS block_timestamp
-            FROM decoded_instructions di
+            FROM jup_swaps_decoded_instructions di
             LEFT JOIN solana_amm sa ON di.amm = sa.amm_address
             LEFT JOIN solana_tokens it ON di.inputmint = it.token_address
             LEFT JOIN solana_tokens ot ON di.outputmint = ot.token_address;
