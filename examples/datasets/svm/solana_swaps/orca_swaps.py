@@ -216,11 +216,6 @@ async def main(
     connection.sql(
         "CREATE OR REPLACE TABLE solana_tokens AS SELECT * FROM read_csv('examples/datasets/svm/solana_swaps/solana_tokens.csv');"
     )
-
-    connection.sql("COPY decoded_logs TO 'decoded_logs.parquet' (FORMAT PARQUET)")
-    connection.sql(
-        "COPY decoded_instructions TO 'decoded_instructions.parquet' (FORMAT PARQUET)"
-    )
     # DB Operations - Data Transformation
     data = connection.sql("""
         CREATE OR REPLACE TABLE orca_swaps AS  
@@ -234,15 +229,18 @@ async def main(
                     end as token_pair,
                 it.token_symbol as token_sold_symbol,
                 di.tokenMintB as token_sold_address,
-                di.amount as token_sold_amount_raw,
+                dl.input_amount as token_sold_amount_raw,
                 it.token_decimals as token_sold_decimals,
-                di.amount / 10^it.token_decimals as token_sold_amount,
+                dl.input_amount / 10^it.token_decimals as token_sold_amount,
 
                 ot.token_symbol as token_bought_symbol,
                 di.tokenMintA as token_bought_address,
-                -- di.tokenAmountA as token_bought_amount_raw,
+                dl.output_amount as token_bought_amount_raw,
                 ot.token_decimals as token_bought_decimals,
-                -- di.tokenAmountA / 10^ot.token_decimals as token_bought_amount,
+                dl.output_amount / 10^ot.token_decimals as token_bought_amount,
+                          
+                dl.lp_fee as lp_fee,
+                dl.protocol_fee as protocol_fee,
 
                 di.block_slot AS block_slot,
                 di.transaction_index AS transaction_index,
@@ -250,10 +248,15 @@ async def main(
                 di.timestamp AS block_timestamp,
                 di.signature AS signature
             FROM decoded_instructions di
+            LEFT JOIN decoded_logs dl 
+                ON dl.kind = 'data'
+                AND di.block_hash = dl.block_hash
+                AND di.instruction_address = dl.instruction_address
+                AND di.signature = dl.signature
+                AND di.amount = dl.input_amount
             LEFT JOIN solana_tokens it ON di.tokenMintB = it.token_address
             LEFT JOIN solana_tokens ot ON di.tokenMintA = ot.token_address;
                           """)
-    connection.sql("COPY orca_swaps TO 'orca_swaps.parquet' (FORMAT PARQUET)")
     data = connection.sql("SELECT * FROM orca_swaps LIMIT 3")
     logger.info(f"\n{data}")
 
