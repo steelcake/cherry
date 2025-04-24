@@ -1,4 +1,4 @@
-from typing import Dict, Optional, Union
+from typing import Dict, Optional, Any
 from cherry_core import ingest
 from cherry_core.svm_decode import InstructionSignature, LogSignature
 from cherry_etl import config as cc
@@ -9,12 +9,23 @@ logger = logging.getLogger(__name__)
 
 
 def process_data(
-    data: Dict[str, pl.DataFrame], discriminator: Union[bytes, None]
+    data: Dict[str, pl.DataFrame], context: Optional[Dict[str, Any]] = None
 ) -> Dict[str, pl.DataFrame]:
-    df = data["instructions"]
+    if context is None:
+        return data
 
-    processed_df = df.filter(pl.col("data").bin.starts_with(discriminator))
-    data["instructions"] = processed_df
+    discriminator = context.get("discriminator")
+    filter_logs = context.get("filter_logs", False)
+
+    if discriminator is not None and len(discriminator) > 8:
+        df = data["instructions"]
+        processed_df = df.filter(pl.col("data").bin.starts_with(discriminator))
+        data["instructions"] = processed_df
+
+    if filter_logs:
+        df = data["logs"]
+        processed_df = df.filter(pl.col("kind") == "data")
+        data["logs"] = processed_df
 
     return data
 
@@ -46,33 +57,40 @@ def make_pipeline(
             program_id=[program_id],
             d1=[discriminator],
             include_transactions=True,
+            include_logs=True,
         )
     elif len(discriminator) == 2:
         instruction_request = ingest.svm.InstructionRequest(
             program_id=[program_id],
             d2=[discriminator],
             include_transactions=True,
+            include_logs=True,
         )
     elif len(discriminator) == 4:
         instruction_request = ingest.svm.InstructionRequest(
             program_id=[program_id],
             d4=[discriminator],
             include_transactions=True,
+            include_logs=True,
         )
     elif len(discriminator) == 8:
         instruction_request = ingest.svm.InstructionRequest(
             program_id=[program_id],
             d8=[discriminator],
             include_transactions=True,
+            include_logs=True,
         )
     elif len(discriminator) > 8:
         instruction_request = ingest.svm.InstructionRequest(
             program_id=[program_id],
             d8=[discriminator[:8]],
             include_transactions=True,
+            include_logs=True,
         )
     else:
         raise Exception(f"Unsupported discriminator length: {len(discriminator)}")
+
+    filter_logs = log_signature is not None
 
     query = ingest.Query(
         kind=ingest.QueryKind.SVM,
@@ -125,12 +143,6 @@ def make_pipeline(
                 ),
             ),
             instructions=[instruction_request],
-            logs=[
-                ingest.svm.LogRequest(
-                    program_id=[program_id],
-                    kind=[ingest.svm.LogKind.DATA],
-                ),
-            ],
         ),
     )
 
@@ -139,7 +151,7 @@ def make_pipeline(
             kind=cc.StepKind.CUSTOM,
             config=cc.CustomStepConfig(
                 runner=process_data,
-                context=discriminator,
+                context={"discriminator": discriminator, "filter_logs": filter_logs},
             ),
         ),
         cc.Step(
@@ -158,6 +170,7 @@ def make_pipeline(
                 kind=cc.StepKind.SVM_DECODE_LOGS,
                 config=cc.SvmDecodeLogsConfig(
                     log_signature=log_signature,
+                    allow_decode_fail=True,
                 ),
             ),
         )
