@@ -185,7 +185,7 @@ async def sync_data(
     )
 
     # Create the pipeline using the blocks dataset
-    pipeline = datasets.svm.swaps_instructions(
+    pipeline = datasets.svm.orca_swaps(
         provider,
         writer,
         program_id,
@@ -197,7 +197,7 @@ async def sync_data(
     )
 
     # Run the pipeline
-    await run_pipeline(pipeline_name="instructions", pipeline=pipeline)
+    await run_pipeline(pipeline_name="orca_swaps", pipeline=pipeline)
 
 
 async def main(

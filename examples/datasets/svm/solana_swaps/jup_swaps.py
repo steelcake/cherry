@@ -75,7 +75,7 @@ async def sync_data(
     )
 
     # Create the pipeline using the blocks dataset
-    pipeline = datasets.svm.swaps_instructions(
+    pipeline = datasets.svm.jup_swaps(
         provider,
         writer,
         program_id,
@@ -86,7 +86,7 @@ async def sync_data(
     )
 
     # Run the pipeline
-    await run_pipeline(pipeline_name="swaps_instructions", pipeline=pipeline)
+    await run_pipeline(pipeline_name="jup_swaps", pipeline=pipeline)
 
 
 async def main(
@@ -141,7 +141,6 @@ async def main(
             LEFT JOIN solana_tokens it ON di.inputmint = it.token_address
             LEFT JOIN solana_tokens ot ON di.outputmint = ot.token_address;
                           """)
-    connection.sql("COPY jup_swaps TO 'jup_swaps.parquet' (FORMAT PARQUET)")
     data = connection.sql("SELECT * FROM jup_swaps LIMIT 3")
     logger.info(f"\n{data}")
 
