@@ -18,6 +18,10 @@ def process_data(
 
     if discriminator is not None and len(discriminator) > 8:
         df = data["instructions"]
+        if isinstance(discriminator, str):
+            discriminator = bytes.fromhex(discriminator.strip("0x"))
+        else:
+            pass
         processed_df = df.filter(pl.col("data").bin.starts_with(discriminator))
         data["instructions"] = processed_df
 
@@ -34,49 +38,6 @@ def make_pipeline(
 ) -> cc.Pipeline:
     if to_block is not None and from_block > to_block:
         raise Exception("block range is invalid")
-
-    discriminator = instruction_signature.discriminator
-    if isinstance(discriminator, str):
-        discriminator = bytes.fromhex(discriminator.strip("0x"))
-    elif isinstance(discriminator, bytes):
-        pass
-    else:
-        raise TypeError(
-            f"discriminator must be bytes or str, got {type(discriminator)}"
-        )
-
-    if len(discriminator) == 1:
-        instruction_request = ingest.svm.InstructionRequest(
-            program_id=[program_id],
-            d1=[discriminator],
-            include_transactions=True,
-        )
-    elif len(discriminator) == 2:
-        instruction_request = ingest.svm.InstructionRequest(
-            program_id=[program_id],
-            d2=[discriminator],
-            include_transactions=True,
-        )
-    elif len(discriminator) == 4:
-        instruction_request = ingest.svm.InstructionRequest(
-            program_id=[program_id],
-            d4=[discriminator],
-            include_transactions=True,
-        )
-    elif len(discriminator) == 8:
-        instruction_request = ingest.svm.InstructionRequest(
-            program_id=[program_id],
-            d8=[discriminator],
-            include_transactions=True,
-        )
-    elif len(discriminator) > 8:
-        instruction_request = ingest.svm.InstructionRequest(
-            program_id=[program_id],
-            d8=[discriminator[:8]],
-            include_transactions=True,
-        )
-    else:
-        raise Exception(f"Unsupported discriminator length: {len(discriminator)}")
 
     query = ingest.Query(
         kind=ingest.QueryKind.SVM,
@@ -118,7 +79,13 @@ def make_pipeline(
                     signature=True,
                 ),
             ),
-            instructions=[instruction_request],
+            instructions=[
+                ingest.svm.InstructionRequest(
+                    program_id=[program_id],
+                    discriminator=[instruction_signature.discriminator],
+                    include_transactions=True,
+                )
+            ],
         ),
     )
 
@@ -127,7 +94,7 @@ def make_pipeline(
             kind=cc.StepKind.CUSTOM,
             config=cc.CustomStepConfig(
                 runner=process_data,
-                context={"discriminator": discriminator},
+                context={"discriminator": instruction_signature.discriminator},
             ),
         ),
         cc.Step(
