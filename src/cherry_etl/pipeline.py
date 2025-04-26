@@ -13,7 +13,9 @@ from .config import (
     StepKind,
     U256ToBinaryConfig,
     SvmDecodeInstructionsConfig,
+    SvmDecodeLogsConfig,
     JoinBlockDataConfig,
+    JoinSvmTransactionDataConfig,
     GlaciersEventsConfig,
 )
 from typing import Dict, List, Optional
@@ -52,6 +54,9 @@ async def process_steps(
         elif step.kind == StepKind.SVM_DECODE_INSTRUCTIONS:
             assert isinstance(step.config, SvmDecodeInstructionsConfig)
             data = step_def.svm_decode_instructions.execute(data, step.config)
+        elif step.kind == StepKind.SVM_DECODE_LOGS:
+            assert isinstance(step.config, SvmDecodeLogsConfig)
+            data = step_def.svm_decode_logs.execute(data, step.config)
         elif step.kind == StepKind.CAST:
             assert isinstance(step.config, CastConfig)
             data = step_def.cast.execute(data, step.config)
@@ -79,6 +84,9 @@ async def process_steps(
         elif step.kind == StepKind.JOIN_BLOCK_DATA:
             assert isinstance(step.config, JoinBlockDataConfig)
             data = step_def.join_block_data.execute(data, step.config)
+        elif step.kind == StepKind.JOIN_SVM_TRANSACTION_DATA:
+            assert isinstance(step.config, JoinSvmTransactionDataConfig)
+            data = step_def.join_svm_transaction_data.execute(data, step.config)
         else:
             raise Exception(f"Unknown step kind: {step.kind}")
 

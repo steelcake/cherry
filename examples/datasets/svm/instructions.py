@@ -10,7 +10,7 @@ from cherry_core import ingest
 from cherry_etl import config as cc
 from cherry_etl import datasets
 from cherry_etl.pipeline import run_pipeline
-from cherry_core.svm_decode import InstructionSignature, ParamInput, DynType, FixedArray
+from cherry_core.svm_decode import InstructionSignature, ParamInput, DynType
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -47,32 +47,16 @@ async def sync_data(
         ),
     )
     # Hardcoded values for the example
-    program_id = "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4"
+    program_id = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
     instruction_signature = InstructionSignature(
-        discriminator="0xe445a52e51cb9a1d40c6cde8260871e2",
+        discriminator="0x03",
         params=[
             ParamInput(
-                name="Amm",
-                param_type=FixedArray(DynType.U8, 32),
-            ),
-            ParamInput(
-                name="InputMint",
-                param_type=FixedArray(DynType.U8, 32),
-            ),
-            ParamInput(
-                name="InputAmount",
+                name="Amount",
                 param_type=DynType.U64,
-            ),
-            ParamInput(
-                name="OutputMint",
-                param_type=FixedArray(DynType.U8, 32),
-            ),
-            ParamInput(
-                name="OutputAmount",
-                param_type=DynType.U64,
-            ),
+            )
         ],
-        accounts_names=[],
+        accounts_names=["Source", "Destination", "Authority"],
     )
 
     # Create the pipeline using the blocks dataset

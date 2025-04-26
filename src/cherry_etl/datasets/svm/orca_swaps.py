@@ -1,6 +1,6 @@
 from typing import Dict, Optional, Any
 from cherry_core import ingest
-from cherry_core.svm_decode import InstructionSignature
+from cherry_core.svm_decode import InstructionSignature, LogSignature
 from cherry_etl import config as cc
 import polars as pl
 import logging
@@ -15,6 +15,7 @@ def process_data(
         return data
 
     discriminator = context.get("discriminator")
+    filter_logs = context.get("filter_logs", False)
 
     if discriminator is not None and len(discriminator) > 8:
         df = data["instructions"]
@@ -24,6 +25,11 @@ def process_data(
             pass
         processed_df = df.filter(pl.col("data").bin.starts_with(discriminator))
         data["instructions"] = processed_df
+
+    if filter_logs:
+        df = data["logs"]
+        processed_df = df.filter(pl.col("kind") == "data")
+        data["logs"] = processed_df
 
     return data
 
@@ -35,9 +41,41 @@ def make_pipeline(
     instruction_signature: InstructionSignature,
     from_block: int = 0,
     to_block: Optional[int] = None,
+    dataset_name: Optional[str] = None,
+    log_signature: Optional[LogSignature] = None,
 ) -> cc.Pipeline:
     if to_block is not None and from_block > to_block:
         raise Exception("block range is invalid")
+
+    filter_logs = log_signature is not None
+
+    if dataset_name is None:
+        decode_instructions_config = cc.SvmDecodeInstructionsConfig(
+            instruction_signature=instruction_signature,
+            hstack=True,
+            allow_decode_fail=True,
+        )
+        decode_logs_config = None
+        if filter_logs:
+            decode_logs_config = cc.SvmDecodeLogsConfig(
+                log_signature=log_signature,
+                allow_decode_fail=True,
+                output_table=f"{dataset_name}_decoded_logs",
+            )
+    else:
+        decode_instructions_config = cc.SvmDecodeInstructionsConfig(
+            instruction_signature=instruction_signature,
+            hstack=True,
+            allow_decode_fail=True,
+            output_table=f"{dataset_name}_decoded_instructions",
+        )
+        decode_logs_config = None
+        if filter_logs:
+            decode_logs_config = cc.SvmDecodeLogsConfig(
+                log_signature=log_signature,
+                allow_decode_fail=True,
+                output_table=f"{dataset_name}_decoded_logs",
+            )
 
     query = ingest.Query(
         kind=ingest.QueryKind.SVM,
@@ -78,12 +116,23 @@ def make_pipeline(
                     transaction_index=True,
                     signature=True,
                 ),
+                log=ingest.svm.LogFields(
+                    block_slot=True,
+                    block_hash=True,
+                    transaction_index=True,
+                    log_index=True,
+                    instruction_address=True,
+                    program_id=True,
+                    kind=True,
+                    message=True,
+                ),
             ),
             instructions=[
                 ingest.svm.InstructionRequest(
                     program_id=[program_id],
                     discriminator=[instruction_signature.discriminator],
                     include_transactions=True,
+                    include_logs=True,
                 )
             ],
         ),
@@ -94,30 +143,42 @@ def make_pipeline(
             kind=cc.StepKind.CUSTOM,
             config=cc.CustomStepConfig(
                 runner=process_data,
-                context={"discriminator": instruction_signature.discriminator},
+                context={
+                    "discriminator": instruction_signature.discriminator,
+                    "filter_logs": filter_logs,
+                },
             ),
         ),
         cc.Step(
             kind=cc.StepKind.SVM_DECODE_INSTRUCTIONS,
-            config=cc.SvmDecodeInstructionsConfig(
-                instruction_signature=instruction_signature,
-                hstack=True,
-                allow_decode_fail=True,
-            ),
-        ),
-        cc.Step(
-            kind=cc.StepKind.JOIN_SVM_TRANSACTION_DATA,
-            config=cc.JoinSvmTransactionDataConfig(),
-        ),
-        cc.Step(
-            kind=cc.StepKind.JOIN_BLOCK_DATA,
-            config=cc.JoinBlockDataConfig(),
-        ),
-        cc.Step(
-            kind=cc.StepKind.BASE58_ENCODE,
-            config=cc.Base58EncodeConfig(),
+            config=decode_instructions_config,
         ),
     ]
+
+    if filter_logs and decode_logs_config is not None:
+        steps.append(
+            cc.Step(
+                kind=cc.StepKind.SVM_DECODE_LOGS,
+                config=decode_logs_config,
+            ),
+        )
+
+    steps.extend(
+        [
+            cc.Step(
+                kind=cc.StepKind.JOIN_SVM_TRANSACTION_DATA,
+                config=cc.JoinSvmTransactionDataConfig(),
+            ),
+            cc.Step(
+                kind=cc.StepKind.JOIN_BLOCK_DATA,
+                config=cc.JoinBlockDataConfig(),
+            ),
+            cc.Step(
+                kind=cc.StepKind.BASE58_ENCODE,
+                config=cc.Base58EncodeConfig(),
+            ),
+        ]
+    )
 
     return cc.Pipeline(
         provider=provider,

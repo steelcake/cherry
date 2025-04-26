@@ -45,6 +45,7 @@ async def sync_data(
     )
 
     # Hardcoded values for the example
+    dataset_name = "jup_swaps"
     program_id = "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4"
     instruction_signature = InstructionSignature(
         discriminator="0xe445a52e51cb9a1d40c6cde8260871e2",
@@ -74,12 +75,18 @@ async def sync_data(
     )
 
     # Create the pipeline using the blocks dataset
-    pipeline = datasets.svm.instructions(
-        provider, writer, program_id, instruction_signature, from_block, to_block
+    pipeline = datasets.svm.jup_swaps(
+        provider,
+        writer,
+        program_id,
+        instruction_signature,
+        from_block,
+        to_block,
+        dataset_name,
     )
 
     # Run the pipeline
-    await run_pipeline(pipeline_name="instructions", pipeline=pipeline)
+    await run_pipeline(pipeline_name="jup_swaps", pipeline=pipeline)
 
 
 async def main(
@@ -89,7 +96,7 @@ async def main(
     to_block: Optional[int],
 ):
     # Connect to a persistent database file
-    connection = duckdb.connect("examples/database/jup_swaps/jup_swaps.db")
+    connection = duckdb.connect("examples/datasets/svm/solana_swaps/solana_swaps.db")
 
     # sync the data into duckdb
     await sync_data(
@@ -98,10 +105,10 @@ async def main(
 
     # DB Operations - Create tables
     connection.sql(
-        "CREATE OR REPLACE TABLE solana_amm AS SELECT * FROM read_csv('examples/database/jup_swaps/solana_amm.csv');"
+        "CREATE OR REPLACE TABLE solana_amm AS SELECT * FROM read_csv('examples/datasets/svm/solana_swaps/solana_amm.csv');"
     )
     connection.sql(
-        "CREATE OR REPLACE TABLE solana_tokens AS SELECT * FROM read_csv('examples/database/jup_swaps/solana_tokens.csv');"
+        "CREATE OR REPLACE TABLE solana_tokens AS SELECT * FROM read_csv('examples/datasets/svm/solana_swaps/solana_tokens.csv');"
     )
     # DB Operations - Data Transformation
     connection.sql("""
@@ -129,12 +136,11 @@ async def main(
                 di.transaction_index AS transaction_index,
                 di.instruction_address AS instruction_address,
                 di.timestamp AS block_timestamp
-            FROM decoded_instructions di
+            FROM jup_swaps_decoded_instructions di
             LEFT JOIN solana_amm sa ON di.amm = sa.amm_address
             LEFT JOIN solana_tokens it ON di.inputmint = it.token_address
             LEFT JOIN solana_tokens ot ON di.outputmint = ot.token_address;
                           """)
-    connection.sql("COPY jup_swaps TO 'jup_swaps.parquet' (FORMAT PARQUET)")
     data = connection.sql("SELECT * FROM jup_swaps LIMIT 3")
     logger.info(f"\n{data}")
 

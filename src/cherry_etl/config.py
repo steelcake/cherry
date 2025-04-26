@@ -4,7 +4,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Callable
 
 from cherry_core.ingest import ProviderConfig, Query
-from cherry_core.svm_decode import InstructionSignature
+from cherry_core.svm_decode import InstructionSignature, LogSignature
 from clickhouse_connect.driver.asyncclient import AsyncClient as ClickHouseClient
 from pyiceberg.catalog import Catalog as IcebergCatalog
 import deltalake
@@ -35,7 +35,9 @@ class StepKind(str, Enum):
     BASE58_ENCODE = "base58_encode"
     U256_TO_BINARY = "u256_to_binary"
     SVM_DECODE_INSTRUCTIONS = "svm_decode_instructions"
+    SVM_DECODE_LOGS = "svm_decode_logs"
     JOIN_BLOCK_DATA = "join_block_data"
+    JOIN_SVM_TRANSACTION_DATA = "join_svm_transaction_data"
     GLACIERS_EVENTS = "glaciers_events"
 
 
@@ -113,8 +115,19 @@ class Writer:
 @dataclass
 class JoinBlockDataConfig:
     tables: Optional[list[str]] = None
-    join_left_on: Optional[str] = "block_hash"
-    join_blocks_on: Optional[str] = "hash"
+    join_left_on: list[str] = field(default_factory=lambda: ["block_hash"])
+    join_blocks_on: list[str] = field(default_factory=lambda: ["hash"])
+
+
+@dataclass
+class JoinSvmTransactionDataConfig:
+    tables: Optional[list[str]] = None
+    join_left_on: list[str] = field(
+        default_factory=lambda: ["block_slot", "block_hash", "transaction_index"]
+    )
+    join_transactions_on: list[str] = field(
+        default_factory=lambda: ["block_slot", "block_hash", "transaction_index"]
+    )
 
 
 @dataclass
@@ -148,6 +161,15 @@ class SvmDecodeInstructionsConfig:
     allow_decode_fail: bool = False
     input_table: str = "instructions"
     output_table: str = "decoded_instructions"
+    hstack: bool = True
+
+
+@dataclass
+class SvmDecodeLogsConfig:
+    log_signature: LogSignature
+    allow_decode_fail: bool = False
+    input_table: str = "logs"
+    output_table: str = "decoded_logs"
     hstack: bool = True
 
 
@@ -199,8 +221,10 @@ class Step:
         | CastByTypeConfig
         | Base58EncodeConfig
         | SvmDecodeInstructionsConfig
+        | SvmDecodeLogsConfig
         | CustomStepConfig
         | JoinBlockDataConfig
+        | JoinSvmTransactionDataConfig
         | GlaciersEventsConfig
     )
     name: Optional[str] = None
