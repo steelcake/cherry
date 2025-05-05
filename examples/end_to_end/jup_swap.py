@@ -6,7 +6,7 @@
 # uv run examples/end_to_end/jup_swap.py --from_block 330447751 --to_block 330447751
 
 # After run, you can see the result in the database:
-# run duckdb examples/end_to_end/solana_swaps.db
+# run duckdb data/solana_swaps.db
 # SELECT * FROM jup_swaps_decoded_instructions LIMIT 3;
 # SELECT * FROM jup_swaps LIMIT 3;
 ################################################################################
