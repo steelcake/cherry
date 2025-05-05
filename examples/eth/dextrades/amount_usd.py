@@ -39,8 +39,8 @@ def calculate_amount_usd(swaps: pl.DataFrame) -> pl.DataFrame:
     )
 
     # Join prices to swaps using asof join
-    return swaps.join_asof(
-        price_df.sort("block_timestamp"), on="block_timestamp", strategy="backward"
+    return swaps.sort("block_timestamp").join_asof(
+        price_df.sort("block_timestamp"), left_on="block_timestamp", right_on="block_timestamp", strategy="backward"
     ).with_columns(
         # Calculate USD amount using token amounts and token decimals
         # The actual decimal adjustment will happen in pipeline.py
@@ -75,5 +75,6 @@ def calculate_amount_usd(swaps: pl.DataFrame) -> pl.DataFrame:
             * (1.0 / (10.0 ** pl.col("token_sold_decimals")))
         )
         .otherwise(None)
-        .alias("amount_usd")
+        .alias("amount_usd"),
+        pl.col("hash").alias("tx_hash")
     )

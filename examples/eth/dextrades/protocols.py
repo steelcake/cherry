@@ -74,4 +74,8 @@ class UniswapV2:
             .then(pl.col("token0_decimals"))
             .otherwise(pl.col("token1_decimals"))
             .alias("token_sold_decimals"),
+            pl.col("timestamp").alias("block_timestamp"),
+            pl.col("hash").alias("tx_hash"),
+            pl.col("from").alias("tx_from"),
+            pl.col("to_right").alias("tx_to"),
         )

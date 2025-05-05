@@ -16,6 +16,7 @@ from .config import (
     SvmDecodeLogsConfig,
     JoinBlockDataConfig,
     JoinSvmTransactionDataConfig,
+    JoinEvmTransactionDataConfig,
     GlaciersEventsConfig,
 )
 from typing import Dict, List, Optional
@@ -87,6 +88,9 @@ async def process_steps(
         elif step.kind == StepKind.JOIN_SVM_TRANSACTION_DATA:
             assert isinstance(step.config, JoinSvmTransactionDataConfig)
             data = step_def.join_svm_transaction_data.execute(data, step.config)
+        elif step.kind == StepKind.JOIN_EVM_TRANSACTION_DATA:
+            assert isinstance(step.config, JoinEvmTransactionDataConfig)
+            data = step_def.join_evm_transaction_data.execute(data, step.config)
         else:
             raise Exception(f"Unknown step kind: {step.kind}")
 
@@ -111,6 +115,10 @@ async def run_pipeline(pipeline: Pipeline, pipeline_name: Optional[str] = None):
         for table_name, table_batch in data.items():
             tables[table_name] = pa.Table.from_batches([table_batch])
 
+        start_block = pa.compute.min(tables["blocks"]["number"])
+        end_block = pa.compute.max(tables["blocks"]["number"])
+        print(f"Processing blocks {start_block} to {end_block}")
+        
         processed = await process_steps(tables, pipeline.steps)
 
         await writer.push_data(processed)

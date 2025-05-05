@@ -1,16 +1,15 @@
-"""DEX trades data processing example using Delta Lake for storage"""
+"""DEX trades data processing example using DuckDB for storage"""
 
 import argparse
 import asyncio
 import os
-import shutil
 from pathlib import Path
 from typing import Optional
 
-import cherry_core
 import polars as pl
 from cherry_core import ingest
-from deltalake import DeltaTable
+from cherry_etl import config as cc
+import duckdb
 from dotenv import load_dotenv
 from pipeline import create_pipeline
 from protocols import UniswapV2
@@ -20,7 +19,7 @@ from cherry_etl import run_pipeline
 # Configuration
 TABLE_NAME = "dex_trades"
 SCRIPT_DIR = Path(__file__).parent
-DATA_PATH = str(Path.cwd() / "data" / "deltalake")
+DATA_PATH = str(Path.cwd() / "data")
 DEFAULT_FROM_BLOCK = 18000000
 DEFAULT_TO_BLOCK = DEFAULT_FROM_BLOCK + 100
 
@@ -38,64 +37,6 @@ SQD_PROVIDER_URL = os.getenv("SQD_PROVIDER_URL")
 RPC_URL = os.getenv("RPC_URL")
 
 
-async def sync_data(
-    delta_path: str,
-    provider_kind: ingest.ProviderKind,
-    provider_url: str,
-    from_block: int,
-    to_block: int,
-):
-    # Setup the protocol handler
-    dex = UniswapV2()
-
-    # Define query fields
-    request_fields = ingest.evm.Fields(
-        block=ingest.evm.BlockFields(number=True, timestamp=True),
-        transaction=ingest.evm.TransactionFields(
-            block_number=True, transaction_index=True, hash=True, from_=True, to=True
-        ),
-        log=ingest.evm.LogFields(
-            block_number=True,
-            transaction_index=True,
-            log_index=True,
-            address=True,
-            data=True,
-            topic0=True,
-            topic1=True,
-            topic2=True,
-            topic3=True,
-        ),
-    )
-
-    # Create provider config and query
-    provider = ingest.ProviderConfig(kind=provider_kind, url=provider_url)
-    query = ingest.Query(
-        kind=ingest.QueryKind.EVM,
-        params=ingest.evm.Query(
-            from_block=from_block,
-            to_block=to_block,
-            logs=[
-                ingest.evm.LogRequest(
-                    topic0=[cherry_core.evm_signature_to_topic0(dex.event_signature)],
-                    include_blocks=True,
-                    include_transactions=True,
-                )
-            ],
-            fields=request_fields,
-        ),
-    )
-
-    # Create and run the pipeline
-    pipeline = create_pipeline(
-        dex=dex,
-        delta_path=delta_path,
-        provider=provider,
-        query=query,
-        table_name=TABLE_NAME,
-    )
-    await run_pipeline(pipeline_name=TABLE_NAME, pipeline=pipeline)
-
-
 async def main(
     provider_kind: ingest.ProviderKind,
     provider_url: Optional[str],
@@ -106,38 +47,44 @@ async def main(
     if provider_url is None:
         raise ValueError("Provider URL cannot be None")
 
-    # Ensure to_block is not None, use from_block + 100 as default if it is
-    actual_to_block = to_block if to_block is not None else from_block + 100
+    connection = duckdb.connect("data/dex_trades.db")
+    try:
+        last_block_number = connection.sql("SELECT MAX(block_number) FROM dex_trades").fetchone()[0]
+        print(f"Last run block number: {last_block_number}")
+    except:
+        last_block_number = None
+    start_block = last_block_number if (last_block_number is not None and last_block_number > from_block) else from_block
+    end_block = to_block if to_block is not None else from_block + 100
 
-    # Clean up existing table before running
-    table_path = Path(f"{DATA_PATH}/{TABLE_NAME}")
-    if table_path.exists():
-        print(f"Removing existing table at {table_path}")
-        shutil.rmtree(table_path)
+    if start_block >= end_block:
+        print("No new blocks to process")
+        return
 
-    # Process data
-    await sync_data(DATA_PATH, provider_kind, provider_url, from_block, actual_to_block)
 
-    # Display results
-    table = DeltaTable(f"{DATA_PATH}/{TABLE_NAME}").to_pyarrow_table()
-    # Cast to DataFrame explicitly since we know it's a table
-    df = pl.DataFrame(pl.from_arrow(table))
-    print(table.schema)
-
-    print(
-        df.select(
-            "blockchain",
-            "project",
-            "version",
-            "block_date",
-            "block_time",
-            "token_bought_symbol",
-            "token_sold_symbol",
-            "token_bought_amount",
-            "token_sold_amount",
-            "amount_usd",
-        ).tail(5)
+    writer = cc.Writer(
+        kind=cc.WriterKind.DUCKDB,
+        config=cc.DuckdbWriterConfig(
+            connection=connection.cursor(),
+        ),
     )
+
+    # Setup the protocol handler
+    dex = UniswapV2()
+
+    # Create and run the pipeline
+    pipeline = create_pipeline(
+        dex=dex,
+        provider_kind=provider_kind,
+        provider_url=provider_url,
+        from_block=start_block,
+        to_block=end_block,
+        writer=writer,
+        table_name=TABLE_NAME,
+    )
+    
+    await run_pipeline(pipeline_name=TABLE_NAME, pipeline=pipeline)
+
+    connection.close()
 
 
 if __name__ == "__main__":
