@@ -114,10 +114,6 @@ async def run_pipeline(pipeline: Pipeline, pipeline_name: Optional[str] = None):
 
         for table_name, table_batch in data.items():
             tables[table_name] = pa.Table.from_batches([table_batch])
-
-        start_block = pa.compute.min(tables["blocks"]["number"])
-        end_block = pa.compute.max(tables["blocks"]["number"])
-        print(f"Processing blocks {start_block} to {end_block}")
         
         processed = await process_steps(tables, pipeline.steps)
 

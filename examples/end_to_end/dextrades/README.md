@@ -20,7 +20,7 @@ Unlike [other](https://github.com/duneanalytics/spellbook/tree/main/dbt_subproje
 
 ```bash
 > uv add dexmetadata
-> uv run python examples/eth/dextrades/main.py
+> uv run python examples/end-to-end/dextrades/main.py
 
 ┌────────────┬─────────┬─────────┬────────────┬────────────┬─────────────────────┬───────────────────┬─────────────────────┬───────────────────┬────────────┐
 │ blockchain ┆ project ┆ version ┆ block_date ┆ block_time ┆ token_bought_symbol ┆ token_sold_symbol ┆ token_bought_amount ┆ token_sold_amount ┆ amount_usd │
