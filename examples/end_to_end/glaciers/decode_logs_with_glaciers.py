@@ -6,7 +6,7 @@
 # uv run examples/end_to_end/glaciers/decode_logs_with_glaciers.py --provider hypersync --from_block 20000000 --to_block 20000001
 
 # After run, you can see the result in the database:
-# run duckdb data/glaciers_decoded_logs.db
+# duckdb data/glaciers_decoded_logs.db
 # SELECT * FROM decoded_logs LIMIT 3;
 # SELECT * FROM ethereum_uni_v2_trades LIMIT 3;
 

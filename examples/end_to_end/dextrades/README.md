@@ -19,8 +19,8 @@ Unlike [other](https://github.com/duneanalytics/spellbook/tree/main/dbt_subproje
 
 
 ```bash
-> uv add dexmetadata
-> uv run python examples/end-to-end/dextrades/main.py
+> uv pip install dexmetadata cherry-etl cherry-core
+> uv run python examples/end_to_end/dextrades/main.py
 
 ┌────────────┬─────────┬─────────┬────────────┬────────────┬─────────────────────┬───────────────────┬─────────────────────┬───────────────────┬────────────┐
 │ blockchain ┆ project ┆ version ┆ block_date ┆ block_time ┆ token_bought_symbol ┆ token_sold_symbol ┆ token_bought_amount ┆ token_sold_amount ┆ amount_usd │
@@ -34,3 +34,13 @@ Unlike [other](https://github.com/duneanalytics/spellbook/tree/main/dbt_subproje
 │ ethereum   ┆ uniswap ┆ 2       ┆ 2023-08-26 ┆ 16:41:35   ┆ WETH                ┆ FLASH             ┆ 0.322445            ┆ 50000.0           ┆ 531.106439 │
 └────────────┴─────────┴─────────┴────────────┴────────────┴─────────────────────┴───────────────────┴─────────────────────┴───────────────────┴────────────┘
 ```
+
+## Checking the tables in storage
+```bash
+> duckdb data/dex_trades.db
+show tables;
+SELECT * FROM uni_v2_dex_trades LIMIT 3;
+SELECT * FROM metadata LIMIT 3;
+SELECT * FROM dex_trades LIMIT 3;
+```
+
