@@ -1,8 +1,4 @@
-<<<<<<< Updated upstream
-# Cherry is published to PyPI as cherry-etl.
-=======
-# Cherry is published to PyPI as cherry-etl and cherry-coreand.
->>>>>>> Stashed changes
+# Cherry is published to PyPI as cherry-etl and cherry-core.
 # To install it, run: pip install cherry-etl cherry-core
 # Or with uv: uv pip install cherry-etl cherry-core
 
@@ -18,10 +14,7 @@
 
 import argparse
 import asyncio
-<<<<<<< Updated upstream
-=======
 from pathlib import Path
->>>>>>> Stashed changes
 from typing import Optional
 
 import duckdb
@@ -33,14 +26,11 @@ from cherry_core.ingest import ProviderConfig, ProviderKind, QueryKind, Query as
 from cherry_core.ingest.svm import Query, Fields, InstructionFields, BlockFields, TransactionFields, InstructionRequest
 
 
-<<<<<<< Updated upstream
-=======
 # Create directories
 DATA_PATH = str(Path.cwd() / "data")
 Path(DATA_PATH).mkdir(parents=True, exist_ok=True)
 
 
->>>>>>> Stashed changes
 ################################################################################
 # Main function
 
@@ -48,11 +38,8 @@ async def main(
     from_block: int,
     to_block: Optional[int],
 ):
-<<<<<<< Updated upstream
-=======
     # Ensure to_block is not None, use from_block + 100 as default if it is
     actual_to_block = to_block if to_block is not None else from_block + 10
->>>>>>> Stashed changes
 
     # Defining a Provider
     provider = ProviderConfig(
@@ -65,11 +52,7 @@ async def main(
         kind=QueryKind.SVM,
         params=Query(
             from_block=from_block, # Required: Starting block number
-<<<<<<< Updated upstream
-            to_block=to_block, # Optional: Ending block number
-=======
             to_block=actual_to_block, # Optional: Ending block number
->>>>>>> Stashed changes
             include_all_blocks=True, # Optional: Weather to include blocks with no matches in the tables request
             fields=Fields( # Required: Which fields (columns) to return on each table
                 instruction=InstructionFields(
@@ -166,11 +149,7 @@ async def main(
     ]
 
     # Write to Database
-<<<<<<< Updated upstream
-    connection = duckdb.connect("examples/end_to_end/solana_swaps.db")
-=======
     connection = duckdb.connect("data/solana_swaps.db")
->>>>>>> Stashed changes
     writer = cc.Writer(
         kind=cc.WriterKind.DUCKDB,
         config=cc.DuckdbWriterConfig(
