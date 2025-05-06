@@ -114,11 +114,7 @@ def make_pipeline(
         ),
         cc.Step(
             kind=cc.StepKind.SVM_DECODE_INSTRUCTIONS,
-            config=cc.SvmDecodeInstructionsConfig(
-                instruction_signature=instruction_signature,
-                hstack=True,
-                allow_decode_fail=True,
-            ),
+            config=decode_instructions_config
         ),
         cc.Step(
             kind=cc.StepKind.JOIN_SVM_TRANSACTION_DATA,
@@ -126,7 +122,10 @@ def make_pipeline(
         ),
         cc.Step(
             kind=cc.StepKind.JOIN_BLOCK_DATA,
-            config=cc.JoinBlockDataConfig(),
+            config=cc.JoinBlockDataConfig(
+                join_left_on=["block_hash"],
+                join_blocks_on=["hash"]
+            ),
         ),
         cc.Step(
             kind=cc.StepKind.BASE58_ENCODE,

@@ -1,3 +1,16 @@
+# Cherry is published to PyPI as cherry-etl and cherry-core.
+# To install it, run: pip install cherry-etl cherry-core
+# Or with uv: uv pip install cherry-etl cherry-core
+
+# You can run this script with:
+# uv run examples/using_datasets/svm/orca_swaps.py --from_block 330447757 --to_block 330447760
+
+# After run, you can see the result in the database:
+# duckdb data/solana_swaps.db
+# SELECT * FROM orca_swaps_decoded_instructions LIMIT 3;
+# SELECT * FROM orca_swaps LIMIT 3;
+# SELECT * FROM orca_swaps_decoded_logs LIMIT 3;
+
 import argparse
 import asyncio
 import logging
