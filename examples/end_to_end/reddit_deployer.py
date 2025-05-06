@@ -1,3 +1,14 @@
+# Cherry is published to PyPI as cherry-etl and cherry-core.
+# To install it, run: pip install cherry-etl cherry-core
+# Or with uv: uv pip install cherry-etl cherry-core
+
+# You can run this script with:
+# uv run examples/end_to_end/reddit_deployer.py --from_block 71180000 --to_block 71185713
+
+# After run, you can see the result in the database:
+# duckdb data/reddit_deployer_contracts.db
+# SELECT * FROM reddit_deployer_contracts LIMIT 3;
+
 import argparse
 import asyncio
 import logging
@@ -9,6 +20,7 @@ import polars as pl
 import pyarrow as pa
 from cherry_core import ingest
 from dotenv import load_dotenv
+from pathlib import Path
 
 from cherry_etl import config as cc
 from cherry_etl.pipeline import run_pipeline
@@ -17,6 +29,10 @@ load_dotenv()
 
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO").upper())
 logger = logging.getLogger("examples.eth.reddit_deployer")
+
+# Create directories
+DATA_PATH = str(Path.cwd() / "data")
+Path(DATA_PATH).mkdir(parents=True, exist_ok=True)
 
 
 PROVIDER_URLS = {
@@ -34,8 +50,9 @@ def process_data(data: Dict[str, pl.DataFrame], _: Any) -> Dict[str, pl.DataFram
     traces = data["traces"]
 
     deployed_contracts = traces.filter(pl.col("address").is_not_null())
-
-    return {"deployed_contracts": deployed_contracts}
+    
+    data["deployed_contracts"] = deployed_contracts
+    return data
 
 
 async def main(
@@ -45,7 +62,7 @@ async def main(
     to_block: Optional[int],
 ):
     # Start duckdb
-    connection = duckdb.connect().cursor()
+    connection = duckdb.connect(database="data/reddit_deployer_contracts.db")
 
     logger.info(f"starting to ingest from block {from_block}")
 
@@ -59,7 +76,7 @@ async def main(
         params=ingest.evm.Query(
             from_block=from_block,
             to_block=to_block,
-            include_all_blocks=True,
+            include_all_blocks=False,
             transactions=[
                 ingest.evm.TransactionRequest(
                     from_=[CONTRACT_ADDRESS], include_traces=True
@@ -69,6 +86,12 @@ async def main(
                 trace=ingest.evm.TraceFields(
                     address=True,
                     block_number=True,
+                ),
+                transaction=ingest.evm.TransactionFields(
+                    hash=True,
+                ),
+                block=ingest.evm.BlockFields(
+                    number=True,
                 ),
             ),
         ),
@@ -110,7 +133,7 @@ async def main(
     await run_pipeline(pipeline=pipeline, pipeline_name="reddit deployer")
 
     data = connection.sql("SELECT * FROM deployed_contracts")
-    logger.info(data)
+    logger.info(f"\n{data}")
 
 
 if __name__ == "__main__":

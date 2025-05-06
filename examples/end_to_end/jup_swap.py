@@ -140,7 +140,10 @@ async def main(
         ),
         cc.Step(
             kind=cc.StepKind.JOIN_BLOCK_DATA,
-            config=cc.JoinBlockDataConfig(),
+            config=cc.JoinBlockDataConfig(
+                join_blocks_on=["hash"],
+                join_left_on=["block_hash"],
+            ),
         ),
         cc.Step(
             kind=cc.StepKind.BASE58_ENCODE,
@@ -170,8 +173,8 @@ async def main(
 
     # Post-pipeline Analytics
     connection.sql("""
-        CREATE OR REPLACE TABLE solana_amm AS SELECT * FROM read_csv('examples/datasets/svm/solana_swaps/solana_amm.csv');
-        CREATE OR REPLACE TABLE solana_tokens AS SELECT * FROM read_csv('examples/datasets/svm/solana_swaps/solana_tokens.csv');
+        CREATE OR REPLACE TABLE solana_amm AS SELECT * FROM read_csv('examples/using_datasets/svm/solana_swaps/solana_amm.csv');
+        CREATE OR REPLACE TABLE solana_tokens AS SELECT * FROM read_csv('examples/using_datasets/svm/solana_swaps/solana_tokens.csv');
         CREATE OR REPLACE TABLE jup_swaps AS            
             SELECT
                 di.amm AS amm,

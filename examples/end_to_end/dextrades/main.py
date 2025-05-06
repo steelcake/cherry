@@ -84,7 +84,8 @@ async def main(
     
     await run_pipeline(pipeline_name=TABLE_NAME, pipeline=pipeline)
 
-    connection.close()
+    data = connection.sql("SELECT * FROM dex_trades LIMIT 3")
+    print(data)
 
 
 if __name__ == "__main__":

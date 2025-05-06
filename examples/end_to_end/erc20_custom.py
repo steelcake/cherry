@@ -1,4 +1,14 @@
 # This example shows a simple custom pipeline that ingests and decodes erc20 transfers into duckdb
+# Cherry is published to PyPI as cherry-etl and cherry-core.
+# To install it, run: pip install cherry-etl cherry-core
+# Or with uv: uv pip install cherry-etl cherry-core
+
+# You can run this script with:
+# uv run examples/end_to_end/erc20_custom.py --provider hypersync
+
+# After run, you can see the result in the database:
+# duckdb data/transfers.db
+# SELECT * FROM transfers LIMIT 3;
 
 import pyarrow as pa
 from cherry_etl import config as cc
@@ -7,6 +17,7 @@ from cherry_core import ingest, evm_signature_to_topic0
 import logging
 import os
 import asyncio
+from pathlib import Path
 from dotenv import load_dotenv
 import traceback
 from typing import Dict, Optional, Any
@@ -19,8 +30,9 @@ load_dotenv()
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO").upper())
 logger = logging.getLogger(__name__)
 
-if not os.path.exists("data"):
-    os.makedirs("data")
+# Create directories
+DATA_PATH = str(Path.cwd() / "data")
+Path(DATA_PATH).mkdir(parents=True, exist_ok=True)
 
 db_path = "./data/transfers"
 
@@ -63,7 +75,7 @@ async def print_last_processed_transfers(db: duckdb.DuckDBPyConnection):
             'SELECT block_number, transaction_hash, "from", "to", amount FROM transfers ORDER BY block_number, log_index DESC LIMIT 10'
         )
         logger.info("printing last 10 transfers:")
-        logger.info(data)
+        logger.info(f"\n{data}")
 
 
 async def main(provider_kind: ingest.ProviderKind, url: Optional[str]):
