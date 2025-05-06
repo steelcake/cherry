@@ -1,8 +1,22 @@
+# Cherry is published to PyPI as cherry-etl and cherry-core.
+# To install it, run: pip install cherry-etl cherry-core
+# Or with uv: uv pip install cherry-etl cherry-core
+
+# You can run this script with:
+# uv run examples/using_datasets/eth/logs.py --provider hypersync --from_block 20000000 --to_block 20000100
+
+# After run, you can see the result in the database:
+# duckdb data/logs.db
+# SELECT * FROM logs LIMIT 3;
+# SELECT * FROM decoded_logs LIMIT 3;
+
+
 import argparse
 import asyncio
 import logging
 import os
 from typing import Optional
+from pathlib import Path
 
 import duckdb
 from cherry_core import ingest
@@ -17,6 +31,8 @@ load_dotenv()
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO").upper())
 logger = logging.getLogger("examples.eth.logs")
 
+DATA_PATH = str(Path.cwd() / "data")
+Path(DATA_PATH).mkdir(parents=True, exist_ok=True)
 
 PROVIDER_URLS = {
     ingest.ProviderKind.HYPERSYNC: "https://eth.hypersync.xyz",
@@ -70,7 +86,7 @@ async def main(
     from_block: int,
     to_block: Optional[int],
 ):
-    connection = duckdb.connect("")
+    connection = duckdb.connect("data/logs.db")
 
     # sync the data into duckdb
     await sync_data(

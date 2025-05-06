@@ -12,7 +12,7 @@
 
 from cherry_etl import config as cc
 from cherry_etl import run_pipeline
-from cherry_etl.datasets.evm import address_appearances
+from cherry_etl.datasets.evm import make_address_appearances_pipeline
 from cherry_core import ingest
 import logging
 import os
@@ -62,7 +62,7 @@ async def sync_data(
     )
 
     # create the pipeline using dataset
-    pipeline = address_appearances(provider, writer, from_block, actual_to_block)
+    pipeline = make_address_appearances_pipeline(provider, writer, from_block, actual_to_block)
 
     # finally run the pipeline
     await run_pipeline(pipeline=pipeline)

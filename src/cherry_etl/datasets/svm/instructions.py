@@ -35,9 +35,24 @@ def make_pipeline(
     instruction_signature: InstructionSignature,
     from_block: int = 0,
     to_block: Optional[int] = None,
+    dataset_name: Optional[str] = None,
 ) -> cc.Pipeline:
     if to_block is not None and from_block > to_block:
         raise Exception("block range is invalid")
+    
+    if dataset_name is None:
+        decode_instructions_config = cc.SvmDecodeInstructionsConfig(
+            instruction_signature=instruction_signature,
+            hstack=True,
+            allow_decode_fail=True,
+        )
+    else:
+        decode_instructions_config = cc.SvmDecodeInstructionsConfig(
+            instruction_signature=instruction_signature,
+            hstack=True,
+            allow_decode_fail=True,
+            output_table=f"{dataset_name}_decoded_instructions",
+        )
 
     query = ingest.Query(
         kind=ingest.QueryKind.SVM,
