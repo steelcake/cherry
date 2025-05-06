@@ -22,8 +22,20 @@ import duckdb
 from cherry_etl import config as cc
 from cherry_etl.pipeline import run_pipeline
 from cherry_core.svm_decode import InstructionSignature, ParamInput, DynType, FixedArray
-from cherry_core.ingest import ProviderConfig, ProviderKind, QueryKind, Query as IngestQuery
-from cherry_core.ingest.svm import Query, Fields, InstructionFields, BlockFields, TransactionFields, InstructionRequest
+from cherry_core.ingest import (
+    ProviderConfig,
+    ProviderKind,
+    QueryKind,
+    Query as IngestQuery,
+)
+from cherry_core.ingest.svm import (
+    Query,
+    Fields,
+    InstructionFields,
+    BlockFields,
+    TransactionFields,
+    InstructionRequest,
+)
 
 
 # Create directories
@@ -33,6 +45,7 @@ Path(DATA_PATH).mkdir(parents=True, exist_ok=True)
 
 ################################################################################
 # Main function
+
 
 async def main(
     from_block: int,
@@ -51,10 +64,10 @@ async def main(
     query = IngestQuery(
         kind=QueryKind.SVM,
         params=Query(
-            from_block=from_block, # Required: Starting block number
-            to_block=actual_to_block, # Optional: Ending block number
-            include_all_blocks=True, # Optional: Weather to include blocks with no matches in the tables request
-            fields=Fields( # Required: Which fields (columns) to return on each table
+            from_block=from_block,  # Required: Starting block number
+            to_block=actual_to_block,  # Optional: Ending block number
+            include_all_blocks=True,  # Optional: Weather to include blocks with no matches in the tables request
+            fields=Fields(  # Required: Which fields (columns) to return on each table
                 instruction=InstructionFields(
                     block_slot=True,
                     block_hash=True,
@@ -85,7 +98,7 @@ async def main(
                     signature=True,
                 ),
             ),
-            instructions=[ # Optional: List of specific filters for instructions
+            instructions=[  # Optional: List of specific filters for instructions
                 InstructionRequest(
                     program_id=["JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4"],
                     discriminator=["0xe445a52e51cb9a1d40c6cde8260871e2"],
@@ -160,7 +173,7 @@ async def main(
         ),
     )
 
-    #Running a Pipeline
+    # Running a Pipeline
     pipeline = cc.Pipeline(
         provider=provider,
         query=query,
@@ -208,9 +221,10 @@ async def main(
     print(f"Dex Trades Jupiter Swaps:\n{data}")
     connection.close()
 
+
 ################################################################################
 # CLI Argument Parser for starting and ending block
-if __name__ == "__main__": 
+if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Instructions tracker")
     parser.add_argument(
         "--from_block",

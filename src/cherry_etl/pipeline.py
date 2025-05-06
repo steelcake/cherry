@@ -114,7 +114,7 @@ async def run_pipeline(pipeline: Pipeline, pipeline_name: Optional[str] = None):
 
         for table_name, table_batch in data.items():
             tables[table_name] = pa.Table.from_batches([table_batch])
-        
+
         processed = await process_steps(tables, pipeline.steps)
 
         await writer.push_data(processed)

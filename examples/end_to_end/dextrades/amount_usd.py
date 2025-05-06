@@ -39,42 +39,49 @@ def calculate_amount_usd(swaps: pl.DataFrame) -> pl.DataFrame:
     )
 
     # Join prices to swaps using asof join
-    return swaps.sort("block_timestamp").join_asof(
-        price_df.sort("block_timestamp"), left_on="block_timestamp", right_on="block_timestamp", strategy="backward"
-    ).with_columns(
-        # Calculate USD amount using token amounts and token decimals
-        # The actual decimal adjustment will happen in pipeline.py
-        pl.when(pl.col("token_bought_address").str.to_lowercase() == WETH)
-        .then(
-            # For WETH tokens, multiply by ETH price
-            (
+    return (
+        swaps.sort("block_timestamp")
+        .join_asof(
+            price_df.sort("block_timestamp"),
+            left_on="block_timestamp",
+            right_on="block_timestamp",
+            strategy="backward",
+        )
+        .with_columns(
+            # Calculate USD amount using token amounts and token decimals
+            # The actual decimal adjustment will happen in pipeline.py
+            pl.when(pl.col("token_bought_address").str.to_lowercase() == WETH)
+            .then(
+                # For WETH tokens, multiply by ETH price
+                (
+                    pl.col("token_bought_amount")
+                    * (1.0 / (10.0 ** pl.col("token_bought_decimals")))
+                )
+                * pl.col("eth_price")
+            )
+            .when(pl.col("token_sold_address").str.to_lowercase() == WETH)
+            .then(
+                # For WETH tokens, multiply by ETH price
+                (
+                    pl.col("token_sold_amount")
+                    * (1.0 / (10.0 ** pl.col("token_sold_decimals")))
+                )
+                * pl.col("eth_price")
+            )
+            .when(pl.col("token_bought_address").str.to_lowercase() == USDC)
+            .then(
+                # For USDC tokens, just use the amount
                 pl.col("token_bought_amount")
                 * (1.0 / (10.0 ** pl.col("token_bought_decimals")))
             )
-            * pl.col("eth_price")
-        )
-        .when(pl.col("token_sold_address").str.to_lowercase() == WETH)
-        .then(
-            # For WETH tokens, multiply by ETH price
-            (
+            .when(pl.col("token_sold_address").str.to_lowercase() == USDC)
+            .then(
+                # For USDC tokens, just use the amount
                 pl.col("token_sold_amount")
                 * (1.0 / (10.0 ** pl.col("token_sold_decimals")))
             )
-            * pl.col("eth_price")
+            .otherwise(None)
+            .alias("amount_usd"),
+            pl.col("hash").alias("tx_hash"),
         )
-        .when(pl.col("token_bought_address").str.to_lowercase() == USDC)
-        .then(
-            # For USDC tokens, just use the amount
-            pl.col("token_bought_amount")
-            * (1.0 / (10.0 ** pl.col("token_bought_decimals")))
-        )
-        .when(pl.col("token_sold_address").str.to_lowercase() == USDC)
-        .then(
-            # For USDC tokens, just use the amount
-            pl.col("token_sold_amount")
-            * (1.0 / (10.0 ** pl.col("token_sold_decimals")))
-        )
-        .otherwise(None)
-        .alias("amount_usd"),
-        pl.col("hash").alias("tx_hash")
     )

@@ -40,6 +40,7 @@ logger = logging.getLogger("examples.svm.orca_swaps")
 DATA_PATH = str(Path.cwd() / "data")
 Path(DATA_PATH).mkdir(parents=True, exist_ok=True)
 
+
 async def sync_data(
     connection: duckdb.DuckDBPyConnection,
     provider_kind: ingest.ProviderKind,

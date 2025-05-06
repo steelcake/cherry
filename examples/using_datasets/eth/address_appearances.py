@@ -43,8 +43,10 @@ async def sync_data(
 ):
     # Ensure to_block is not None, use from_block + 10 as default if it is
     actual_to_block = to_block if to_block is not None else from_block + 10
-    
-    logger.info(f"starting to ingest from block {from_block} to block {actual_to_block}")
+
+    logger.info(
+        f"starting to ingest from block {from_block} to block {actual_to_block}"
+    )
 
     # The provider we want to use is selected like this, only need to change these two
     #  parameters to switch to another provider and the pipeline work exactly the same
@@ -62,7 +64,9 @@ async def sync_data(
     )
 
     # create the pipeline using dataset
-    pipeline = make_address_appearances_pipeline(provider, writer, from_block, actual_to_block)
+    pipeline = make_address_appearances_pipeline(
+        provider, writer, from_block, actual_to_block
+    )
 
     # finally run the pipeline
     await run_pipeline(pipeline=pipeline)
@@ -86,7 +90,7 @@ async def main(
     data = connection.sql(
         "SELECT address, COUNT(*) as appearances FROM address_appearances GROUP BY address ORDER BY appearances DESC LIMIT 20"
     )
-    logger.info(f'\n{data}')
+    logger.info(f"\n{data}")
 
 
 if __name__ == "__main__":

@@ -39,6 +39,7 @@ PROVIDER_URLS = {
     ingest.ProviderKind.SQD: "https://portal.sqd.dev/datasets/ethereum-mainnet",
 }
 
+
 async def sync_data(
     connection: duckdb.DuckDBPyConnection,
     provider_kind: ingest.ProviderKind,
@@ -47,12 +48,12 @@ async def sync_data(
     provider_url: Optional[str],
     to_block: Optional[int],
 ):
-    
     # Ensure to_block is not None, use from_block + 10 as default if it is
     actual_to_block = to_block if to_block is not None else from_block + 10
-    
-    logger.info(f"starting to ingest from block {from_block} to block {actual_to_block}")
 
+    logger.info(
+        f"starting to ingest from block {from_block} to block {actual_to_block}"
+    )
 
     provider = ingest.ProviderConfig(
         kind=provider_kind,
@@ -65,7 +66,7 @@ async def sync_data(
             connection=connection.cursor(),
         ),
     )
-    
+
     query = ingest.Query(
         kind=ingest.QueryKind.EVM,
         params=ingest.evm.Query(
@@ -153,9 +154,7 @@ async def main(
         with open(abi_db_path, "wb") as file:
             file.write(response.content)
 
-    connection = duckdb.connect(
-        "data/glaciers_decoded_logs.db"
-    )
+    connection = duckdb.connect("data/glaciers_decoded_logs.db")
 
     # sync the data into duckdb
     await sync_data(

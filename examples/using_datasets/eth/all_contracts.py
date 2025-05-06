@@ -62,7 +62,9 @@ async def sync_data(
     )
 
     # Create the pipeline using the all_contracts dataset
-    pipeline = datasets.evm.make_all_contracts_pipeline(provider, writer, from_block, to_block)
+    pipeline = datasets.evm.make_all_contracts_pipeline(
+        provider, writer, from_block, to_block
+    )
 
     # Run the pipeline
     await run_pipeline(pipeline_name="all_contracts", pipeline=pipeline)

@@ -62,7 +62,9 @@ async def sync_data(
     )
 
     # Create the pipeline using the all_contracts dataset
-    pipeline = datasets.evm.make_erc20_transfers_pipeline(provider, writer, from_block, to_block)
+    pipeline = datasets.evm.make_erc20_transfers_pipeline(
+        provider, writer, from_block, to_block
+    )
 
     # Run the pipeline
     await run_pipeline(pipeline_name="erc20_transfers", pipeline=pipeline)

@@ -172,8 +172,7 @@ def make_pipeline(
             cc.Step(
                 kind=cc.StepKind.JOIN_BLOCK_DATA,
                 config=cc.JoinBlockDataConfig(
-                    join_left_on=["block_hash"],
-                    join_blocks_on=["hash"]
+                    join_left_on=["block_hash"], join_blocks_on=["hash"]
                 ),
             ),
             cc.Step(

@@ -39,7 +39,7 @@ def make_pipeline(
 ) -> cc.Pipeline:
     if to_block is not None and from_block > to_block:
         raise Exception("block range is invalid")
-    
+
     if dataset_name is None:
         decode_instructions_config = cc.SvmDecodeInstructionsConfig(
             instruction_signature=instruction_signature,
@@ -113,8 +113,7 @@ def make_pipeline(
             ),
         ),
         cc.Step(
-            kind=cc.StepKind.SVM_DECODE_INSTRUCTIONS,
-            config=decode_instructions_config
+            kind=cc.StepKind.SVM_DECODE_INSTRUCTIONS, config=decode_instructions_config
         ),
         cc.Step(
             kind=cc.StepKind.JOIN_SVM_TRANSACTION_DATA,
@@ -123,8 +122,7 @@ def make_pipeline(
         cc.Step(
             kind=cc.StepKind.JOIN_BLOCK_DATA,
             config=cc.JoinBlockDataConfig(
-                join_left_on=["block_hash"],
-                join_blocks_on=["hash"]
+                join_left_on=["block_hash"], join_blocks_on=["hash"]
             ),
         ),
         cc.Step(

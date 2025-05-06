@@ -50,7 +50,7 @@ def process_data(data: Dict[str, pl.DataFrame], _: Any) -> Dict[str, pl.DataFram
     traces = data["traces"]
 
     deployed_contracts = traces.filter(pl.col("address").is_not_null())
-    
+
     data["deployed_contracts"] = deployed_contracts
     return data
 

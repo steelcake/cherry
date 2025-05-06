@@ -49,17 +49,21 @@ async def main(
 
     connection = duckdb.connect("data/dex_trades.db")
     try:
-        last_block_number = connection.sql("SELECT MAX(block_number) FROM dex_trades").fetchone()[0]
+        result = connection.sql("SELECT MAX(block_number) FROM dex_trades").fetchone()
+        last_block_number = result[0] if result is not None else None
         print(f"Last run block number: {last_block_number}")
-    except:
+    except duckdb.Error:
         last_block_number = None
-    start_block = last_block_number if (last_block_number is not None and last_block_number > from_block) else from_block
+    start_block = (
+        last_block_number
+        if (last_block_number is not None and last_block_number > from_block)
+        else from_block
+    )
     end_block = to_block if to_block is not None else from_block + 100
 
     if start_block >= end_block:
         print("No new blocks to process")
         return
-
 
     writer = cc.Writer(
         kind=cc.WriterKind.DUCKDB,
@@ -81,7 +85,7 @@ async def main(
         writer=writer,
         table_name=TABLE_NAME,
     )
-    
+
     await run_pipeline(pipeline_name=TABLE_NAME, pipeline=pipeline)
 
     data = connection.sql("SELECT * FROM dex_trades LIMIT 3")

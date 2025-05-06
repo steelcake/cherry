@@ -26,29 +26,33 @@ if RPC_URL is None:
 
 
 def enrich_with_metadata(
-    data: Dict[str, pl.DataFrame], connection: duckdb.DuckDBPyConnection
+    data: Dict[str, pl.DataFrame], connection: Any
 ) -> Dict[str, pl.DataFrame]:
     """Add token metadata for all pools"""
     # Get stored metadata
+    if not isinstance(connection, duckdb.DuckDBPyConnection):
+        raise ValueError("Writer must be configured with DuckDB connection")
 
     try:
         stored_metadata = connection.sql("SELECT * FROM metadata").pl()
-    except:
-        stored_metadata = pl.DataFrame(schema={
-            'address': pl.String,
-            'token0_address': pl.String,
-            'token0_name': pl.String,
-            'token0_symbol': pl.String,
-            'token0_decimals': pl.Int64,
-            'token1_address': pl.String,
-            'token1_name': pl.String,
-            'token1_symbol': pl.String,
-            'token1_decimals': pl.Int64,
-            'is_valid': pl.Boolean,
-            'protocol': pl.String,
-            'identifier': pl.String,
-            'chain_id': pl.Int64
-        })
+    except duckdb.Error:
+        stored_metadata = pl.DataFrame(
+            schema={
+                "address": pl.String,
+                "token0_address": pl.String,
+                "token0_name": pl.String,
+                "token0_symbol": pl.String,
+                "token0_decimals": pl.Int64,
+                "token1_address": pl.String,
+                "token1_name": pl.String,
+                "token1_symbol": pl.String,
+                "token1_decimals": pl.Int64,
+                "is_valid": pl.Boolean,
+                "protocol": pl.String,
+                "identifier": pl.String,
+                "chain_id": pl.Int64,
+            }
+        )
     # Join with decoded logs
     metadata_enriched = data["decoded_logs"].join(
         stored_metadata,
@@ -56,7 +60,9 @@ def enrich_with_metadata(
         how="left",
     )
     # Get rows with missing metadata
-    missing_metadata = metadata_enriched.filter(pl.col("identifier").is_null()).select(data["decoded_logs"].columns)
+    missing_metadata = metadata_enriched.filter(pl.col("identifier").is_null()).select(
+        data["decoded_logs"].columns
+    )
     # Get new pool addresses
     new_pool_addresses = missing_metadata["address"].unique().to_list()
 
@@ -75,7 +81,6 @@ def enrich_with_metadata(
 
         # Update metadata
         data["metadata"] = pl.DataFrame(pools_list).rename({"pool_address": "address"})
-        # DELETE THIS: data["metadata"] = stored_metadata.concat(pl.DataFrame(pools_list).rename({"pool_address": "address"}))
 
         # Join in the missing metadata
         missing_metadata = missing_metadata.join(
@@ -85,11 +90,17 @@ def enrich_with_metadata(
         )
 
         # Union the rows with metadata from storage and newly fetched metadata
-        data["uni_v2_dex_trades"] = pl.concat([metadata_enriched.filter(pl.col("identifier").is_not_null()), missing_metadata])
+        data["uni_v2_dex_trades"] = pl.concat(
+            [
+                metadata_enriched.filter(pl.col("identifier").is_not_null()),
+                missing_metadata,
+            ]
+        )
     else:
         data["uni_v2_dex_trades"] = metadata_enriched
 
     return data
+
 
 def apply_dex_specific_logic(
     data: Dict[str, pl.DataFrame], dex: Any
@@ -98,12 +109,14 @@ def apply_dex_specific_logic(
     data["uni_v2_dex_trades"] = dex.transform(data["uni_v2_dex_trades"])
     return data
 
+
 def estimate_usd_value(
     data: Dict[str, pl.DataFrame], _: Any
 ) -> Dict[str, pl.DataFrame]:
     """Calculate USD amounts using WETH/USDC prices"""
     data["uni_v2_dex_trades"] = calculate_amount_usd(data["uni_v2_dex_trades"])
     return data
+
 
 def format_dex_trades_table(
     data: Dict[str, pl.DataFrame], dex: Any
@@ -148,6 +161,7 @@ def format_dex_trades_table(
     )
     return data
 
+
 # Pipeline configuration function
 def create_pipeline(
     dex: Any,
@@ -158,6 +172,9 @@ def create_pipeline(
     writer: cc.Writer,
     table_name: str,
 ):
+    # Ensure writer is configured with DuckDB
+    if not isinstance(writer.config, cc.DuckdbWriterConfig):
+        raise ValueError("Writer must be configured with DuckDB connection")
 
     # Define query fields
     request_fields = ingest.evm.Fields(
@@ -177,9 +194,11 @@ def create_pipeline(
             topic3=True,
         ),
     )
-    
+
     # Create provider config and query
-    provider = ingest.ProviderConfig(kind=provider_kind, url=provider_url, buffer_size=1000)
+    provider = ingest.ProviderConfig(
+        kind=provider_kind, url=provider_url, buffer_size=1000
+    )
 
     query = ingest.Query(
         kind=ingest.QueryKind.EVM,
@@ -249,7 +268,7 @@ def create_pipeline(
                 config=cc.CustomStepConfig(
                     runner=enrich_with_metadata,
                     context=writer.config.connection,
-                    ),
+                ),
             ),
             # Apply DEX-specific logic
             cc.Step(
