@@ -7,8 +7,8 @@ homepage = "https://github.com/steelcake/cherry"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
 authors = [
-  { name = "Enes Topuz", email = "tpzenes@gmail.com" },
-  { name = "Ozgur Akkurt", email = "oezgurmakkurt@gmail.com" },
+  { name = "Ozgur Akkurt", email = "ozgur@steelcake.com" },
+  { name = "Yule Andrade", email = "yule@steelcake.com" },
 ]
 requires-python = ">=3.11"
 dependencies = [
