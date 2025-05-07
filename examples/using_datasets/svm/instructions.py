@@ -1,9 +1,20 @@
+# Cherry is published to PyPI as cherry-etl and cherry-core.
+# To install it, run: pip install cherry-etl cherry-core
+# Or with uv: uv pip install cherry-etl cherry-core
+
+# You can run this script with:
+# uv run examples/using_datasets/svm/instructions.py --from_block 330447751 --to_block 330447751
+
+# After run, you can see the result in the database:
+# duckdb data/instructions.db
+# SELECT * FROM decoded_instructions LIMIT 3;
+
 import argparse
 import asyncio
 import logging
 import os
 from typing import Optional
-
+from pathlib import Path
 import duckdb
 from cherry_core import ingest
 
@@ -18,6 +29,9 @@ load_dotenv()
 
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO").upper())
 logger = logging.getLogger("examples.svm.instructions")
+
+DATA_PATH = str(Path.cwd() / "data")
+Path(DATA_PATH).mkdir(parents=True, exist_ok=True)
 
 
 async def sync_data(
@@ -60,7 +74,7 @@ async def sync_data(
     )
 
     # Create the pipeline using the blocks dataset
-    pipeline = datasets.svm.instructions(
+    pipeline = datasets.svm.make_instructions_pipeline(
         provider, writer, program_id, instruction_signature, from_block, to_block
     )
 
@@ -75,7 +89,7 @@ async def main(
     to_block: Optional[int],
 ):
     # Connect to a persistent database file
-    connection = duckdb.connect()
+    connection = duckdb.connect(f"{DATA_PATH}/instructions.db")
 
     # sync the data into duckdb
     await sync_data(

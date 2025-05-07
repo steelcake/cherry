@@ -38,6 +38,7 @@ class StepKind(str, Enum):
     SVM_DECODE_LOGS = "svm_decode_logs"
     JOIN_BLOCK_DATA = "join_block_data"
     JOIN_SVM_TRANSACTION_DATA = "join_svm_transaction_data"
+    JOIN_EVM_TRANSACTION_DATA = "join_evm_transaction_data"
     GLACIERS_EVENTS = "glaciers_events"
 
 
@@ -115,18 +116,29 @@ class Writer:
 @dataclass
 class JoinBlockDataConfig:
     tables: Optional[list[str]] = None
-    join_left_on: list[str] = field(default_factory=lambda: ["block_hash"])
-    join_blocks_on: list[str] = field(default_factory=lambda: ["hash"])
+    join_left_on: list[str] = field(default_factory=lambda: ["block_number"])
+    join_blocks_on: list[str] = field(default_factory=lambda: ["number"])
 
 
 @dataclass
 class JoinSvmTransactionDataConfig:
     tables: Optional[list[str]] = None
     join_left_on: list[str] = field(
-        default_factory=lambda: ["block_slot", "block_hash", "transaction_index"]
+        default_factory=lambda: ["block_slot", "transaction_index"]
     )
     join_transactions_on: list[str] = field(
-        default_factory=lambda: ["block_slot", "block_hash", "transaction_index"]
+        default_factory=lambda: ["block_slot", "transaction_index"]
+    )
+
+
+@dataclass
+class JoinEvmTransactionDataConfig:
+    tables: Optional[list[str]] = None
+    join_left_on: list[str] = field(
+        default_factory=lambda: ["block_number", "transaction_index"]
+    )
+    join_transactions_on: list[str] = field(
+        default_factory=lambda: ["block_number", "transaction_index"]
     )
 
 
@@ -225,6 +237,7 @@ class Step:
         | CustomStepConfig
         | JoinBlockDataConfig
         | JoinSvmTransactionDataConfig
+        | JoinEvmTransactionDataConfig
         | GlaciersEventsConfig
     )
     name: Optional[str] = None

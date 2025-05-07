@@ -12,9 +12,10 @@ def execute(data: Dict[str, pa.Table], config: CastConfig) -> Dict[str, pa.Table
     mappings = list(config.mappings.items())
 
     for table_name, table_data in data.items():
+        if table_name != config.table_name:
+            continue
         batches = table_data.to_batches()
         out_batches = []
-
         for batch in batches:
             out_batches.append(cast(mappings, batch, config.allow_cast_fail))
 

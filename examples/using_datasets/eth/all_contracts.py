@@ -1,3 +1,14 @@
+# Cherry is published to PyPI as cherry-etl and cherry-core.
+# To install it, run: pip install cherry-etl cherry-core
+# Or with uv: uv pip install cherry-etl cherry-core
+
+# You can run this script with:
+# uv run examples/using_datasets/eth/all_contracts.py --provider hypersync --from_block 20000000 --to_block 20000100
+
+# After run, you can see the result in the database:
+# duckdb data/all_contracts.db
+# SELECT * FROM contracts LIMIT 3;
+
 import argparse
 import asyncio
 import logging
@@ -7,6 +18,7 @@ from typing import Optional
 import duckdb
 from cherry_core import ingest
 from dotenv import load_dotenv
+from pathlib import Path
 
 from cherry_etl import config as cc
 from cherry_etl import datasets
@@ -16,6 +28,10 @@ load_dotenv()
 
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO").upper())
 logger = logging.getLogger("examples.eth.all_contracts")
+
+# Create directories
+DATA_PATH = str(Path.cwd() / "data")
+Path(DATA_PATH).mkdir(parents=True, exist_ok=True)
 
 
 PROVIDER_URLS = {
@@ -46,7 +62,9 @@ async def sync_data(
     )
 
     # Create the pipeline using the all_contracts dataset
-    pipeline = datasets.evm.all_contracts(provider, writer, from_block, to_block)
+    pipeline = datasets.evm.make_all_contracts_pipeline(
+        provider, writer, from_block, to_block
+    )
 
     # Run the pipeline
     await run_pipeline(pipeline_name="all_contracts", pipeline=pipeline)
@@ -58,7 +76,7 @@ async def main(
     from_block: int,
     to_block: Optional[int],
 ):
-    connection = duckdb.connect()
+    connection = duckdb.connect("data/all_contracts.db")
 
     # sync the data into duckdb
     await sync_data(
@@ -66,8 +84,8 @@ async def main(
     )
 
     # Optional: read result to show
-    data = connection.sql("SELECT * FROM contracts LIMIT 20")
-    logger.info(data)
+    data = connection.sql("SELECT * FROM contracts")
+    logger.info(f"\n{data}")
 
 
 if __name__ == "__main__":

@@ -1,20 +1,37 @@
+# Cherry is published to PyPI as cherry-etl and cherry-core.
+# To install it, run: pip install cherry-etl cherry-core
+# Or with uv: uv pip install cherry-etl cherry-core
+
+# You can run this script with:
+# uv run examples/end_to_end/glaciers/decode_logs_with_glaciers.py --provider hypersync --from_block 20000000 --to_block 20000001
+
+# After run, you can see the result in the database:
+# duckdb data/glaciers_decoded_logs.db
+# SELECT * FROM decoded_logs LIMIT 3;
+# SELECT * FROM ethereum_uni_v2_trades LIMIT 3;
+
 import argparse
 import asyncio
 import logging
 import os
 import requests
+import pyarrow as pa
 
 from typing import Optional
+from pathlib import Path
 
 import duckdb
 from cherry_core import ingest
 
 from cherry_etl import config as cc
-from cherry_etl import datasets
 from cherry_etl.pipeline import run_pipeline
 
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO").upper())
 logger = logging.getLogger("examples.eth.glaciers")
+
+# Create directories
+DATA_PATH = str(Path.cwd() / "data")
+Path(DATA_PATH).mkdir(parents=True, exist_ok=True)
 
 
 PROVIDER_URLS = {
@@ -31,10 +48,12 @@ async def sync_data(
     provider_url: Optional[str],
     to_block: Optional[int],
 ):
-    if to_block is not None:
-        logger.info(f"starting to ingest from block {from_block} to block {to_block}")
-    else:
-        logger.info(f"starting to ingest from block {from_block}")
+    # Ensure to_block is not None, use from_block + 10 as default if it is
+    actual_to_block = to_block if to_block is not None else from_block + 10
+
+    logger.info(
+        f"starting to ingest from block {from_block} to block {actual_to_block}"
+    )
 
     provider = ingest.ProviderConfig(
         kind=provider_kind,
@@ -48,9 +67,73 @@ async def sync_data(
         ),
     )
 
+    query = ingest.Query(
+        kind=ingest.QueryKind.EVM,
+        params=ingest.evm.Query(
+            from_block=from_block,
+            to_block=actual_to_block,
+            include_all_blocks=True,
+            fields=ingest.evm.Fields(
+                block=ingest.evm.BlockFields(
+                    hash=True,
+                    number=True,
+                    timestamp=True,
+                ),
+                log=ingest.evm.LogFields(
+                    address=True,
+                    data=True,
+                    topic0=True,
+                    topic1=True,
+                    topic2=True,
+                    topic3=True,
+                    block_number=True,
+                    block_hash=True,
+                    transaction_hash=True,
+                    transaction_index=True,
+                    log_index=True,
+                    removed=True,
+                ),
+                transaction=ingest.evm.TransactionFields(
+                    from_=True,
+                    to=True,
+                    value=True,
+                    status=True,
+                    block_hash=True,
+                    block_number=True,
+                    hash=True,
+                ),
+            ),
+            logs=[ingest.evm.LogRequest()],
+            transactions=[ingest.evm.TransactionRequest()],
+        ),
+    )
+
     # Create the pipeline using the logs dataset
-    pipeline = datasets.evm.glaciers(
-        provider, writer, abi_db_path, from_block, to_block
+    pipeline = cc.Pipeline(
+        provider=provider,
+        query=query,
+        writer=writer,
+        steps=[
+            cc.Step(
+                name="i256_to_i128",
+                kind=cc.StepKind.CAST_BY_TYPE,
+                config=cc.CastByTypeConfig(
+                    from_type=pa.decimal256(76, 0),
+                    to_type=pa.decimal128(38, 0),
+                ),
+            ),
+            cc.Step(
+                kind=cc.StepKind.GLACIERS_EVENTS,
+                config=cc.GlaciersEventsConfig(
+                    abi_db_path=abi_db_path,
+                ),
+            ),
+            cc.Step(kind=cc.StepKind.JOIN_BLOCK_DATA, config=cc.JoinBlockDataConfig()),
+            cc.Step(
+                kind=cc.StepKind.HEX_ENCODE,
+                config=cc.HexEncodeConfig(),
+            ),
+        ],
     )
 
     # Run the pipeline
@@ -64,16 +147,14 @@ async def main(
     to_block: Optional[int],
 ):
     url = "https://github.com/yulesa/glaciers/raw/refs/heads/master/ABIs/ethereum__events__abis.parquet"
-    abi_db_path = "examples/datasets/eth/glaciers/ethereum__events__abis.parquet"
+    abi_db_path = "data/ethereum__events__abis.parquet"
 
     if not os.path.exists(abi_db_path):
         response = requests.get(url)
         with open(abi_db_path, "wb") as file:
             file.write(response.content)
 
-    connection = duckdb.connect(
-        "examples/datasets/eth/glaciers/glaciers_decoded_logs.db"
-    )
+    connection = duckdb.connect("data/glaciers_decoded_logs.db")
 
     # sync the data into duckdb
     await sync_data(
@@ -93,10 +174,10 @@ async def main(
 
     # DB Operations - Create tables
     connection.sql(
-        "CREATE OR REPLACE TABLE eth_tokens AS SELECT * FROM read_csv('examples/datasets/eth/glaciers/eth_tokens.csv');"
+        "CREATE OR REPLACE TABLE eth_tokens AS SELECT * FROM read_csv('examples/end_to_end/glaciers/eth_tokens.csv');"
     )
     connection.sql(
-        "CREATE OR REPLACE TABLE ethereum_uni_v2_pools AS SELECT * FROM read_csv('examples/datasets/eth/glaciers/ethereum_uni_v2_pools.csv');"
+        "CREATE OR REPLACE TABLE ethereum_uni_v2_pools AS SELECT * FROM read_csv('examples/end_to_end/glaciers/ethereum_uni_v2_pools.csv');"
     )
 
     # Create uniswap v2 trade table using the decoded_logs dataset

@@ -12,7 +12,7 @@ authors = [
 ]
 requires-python = ">=3.11"
 dependencies = [
-    "cherry-core>=0.5.3",
+    "cherry-core>=0.5.4",
     "pyarrow>=19.0.1",
     "sqlalchemy>=2.0.38",
     "psycopg2-binary>=2.9.10",

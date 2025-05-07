@@ -13,9 +13,9 @@ TABLE_NAME = "contracts"
 
 
 def process_data(data: Dict[str, pl.DataFrame], _: Any) -> Dict[str, pl.DataFrame]:
-    out = data["traces"]
-
-    return {"contracts": out}
+    data[TABLE_NAME] = data["traces"]
+    data.pop("traces")
+    return data
 
 
 def make_pipeline(
@@ -32,12 +32,12 @@ def make_pipeline(
         params=ingest.evm.Query(
             from_block=from_block,
             to_block=to_block,
-            include_all_blocks=True,
+            include_all_blocks=False,
             traces=[ingest.evm.TraceRequest(type_=["create"])],
             fields=ingest.evm.Fields(
                 trace=ingest.evm.TraceFields(
                     address=True, block_number=True, transaction_hash=True
-                )
+                ),
             ),
         ),
     )

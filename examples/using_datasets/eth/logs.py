@@ -1,8 +1,22 @@
+# Cherry is published to PyPI as cherry-etl and cherry-core.
+# To install it, run: pip install cherry-etl cherry-core
+# Or with uv: uv pip install cherry-etl cherry-core
+
+# You can run this script with:
+# uv run examples/using_datasets/eth/logs.py --provider hypersync --from_block 20000000 --to_block 20000100
+
+# After run, you can see the result in the database:
+# duckdb data/logs.db
+# SELECT * FROM logs LIMIT 3;
+# SELECT * FROM decoded_logs LIMIT 3;
+
+
 import argparse
 import asyncio
 import logging
 import os
 from typing import Optional
+from pathlib import Path
 
 import duckdb
 from cherry_core import ingest
@@ -15,8 +29,10 @@ from cherry_etl.pipeline import run_pipeline
 load_dotenv()
 
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO").upper())
-logger = logging.getLogger("examples.eth.blocks")
+logger = logging.getLogger("examples.eth.logs")
 
+DATA_PATH = str(Path.cwd() / "data")
+Path(DATA_PATH).mkdir(parents=True, exist_ok=True)
 
 PROVIDER_URLS = {
     ingest.ProviderKind.HYPERSYNC: "https://eth.hypersync.xyz",
@@ -45,11 +61,23 @@ async def sync_data(
         ),
     )
 
-    # Create the pipeline using the blocks dataset
-    pipeline = datasets.evm.blocks(provider, writer, from_block, to_block)
+    event_full_signature = "PairCreated(address indexed token0, address indexed token1, address pair,uint256)"
+    address = ["0x5c69bee701ef814a2b6a3edd4b1652cb9cc5aa6f"]
+    topic0 = ["0x0d3648bd0f6ba80134a33ba9275ac585d9d315f0ad8355cddefde31afa28d0e9"]
+
+    # Create the pipeline using the all_contracts dataset
+    pipeline = datasets.evm.make_log_pipeline(
+        provider=provider,
+        writer=writer,
+        event_full_signature=event_full_signature,
+        from_block=from_block,
+        to_block=to_block,
+        address=address,
+        topic0=topic0,
+    )
 
     # Run the pipeline
-    await run_pipeline(pipeline_name="blocks", pipeline=pipeline)
+    await run_pipeline(pipeline_name="logs", pipeline=pipeline)
 
 
 async def main(
@@ -58,7 +86,7 @@ async def main(
     from_block: int,
     to_block: Optional[int],
 ):
-    connection = duckdb.connect()
+    connection = duckdb.connect("data/logs.db")
 
     # sync the data into duckdb
     await sync_data(
@@ -66,12 +94,12 @@ async def main(
     )
 
     # Optional: read result to show
-    data = connection.sql("SELECT * FROM blocks LIMIT 20")
-    logger.info(data)
+    data = connection.sql("SELECT * FROM decoded_logs LIMIT 3")
+    logger.info(f"\n{data}")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Blocks tracker")
+    parser = argparse.ArgumentParser(description="Logs")
     parser.add_argument(
         "--provider",
         choices=["sqd", "hypersync"],

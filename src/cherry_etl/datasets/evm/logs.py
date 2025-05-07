@@ -44,6 +44,7 @@ def make_pipeline(
             fields=ingest.evm.Fields(
                 block=ingest.evm.BlockFields(
                     hash=True,
+                    number=True,
                     timestamp=True,
                 ),
                 log=ingest.evm.LogFields(

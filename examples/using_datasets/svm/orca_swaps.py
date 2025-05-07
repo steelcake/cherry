@@ -1,8 +1,22 @@
+# Cherry is published to PyPI as cherry-etl and cherry-core.
+# To install it, run: pip install cherry-etl cherry-core
+# Or with uv: uv pip install cherry-etl cherry-core
+
+# You can run this script with:
+# uv run examples/using_datasets/svm/orca_swaps.py --from_block 330447757 --to_block 330447760
+
+# After run, you can see the result in the database:
+# duckdb data/solana_swaps.db
+# SELECT * FROM orca_swaps_decoded_instructions LIMIT 3;
+# SELECT * FROM orca_swaps LIMIT 3;
+# SELECT * FROM orca_swaps_decoded_logs LIMIT 3;
+
 import argparse
 import asyncio
 import logging
 import os
 from typing import Optional
+from pathlib import Path
 
 import duckdb
 from cherry_core import ingest
@@ -22,6 +36,9 @@ from cherry_core.svm_decode import (
 
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO").upper())
 logger = logging.getLogger("examples.svm.orca_swaps")
+
+DATA_PATH = str(Path.cwd() / "data")
+Path(DATA_PATH).mkdir(parents=True, exist_ok=True)
 
 
 async def sync_data(
@@ -185,7 +202,7 @@ async def sync_data(
     )
 
     # Create the pipeline using the blocks dataset
-    pipeline = datasets.svm.orca_swaps(
+    pipeline = datasets.svm.make_instructions_and_logs_pipeline(
         provider,
         writer,
         program_id,
@@ -207,7 +224,7 @@ async def main(
     to_block: Optional[int],
 ):
     # Connect to a persistent database file
-    connection = duckdb.connect("examples/datasets/svm/solana_swaps/solana_swaps.db")
+    connection = duckdb.connect("data/solana_swaps.db")
 
     # sync the data into duckdb
     await sync_data(
@@ -216,7 +233,7 @@ async def main(
 
     # DB Operations - Create tables
     connection.sql(
-        "CREATE OR REPLACE TABLE solana_tokens AS SELECT * FROM read_csv('examples/datasets/svm/solana_swaps/solana_tokens.csv');"
+        "CREATE OR REPLACE TABLE solana_tokens AS SELECT * FROM read_csv('examples/using_datasets/svm/solana_tokens.csv');"
     )
     # DB Operations - Data Transformation
     data = connection.sql("""
