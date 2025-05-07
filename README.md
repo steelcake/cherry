@@ -45,8 +45,8 @@ See [getting started section](https://steelcake.github.io/cherry-docs/getting_st
 
 ## Usage examples
 
-- [**Ethereum(EVM)** examples](examples/using_dataset/eth)
-- [**Solana(SVM)** examples](examples/using_dataset/svm)
+- [**Ethereum(EVM)** examples](examples/using_datasets/eth)
+- [**Solana(SVM)** examples](examples/using_datasets/svm)
 
 ## Logging
 
