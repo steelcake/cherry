@@ -8,8 +8,10 @@ from ..config import (
     DeltaLakeWriterConfig,
     PyArrowDatasetWriterConfig,
     DuckdbWriterConfig,
+    ChdbWriterConfig,
 )
 from ..writers import iceberg, clickhouse, delta_lake, duckdb
+from ..writers import chdb
 import logging
 
 logger = logging.getLogger(__name__)
@@ -32,5 +34,8 @@ def create_writer(writer: Writer) -> DataWriter:
         case WriterKind.DUCKDB:
             assert isinstance(writer.config, DuckdbWriterConfig)
             return duckdb.Writer(writer.config)
+        case WriterKind.CHDB:
+            assert isinstance(writer.config, ChdbWriterConfig)
+            return chdb.Writer(writer.config)
         case _:
             raise ValueError(f"Invalid writer kind: {writer.kind}")

@@ -37,6 +37,7 @@ See [getting started section](https://steelcake.github.io/cherry-docs/getting_st
 ## Supported output formats
 
 - **ClickHouse**
+- **CHDB**
 - **Iceberg**
 - **Deltalake**
 - **DuckDB**

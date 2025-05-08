@@ -25,6 +25,9 @@ dependencies = [
     "glaciers>=2.0.1",
 ]
 
+[project.optional-dependencies]
+chdb = ["chdb>=3.1.2"]
+
 [dependency-groups]
 dev = [
     "dotenv>=0.9.9",
@@ -33,9 +36,9 @@ dev = [
     "ruff>=0.9.7",
     "dexmetadata>=0.1.8",
     "base58>=2.1.1",
+    "pytest-asyncio",
 ]
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
-
