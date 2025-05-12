@@ -8,6 +8,7 @@
 # After run, you can see the result in the database:
 # duckdb data/erc20_transfers.db
 # SELECT * FROM erc20_transfers LIMIT 3;
+# SELECT * FROM token_metadata LIMIT 3;
 
 
 import argparse
@@ -19,6 +20,7 @@ from pathlib import Path
 
 import duckdb
 from cherry_core import ingest
+from cherry_core import get_token_metadata_as_table, prefix_hex_encode
 from dotenv import load_dotenv
 
 from cherry_etl import config as cc
@@ -33,6 +35,7 @@ logger = logging.getLogger("examples.eth.erc20_transfers")
 DATA_PATH = str(Path.cwd() / "data")
 Path(DATA_PATH).mkdir(parents=True, exist_ok=True)
 
+RPC_URL = "https://ethereum-rpc.publicnode.com"
 
 PROVIDER_URLS = {
     ingest.ProviderKind.HYPERSYNC: "https://eth.hypersync.xyz",
@@ -40,7 +43,7 @@ PROVIDER_URLS = {
 }
 
 
-async def sync_data(
+async def sync_transfer_data(
     connection: duckdb.DuckDBPyConnection,
     provider_kind: ingest.ProviderKind,
     provider_url: Optional[str],
@@ -70,6 +73,47 @@ async def sync_data(
     await run_pipeline(pipeline_name="erc20_transfers", pipeline=pipeline)
 
 
+def get_token_metadata(connection: duckdb.DuckDBPyConnection):
+    connection.sql(
+        "CREATE TABLE IF NOT EXISTS token_metadata (address BLOB, decimals INTEGER, symbol VARCHAR, name VARCHAR, total_supply BLOB);"
+    )
+
+    missing_metadata = (
+        connection.sql("""
+        SELECT DISTINCT erc20
+        FROM erc20_transfers
+        LEFT JOIN token_metadata ON erc20_transfers.erc20 = token_metadata.address
+        WHERE token_metadata.address IS NULL
+    """)
+        .to_arrow_table()
+        .to_batches()
+    )
+
+    # Translating address from bytes to hex strings
+    missing_metadata = [prefix_hex_encode(batch) for batch in missing_metadata]
+
+    if len(missing_metadata) > 0:
+        # converting from Recordbatches to list.
+        addresses = []
+        for batch in missing_metadata:
+            column_array = batch.column("erc20").to_numpy(zero_copy_only=False)
+            addresses.extend(column_array.tolist())
+
+        # get_token_metadata_as_table use multicall has a lenght limit of 100_000 bytes. We need to break it into chunks.
+        chunk_size = 100
+        for i in range(0, len(addresses), chunk_size):
+            addresses_chunk = addresses[i : i + chunk_size]
+
+            _new_token_metadata = get_token_metadata_as_table(
+                "https://ethereum-rpc.publicnode.com",
+                addresses_chunk,
+            )
+
+            connection.execute(
+                "INSERT INTO token_metadata SELECT * FROM _new_token_metadata"
+            )
+
+
 async def main(
     provider_kind: ingest.ProviderKind,
     provider_url: Optional[str],
@@ -79,12 +123,18 @@ async def main(
     connection = duckdb.connect("data/erc20_transfers.db")
 
     # sync the data into duckdb
-    await sync_data(
+    await sync_transfer_data(
         connection.cursor(), provider_kind, provider_url, from_block, to_block
     )
 
     # Optional: read result to show
-    data = connection.sql("SELECT * FROM erc20_transfers LIMIT 20")
+    data = connection.sql("SELECT * FROM erc20_transfers LIMIT 3")
+    logger.info(f"\n{data}")
+
+    get_token_metadata(connection.cursor())
+
+    # Optional: read result to show
+    data = connection.sql("SELECT * FROM token_metadata LIMIT 3")
     logger.info(f"\n{data}")
 
 
