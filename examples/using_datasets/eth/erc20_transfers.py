@@ -74,37 +74,45 @@ async def sync_transfer_data(
 
 
 def get_token_metadata(connection: duckdb.DuckDBPyConnection):
+    connection.sql(
+        "CREATE TABLE IF NOT EXISTS token_metadata (address BLOB, decimals INTEGER, symbol VARCHAR, name VARCHAR, total_supply BLOB);"
+    )
 
-    connection.sql("CREATE TABLE IF NOT EXISTS token_metadata (address BLOB, decimals INTEGER, symbol VARCHAR, name VARCHAR, total_supply BLOB);")
-    
-    missing_metadata = connection.sql("""
+    missing_metadata = (
+        connection.sql("""
         SELECT DISTINCT erc20
         FROM erc20_transfers
         LEFT JOIN token_metadata ON erc20_transfers.erc20 = token_metadata.address
         WHERE token_metadata.address IS NULL
-    """).to_arrow_table().to_batches()
+    """)
+        .to_arrow_table()
+        .to_batches()
+    )
 
     # Translating address from bytes to hex strings
     missing_metadata = [prefix_hex_encode(batch) for batch in missing_metadata]
 
     if len(missing_metadata) > 0:
         # converting from Recordbatches to list.
-        addresses =[]
+        addresses = []
         for batch in missing_metadata:
-            column_array = batch.column("erc20").to_numpy(zero_copy_only = False)
+            column_array = batch.column("erc20").to_numpy(zero_copy_only=False)
             addresses.extend(column_array.tolist())
 
         # get_token_metadata_as_table use multicall has a lenght limit of 100_000 bytes. We need to break it into chunks.
         chunk_size = 100
         for i in range(0, len(addresses), chunk_size):
-            addresses_chunk = addresses[i:i + chunk_size]
+            addresses_chunk = addresses[i : i + chunk_size]
 
-            new_token_metadata = get_token_metadata_as_table(
-                    "https://ethereum-rpc.publicnode.com",
-                    addresses_chunk,
-                )
+            _new_token_metadata = get_token_metadata_as_table(
+                "https://ethereum-rpc.publicnode.com",
+                addresses_chunk,
+            )
 
-            connection.execute("INSERT INTO token_metadata SELECT * FROM new_token_metadata")
+            connection.execute(
+                "INSERT INTO token_metadata SELECT * FROM _new_token_metadata"
+            )
+
 
 async def main(
     provider_kind: ingest.ProviderKind,
@@ -128,7 +136,6 @@ async def main(
     # Optional: read result to show
     data = connection.sql("SELECT * FROM token_metadata LIMIT 3")
     logger.info(f"\n{data}")
-
 
 
 if __name__ == "__main__":
