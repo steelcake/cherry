@@ -7,8 +7,7 @@
 
 # After run, you can see the result in the database:
 # duckdb data/uni_v3_swaps.db
-# SELECT * FROM uni_v3_swaps_decoded_instructions LIMIT 3;
-# SELECT * FROM uni_v3_swaps LIMIT 3;
+# SELECT * FROM decoded_logs LIMIT 3;
 ################################################################################
 # Import dependencies
 
