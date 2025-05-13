@@ -53,12 +53,16 @@ PROVIDER_URLS = {
 ################################################################################
 # Main function
 
-def filter_uni_v3_swaps(data: Dict[str, pl.DataFrame], context: Any) -> Dict[str, pl.DataFrame]:
+
+def filter_uni_v3_swaps(
+    data: Dict[str, pl.DataFrame], context: Any
+) -> Dict[str, pl.DataFrame]:
     data["logs"] = data["logs"].filter(
         # Filter in vitalik's logs, the topic0 is the event signature of the Swap event
         # Topic0 is ingested as a binary, so we need to encode it to a hex string before comparing.
         # At this point the transformation step to hex encode the data is not applied yet.
-        pl.col("topic0").bin.encode("hex").str.to_lowercase() == context["topic0"].strip("0x")
+        pl.col("topic0").bin.encode("hex").str.to_lowercase()
+        == context["topic0"].strip("0x")
     )
     return data
 
@@ -69,7 +73,6 @@ async def main(
     from_block: int,
     to_block: Optional[int],
 ):
-
     # Defining a Provider
     provider = ProviderConfig(
         kind=provider_kind,
@@ -105,9 +108,9 @@ async def main(
                     topic2=True,
                     topic3=True,
                     data=True,
-                )
+                ),
             ),
-            transactions=[ # Optional: List of specific filters for instructions
+            transactions=[  # Optional: List of specific filters for instructions
                 TransactionRequest(
                     from_=["0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"],
                     include_logs=True,
@@ -149,7 +152,7 @@ async def main(
                     "liquidity": pa.float64(),
                     "tick": pa.int64(),
                     "timestamp": pa.float64(),
-                }
+                },
             ),
         ),
         # Join the transaction data
