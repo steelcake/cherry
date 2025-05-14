@@ -1,6 +1,6 @@
 [project]
 name = "cherry-etl"
-version = "0.6.3"
+version = "0.6.4"
 description = "Library for building blockchain pipelines"
 repository = "https://github.com/steelcake/cherry"
 homepage = "https://github.com/steelcake/cherry"
@@ -22,7 +22,7 @@ dependencies = [
     "pyarrow-stubs>=17.17",
     "polars>=1.25.2",
     "duckdb>=1.2.1",
-    "glaciers>=2.0.1",
+    "glaciers>=2.0.2",
 ]
 
 [dependency-groups]
