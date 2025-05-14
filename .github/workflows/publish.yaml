@@ -20,6 +20,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v3
       - run: uv build
+      - run: uv lock --check
       # Check that basic features work and we didn't miss to include crucial files
       # - name: Smoke test (wheel)
       #   run: uv run --isolated --no-project -p 3.13 --with dist/*.whl tests/smoke_test.py
