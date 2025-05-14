@@ -24,7 +24,8 @@ def test_base58_encode():
 
 
 def test_cast():
-    numbers = pa.array([1, 2], type=pa.uint8())
+    my_list = [1, 2]
+    numbers = pa.array(my_list, type=pa.uint8())
 
     table = pa.Table.from_arrays([numbers], names=["numbers"])
 
@@ -42,13 +43,14 @@ def test_cast():
 
     data = data["data"]
 
-    numbers = pa.array(numbers.to_pylist(), type=pa.int64())
+    numbers = pa.array(my_list, type=pa.int64())
 
     assert data.column("numbers").combine_chunks() == numbers
 
 
 def test_cast_by_type():
-    numbers = pa.array([1, 2], type=pa.uint8())
+    my_list = [1, 2]
+    numbers = pa.array(my_list, type=pa.uint8())
     names = pa.array(["asd", "qwe"], type=pa.binary())
 
     table = pa.Table.from_arrays([numbers, names], names=["numbers", "names"])
@@ -65,7 +67,7 @@ def test_cast_by_type():
 
     data = data["data"]
 
-    numbers = pa.array(numbers.to_pylist(), type=pa.int16())
+    numbers = pa.array(my_list, type=pa.int16())
 
     assert data.column("numbers").combine_chunks() == numbers
     assert data.column("names").combine_chunks() == names
