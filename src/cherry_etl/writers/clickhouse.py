@@ -94,6 +94,7 @@ class Writer(DataWriter):
         self.first_insert = True
         self.anchor_table = config.anchor_table
         self.engine = config.engine
+        self.create_tables = config.create_tables
 
     async def _create_table_if_not_exists(self, table_name: str, schema: pa.Schema):
         if not await self._check_table_exists(table_name):
@@ -148,7 +149,7 @@ class Writer(DataWriter):
 
     async def push_data(self, data: Dict[str, pa.Table]) -> None:
         # create tables if this is the first insert
-        if self.first_insert:
+        if self.create_tables and self.first_insert:
             tasks = []
 
             for table_name, table_data in data.items():

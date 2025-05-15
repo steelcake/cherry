@@ -74,6 +74,7 @@ class ClickHouseWriterConfig:
     engine: str = "MergeTree()"
     skip_index: Dict[str, List[ClickHouseSkipIndex]] = field(default_factory=dict)
     anchor_table: Optional[str] = None
+    create_tables: bool = True
 
 
 @dataclass

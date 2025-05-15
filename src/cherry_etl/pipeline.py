@@ -1,5 +1,7 @@
 import asyncio
 import logging
+
+from cherry_etl.writers.base import DataWriter
 from .config import (
     Base58EncodeConfig,
     CastByTypeConfig,
@@ -97,6 +99,41 @@ async def process_steps(
     return data
 
 
+def merge_data(data: list[Dict[str, pa.Table]]) -> Dict[str, pa.Table]:
+    keys = list(data[0].keys())
+    keys.sort()
+
+    for i in range(1, len(data)):
+        other_keys = list(data[i].keys())
+        other_keys.sort()
+
+        assert keys == other_keys
+
+    out = {}
+
+    for key in keys:
+        tables = []
+        for d in data:
+            tables.append(d[key])
+
+        out[key] = pa.concat_tables(tables)
+
+    return out
+
+
+async def writer_worker(writer: DataWriter, queue: asyncio.Queue):
+    while True:
+        data = [await queue.get()]
+
+        while True:
+            try:
+                data.append(queue.get_nowait())
+            except asyncio.QueueEmpty:
+                break
+
+        await writer.push_data(merge_data(data))
+
+
 async def run_pipeline(pipeline: Pipeline, pipeline_name: Optional[str] = None):
     logger.info(f"Running pipeline: {pipeline_name}")
 
@@ -104,8 +141,15 @@ async def run_pipeline(pipeline: Pipeline, pipeline_name: Optional[str] = None):
 
     writer = create_writer(pipeline.writer)
 
+    buffer_size = 10
+    if pipeline.provider.buffer_size is not None:
+        buffer_size = pipeline.provider.buffer_size
+
+    queue = asyncio.Queue(buffer_size)
+
+    worker_task = asyncio.create_task(writer_worker(writer, queue))
+
     while True:
-        logger.info("Waiting for data")
         data = await stream.next()
         if data is None:
             break
@@ -117,4 +161,6 @@ async def run_pipeline(pipeline: Pipeline, pipeline_name: Optional[str] = None):
 
         processed = await process_steps(tables, pipeline.steps)
 
-        await writer.push_data(processed)
+        await queue.put(processed)
+
+    await worker_task
