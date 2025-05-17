@@ -37,9 +37,7 @@ async def process_steps(
     data: Dict[str, pa.Table],
     steps: List[Step],
 ) -> Dict[str, pa.Table]:
-    logger.debug(
-        f"Processing pipeline steps: {[[step.kind, step.name] for step in steps]}"
-    )
+    logger.debug("Processing pipeline steps")
 
     data = deepcopy(data)
 
@@ -129,6 +127,8 @@ async def writer_worker(writer: DataWriter, queue: asyncio.Queue):
     while True:
         data = [await queue.get()]
 
+        logger.debug("Writer received data batch")
+
         while True:
             try:
                 data.append(queue.get_nowait())
@@ -137,9 +137,12 @@ async def writer_worker(writer: DataWriter, queue: asyncio.Queue):
 
         await writer.push_data(merge_data(data))
 
+        logger.debug("Writer finished writing batch")
+
 
 async def run_pipeline(pipeline: Pipeline, pipeline_name: Optional[str] = None):
     logger.info(f"Running pipeline: {pipeline_name}")
+    logger.debug(f"Pipeline config: {pipeline}")
 
     stream = start_stream(pipeline.provider, pipeline.query)
 
@@ -158,12 +161,16 @@ async def run_pipeline(pipeline: Pipeline, pipeline_name: Optional[str] = None):
         if data is None:
             break
 
+        logger.debug("Received data from ingest")
+
         tables = {}
 
         for table_name, table_batch in data.items():
             tables[table_name] = pa.Table.from_batches([table_batch])
 
         processed = await process_steps(tables, pipeline.steps)
+
+        logger.debug("Pushing data to writer queue")
 
         await queue.put(processed)
 
