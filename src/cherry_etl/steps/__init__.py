@@ -13,6 +13,7 @@ from . import (
     join_evm_transaction_data,
     glaciers_events,
     svm_decode_logs,
+    set_chain_id,
 )
 
 __all__ = [
@@ -30,4 +31,5 @@ __all__ = [
     "join_evm_transaction_data",
     "glaciers_events",
     "svm_decode_logs",
+    "set_chain_id",
 ]
