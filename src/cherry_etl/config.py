@@ -40,6 +40,7 @@ class StepKind(str, Enum):
     JOIN_SVM_TRANSACTION_DATA = "join_svm_transaction_data"
     JOIN_EVM_TRANSACTION_DATA = "join_evm_transaction_data"
     GLACIERS_EVENTS = "glaciers_events"
+    SET_CHAIN_ID = "set_chain_id"
 
 
 @dataclass
@@ -223,6 +224,11 @@ class CustomStepConfig:
 
 
 @dataclass
+class SetChainIdConfig:
+    chain_id: int
+
+
+@dataclass
 class Step:
     kind: StepKind
     config: (
@@ -240,6 +246,7 @@ class Step:
         | JoinSvmTransactionDataConfig
         | JoinEvmTransactionDataConfig
         | GlaciersEventsConfig
+        | SetChainIdConfig
     )
     name: Optional[str] = None
 

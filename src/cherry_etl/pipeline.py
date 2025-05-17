@@ -11,6 +11,7 @@ from .config import (
     EvmValidateBlockDataConfig,
     HexEncodeConfig,
     Pipeline,
+    SetChainIdConfig,
     Step,
     StepKind,
     U256ToBinaryConfig,
@@ -93,6 +94,9 @@ async def process_steps(
         elif step.kind == StepKind.JOIN_EVM_TRANSACTION_DATA:
             assert isinstance(step.config, JoinEvmTransactionDataConfig)
             data = step_def.join_evm_transaction_data.execute(data, step.config)
+        elif step.kind == StepKind.SET_CHAIN_ID:
+            assert isinstance(step.config, SetChainIdConfig)
+            data = step_def.set_chain_id.execute(data, step.config)
         else:
             raise Exception(f"Unknown step kind: {step.kind}")
 
