@@ -17,7 +17,11 @@ def arrow_schema_cast_by_type(
 
 
 def arrow_schema_binary_to_string(schema: pa.Schema):
-    return arrow_schema_cast_by_type(schema, pa.binary(), pa.string())
+    return arrow_schema_cast_by_type(
+        arrow_schema_cast_by_type(schema, pa.binary(), pa.string()),
+        pa.large_binary(),
+        pa.large_string(),
+    )
 
 
 def arrow_table_to_batch(table: pa.Table) -> pa.RecordBatch:
