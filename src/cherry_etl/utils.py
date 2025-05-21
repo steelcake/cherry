@@ -29,11 +29,13 @@ def cast_table_by_type(table: pa.Table, config: CastByTypeConfig) -> pa.Table:
     out_batches = []
 
     for batch in batches:
-        out_batches.append(cast_by_type(batch, config.from_type, config.to_type, config.allow_cast_fail))
-    
-    new_schema = cast_schema_by_type(
-            table.schema, config.from_type, config.to_type
+        out_batches.append(
+            cast_by_type(
+                batch, config.from_type, config.to_type, config.allow_cast_fail
+            )
         )
+
+    new_schema = cast_schema_by_type(table.schema, config.from_type, config.to_type)
     return pa.Table.from_batches(out_batches, schema=new_schema)
 
 

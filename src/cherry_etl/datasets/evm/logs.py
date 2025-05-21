@@ -1,7 +1,6 @@
 import logging
 from typing import Optional, List
 
-import pyarrow as pa
 from cherry_core import ingest
 
 from cherry_etl import config as cc

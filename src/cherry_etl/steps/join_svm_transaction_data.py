@@ -5,7 +5,6 @@ from ..config import JoinSvmTransactionDataConfig, CastByTypeConfig
 import pyarrow as pa
 import polars as pl
 from polars import DataFrame
-from . import cast_by_type
 
 
 def execute(
@@ -13,12 +12,13 @@ def execute(
 ) -> Dict[str, pa.Table]:
     table_names = data.keys() if config.tables is None else config.tables
 
-
     cast_by_type_config = CastByTypeConfig(
-                from_type=pa.decimal256(76, 0),
-                to_type=pa.float64(),
-            )
-    data["transactions"] = utils.cast_table_by_type(data["transactions"], cast_by_type_config)
+        from_type=pa.decimal256(76, 0),
+        to_type=pa.float64(),
+    )
+    data["transactions"] = utils.cast_table_by_type(
+        data["transactions"], cast_by_type_config
+    )
 
     transactions_df: DataFrame = pl.DataFrame(pl.from_arrow(data["transactions"]))
 

@@ -6,7 +6,6 @@ from typing import Any, Dict
 
 import polars as pl
 import duckdb
-import pyarrow as pa
 from amount_usd import calculate_amount_usd
 from dexmetadata import fetch
 from dotenv import load_dotenv

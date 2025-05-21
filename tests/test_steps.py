@@ -147,12 +147,8 @@ def test_set_chain_id():
     assert table2.column("names").combine_chunks() == names
     assert table2.column("other_names").combine_chunks() == names
 
-    assert table.column("chain_id").combine_chunks() == pa.repeat(
-        pa.scalar(69, type=pa.uint64()), 2
-    )
-    assert table2.column("chain_id").combine_chunks() == pa.repeat(
-        pa.scalar(69, type=pa.uint64()), 2
-    )
+    assert table.column("chain_id").combine_chunks() == pa.array([69] * 2, type=pa.uint64())
+    assert table2.column("chain_id").combine_chunks() == pa.array([69] * 2, type=pa.uint64())
 
 
 def test_svm_anchor_discriminator():

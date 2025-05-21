@@ -2,7 +2,6 @@ from typing import Dict
 
 from .. import utils
 from ..config import JoinBlockDataConfig, CastByTypeConfig
-from . import cast_by_type
 import pyarrow as pa
 import polars as pl
 from polars import DataFrame
@@ -14,9 +13,9 @@ def execute(
     table_names = data.keys() if config.tables is None else config.tables
 
     cast_by_type_config = CastByTypeConfig(
-                from_type=pa.decimal256(76, 0),
-                to_type=pa.float64(),
-            )
+        from_type=pa.decimal256(76, 0),
+        to_type=pa.float64(),
+    )
     data["blocks"] = utils.cast_table_by_type(data["blocks"], cast_by_type_config)
     blocks_df: DataFrame = pl.DataFrame(pl.from_arrow(data["blocks"]))
 

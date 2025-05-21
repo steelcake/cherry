@@ -2,7 +2,6 @@ import logging
 from typing import Any, Dict, Optional
 
 import polars as pl
-import pyarrow as pa
 from cherry_core import ingest
 
 from cherry_etl import config as cc

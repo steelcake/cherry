@@ -15,7 +15,6 @@ import asyncio
 import logging
 import os
 import requests
-import pyarrow as pa
 
 from typing import Optional
 from pathlib import Path
