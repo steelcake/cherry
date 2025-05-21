@@ -1,5 +1,4 @@
-from . import config
+from . import config, datasets, utils
 from .pipeline import run_pipeline
-from . import datasets
 
-__all__ = ["config", "run_pipeline", "datasets"]
+__all__ = ["config", "run_pipeline", "datasets", "utils"]

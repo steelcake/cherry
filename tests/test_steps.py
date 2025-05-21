@@ -1,5 +1,6 @@
 from cherry_etl import steps as cs
 from cherry_etl import config as cc
+from cherry_etl import utils
 import pyarrow as pa
 import base58
 import binascii
@@ -152,3 +153,8 @@ def test_set_chain_id():
     assert table2.column("chain_id").combine_chunks() == pa.repeat(
         pa.scalar(69, type=pa.uint64()), 2
     )
+
+
+def test_svm_anchor_discriminator():
+    assert utils.svm_anchor_discriminator("swap_v2").hex() == "2b04ed0b1ac91e62"
+    assert utils.svm_anchor_discriminator("swap").hex() == "f8c69e91e17587c8"

@@ -1,6 +1,6 @@
 [project]
 name = "cherry-etl"
-version = "0.7.0"
+version = "0.7.1"
 description = "Library for building blockchain pipelines"
 repository = "https://github.com/steelcake/cherry"
 homepage = "https://github.com/steelcake/cherry"
@@ -28,11 +28,11 @@ dependencies = [
 [dependency-groups]
 dev = [
     "dotenv>=0.9.9",
-    "pyright>=1",
     "pytest>=8.3.5",
     "ruff>=0.9.7",
     "dexmetadata>=0.1.8",
     "base58>=2.1.1",
+    "pyright>=1.1.400",
 ]
 
 [build-system]

@@ -65,7 +65,7 @@ This repo uses `uv` for development.
 
 - Format the code with `uv run ruff format`
 - Lint the code with `uv run ruff check`
-- Run type checks with `uv run pyright`
+- Run type checks with `uv run ty`
 - Run the tests with `uv run pytest`
 
 Core libraries we use for ingesting/decoding/validating/transforming blockchain data are implemented in [cherry-core](https://github.com/steelcake/cherry-core) repo.
