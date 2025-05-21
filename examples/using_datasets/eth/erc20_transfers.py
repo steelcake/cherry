@@ -75,7 +75,7 @@ async def sync_transfer_data(
 
 def get_token_metadata(connection: duckdb.DuckDBPyConnection):
     connection.sql(
-        "CREATE TABLE IF NOT EXISTS token_metadata (address BLOB, decimals INTEGER, symbol VARCHAR, name VARCHAR, total_supply BLOB);"
+        "CREATE TABLE IF NOT EXISTS token_metadata (address BLOB, decimals INTEGER, symbol VARCHAR, name VARCHAR);"
     )
 
     missing_metadata = (

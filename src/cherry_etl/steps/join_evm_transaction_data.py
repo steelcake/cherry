@@ -1,8 +1,7 @@
 from typing import Dict
-from copy import deepcopy
 
 from .. import utils
-from ..config import JoinEvmTransactionDataConfig
+from ..config import JoinEvmTransactionDataConfig, CastByTypeConfig
 import pyarrow as pa
 import polars as pl
 from polars import DataFrame
@@ -11,9 +10,12 @@ from polars import DataFrame
 def execute(
     data: Dict[str, pa.Table], config: JoinEvmTransactionDataConfig
 ) -> Dict[str, pa.Table]:
-    data = deepcopy(data)
     table_names = data.keys() if config.tables is None else config.tables
-
+    cast_by_type_config = CastByTypeConfig(
+                from_type=pa.decimal256(76, 0),
+                to_type=pa.float64(),
+            )
+    data["transactions"] = utils.cast_table_by_type(data["transactions"], cast_by_type_config)
     transactions_df: DataFrame = pl.DataFrame(pl.from_arrow(data["transactions"]))
 
     missing_columns = [
@@ -30,6 +32,7 @@ def execute(
         if table_name in ["blocks", "transactions"]:
             continue
         table = data[table_name]
+        table = utils.cast_table_by_type(table, cast_by_type_config)
         table_df: DataFrame = pl.DataFrame(pl.from_arrow(table))
 
         missing_columns = [

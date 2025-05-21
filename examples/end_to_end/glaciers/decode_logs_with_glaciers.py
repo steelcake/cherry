@@ -115,14 +115,6 @@ async def sync_data(
         writer=writer,
         steps=[
             cc.Step(
-                name="i256_to_i128",
-                kind=cc.StepKind.CAST_BY_TYPE,
-                config=cc.CastByTypeConfig(
-                    from_type=pa.decimal256(76, 0),
-                    to_type=pa.decimal128(38, 0),
-                ),
-            ),
-            cc.Step(
                 kind=cc.StepKind.GLACIERS_EVENTS,
                 config=cc.GlaciersEventsConfig(
                     abi_db_path=abi_db_path,

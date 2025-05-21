@@ -51,7 +51,7 @@ async def main(
     from_block: int,
     to_block: Optional[int],
 ):
-    # Ensure to_block is not None, use from_block + 100 as default if it is
+    # Ensure to_block is not None, use from_block + 10 as default if it is
     actual_to_block = to_block if to_block is not None else from_block + 10
 
     # Defining a Provider
@@ -186,8 +186,8 @@ async def main(
 
     # Post-pipeline Analytics
     connection.sql("""
-        CREATE OR REPLACE TABLE solana_amm AS SELECT * FROM read_csv('examples/using_datasets/svm/solana_swaps/solana_amm.csv');
-        CREATE OR REPLACE TABLE solana_tokens AS SELECT * FROM read_csv('examples/using_datasets/svm/solana_swaps/solana_tokens.csv');
+        CREATE OR REPLACE TABLE solana_amm AS SELECT * FROM read_csv('examples/using_datasets/svm/solana_amm.csv');
+        CREATE OR REPLACE TABLE solana_tokens AS SELECT * FROM read_csv('examples/using_datasets/svm/solana_tokens.csv');
         CREATE OR REPLACE TABLE jup_swaps AS            
             SELECT
                 di.amm AS amm,

@@ -155,16 +155,6 @@ async def main(provider_kind: ingest.ProviderKind, url: Optional[str]):
                     allow_decode_fail=True,
                 ),
             ),
-            # Cast all Decimal256 columns to Decimal128, we have to do this because polars doesn't support decimal256
-            cc.Step(
-                kind=cc.StepKind.CAST_BY_TYPE,
-                config=cc.CastByTypeConfig(
-                    from_type=pa.decimal256(76, 0),
-                    to_type=pa.decimal128(38, 0),
-                    # Write null if the value doesn't fit in decimal128,
-                    allow_cast_fail=True,
-                ),
-            ),
             cc.Step(
                 kind=cc.StepKind.CUSTOM,
                 config=cc.CustomStepConfig(

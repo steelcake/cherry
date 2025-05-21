@@ -77,6 +77,11 @@ async def process_steps(
             data = step_def.cast_by_type.execute(data, step.config)
         elif step.kind == StepKind.CUSTOM:
             assert isinstance(step.config, CustomStepConfig)
+            cast_by_type_config = CastByTypeConfig(
+                from_type=pa.decimal256(76, 0),
+                to_type=pa.float64(),
+            )
+            data = step_def.cast_by_type.execute(data, cast_by_type_config)
             pl_data = utils.pyarrow_data_to_pl(data)
             pl_data = await asyncio.to_thread(
                 step.config.runner, pl_data, step.config.context

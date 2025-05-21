@@ -239,14 +239,6 @@ def create_pipeline(
                     mappings=dex.type_mappings,
                 ),
             ),
-            # Handle decimal256 values
-            cc.Step(
-                kind=cc.StepKind.CAST_BY_TYPE,
-                config=cc.CastByTypeConfig(
-                    from_type=pa.decimal256(76, 0),
-                    to_type=pa.float64(),
-                ),
-            ),
             # Join transaction data to logs
             cc.Step(
                 kind=cc.StepKind.JOIN_EVM_TRANSACTION_DATA,

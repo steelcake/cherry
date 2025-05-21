@@ -90,14 +90,6 @@ def make_pipeline(
                 kind=cc.StepKind.HEX_ENCODE,
                 config=cc.HexEncodeConfig(),
             ),
-            cc.Step(
-                name="i256_to_i128",
-                kind=cc.StepKind.CAST_BY_TYPE,
-                config=cc.CastByTypeConfig(
-                    from_type=pa.decimal256(76, 0),
-                    to_type=pa.decimal128(38, 0),
-                ),
-            ),
             cc.Step(kind=cc.StepKind.JOIN_BLOCK_DATA, config=cc.JoinBlockDataConfig()),
         ],
     )
