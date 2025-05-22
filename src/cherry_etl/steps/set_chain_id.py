@@ -14,8 +14,7 @@ def execute(data: Dict[str, pa.Table], config: SetChainIdConfig) -> Dict[str, pa
                 o = table.drop_columns("chain_id")
                 break
         out[table_name] = o.append_column(
-            "chain_id",
-            pa.array([config.chain_id] * table.num_rows, type=pa.uint64())
+            "chain_id", pa.array([config.chain_id] * table.num_rows, type=pa.uint64())
         )
 
     return out
