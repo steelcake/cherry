@@ -32,7 +32,6 @@ See [getting started section](https://steelcake.github.io/cherry-docs/getting_st
 |---------------------|----------------|---------------|
 | [HyperSync](https://docs.envio.dev/docs/HyperSync/overview) | ✅ | ❌ |
 | [SQD](https://docs.sqd.ai/)             | ✅ | ✅ |
-| [Yellowstone-GRPC](https://github.com/rpcpool/yellowstone-grpc) | ❌ | ✅ |
 
 ## Supported output formats
 
@@ -45,8 +44,8 @@ See [getting started section](https://steelcake.github.io/cherry-docs/getting_st
 
 ## Usage examples
 
-- [**Ethereum(EVM)** examples](examples/using_datasets/eth)
-- [**Solana(SVM)** examples](examples/using_datasets/svm)
+- [Examples](examples)
+- [Documentation](https://steelcake.github.io/cherry-docs/)
 
 ## Logging
 
