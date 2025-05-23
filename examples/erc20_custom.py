@@ -22,8 +22,8 @@ from dotenv import load_dotenv
 import traceback
 from typing import Dict, Optional, Any
 import argparse
-import polars
 import duckdb
+import datafusion
 
 load_dotenv()
 
@@ -50,19 +50,24 @@ def get_start_block(con: duckdb.DuckDBPyConnection) -> int:
         return 0
 
 
-# Custom processing step
-def join_data(data: Dict[str, polars.DataFrame], _: Any) -> Dict[str, polars.DataFrame]:
-    blocks = data["blocks"]
-    transfers = data["transfers"]
+# processing step using datafusion
+def join_data(
+    session_ctx: datafusion.SessionContext,
+    data: Dict[str, datafusion.DataFrame],
+    _: Any,
+) -> Dict[str, datafusion.DataFrame]:
+    _ = data
 
-    bn = blocks.get_column("number")
-    logger.info(f"processing data from: {bn.min()} to: {bn.max()}")
+    bn = session_ctx.sql(
+        "SELECT MIN(number) as min_block, MAX(NUMBER) as max_block FROM blocks"
+    ).to_pylist()[0]
 
-    blocks = blocks.select(
-        polars.col("number").alias("block_number"),
-        polars.col("timestamp").alias("block_timestamp"),
-    )
-    out = transfers.join(blocks, on="block_number")
+    logger.info(f"processing data from: {bn['min_block']} to: {bn['max_block']}")
+
+    out = session_ctx.sql("""
+        SELECT transfers.*, blocks.timestamp as block_timestamp FROM transfers
+        INNER JOIN blocks ON blocks.number = transfers.block_number
+    """)
 
     return {"transfers": out}
 
@@ -155,28 +160,10 @@ async def main(provider_kind: ingest.ProviderKind, url: Optional[str]):
                     allow_decode_fail=True,
                 ),
             ),
-            # Cast all Decimal256 columns to Decimal128, we have to do this because polars doesn't support decimal256
             cc.Step(
-                kind=cc.StepKind.CAST_BY_TYPE,
-                config=cc.CastByTypeConfig(
-                    from_type=pa.decimal256(76, 0),
-                    to_type=pa.decimal128(38, 0),
-                    # Write null if the value doesn't fit in decimal128,
-                    allow_cast_fail=True,
-                ),
-            ),
-            cc.Step(
-                kind=cc.StepKind.CUSTOM,
-                config=cc.CustomStepConfig(
+                kind=cc.StepKind.DATAFUSION,
+                config=cc.DataFusionStepConfig(
                     runner=join_data,
-                ),
-            ),
-            # cast transfers.block_timestamp to int64
-            cc.Step(
-                kind=cc.StepKind.CAST,
-                config=cc.CastConfig(
-                    table_name="transfers",
-                    mappings={"block_timestamp": pa.int64()},
                 ),
             ),
             # hex encode all binary fields to it is easy to view them in db
@@ -184,6 +171,16 @@ async def main(provider_kind: ingest.ProviderKind, url: Optional[str]):
             cc.Step(
                 kind=cc.StepKind.HEX_ENCODE,
                 config=cc.HexEncodeConfig(),
+            ),
+            # Have to do this because duckdb doesn't support 256 bit decimals :)
+            cc.Step(
+                name="i256_to_i128",
+                kind=cc.StepKind.CAST_BY_TYPE,
+                config=cc.CastByTypeConfig(
+                    from_type=pa.decimal256(76, 0),
+                    to_type=pa.decimal128(38, 0),
+                    allow_cast_fail=True,
+                ),
             ),
         ],
     )

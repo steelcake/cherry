@@ -1,7 +1,6 @@
 from typing import Dict
 from copy import deepcopy
 
-from .. import utils
 from ..config import GlaciersEventsConfig
 import pyarrow as pa
 import glaciers as gl
@@ -19,9 +18,7 @@ def execute(
 
     decoded_df = gl.decode_df(config.decoder_type, input_df, config.abi_db_path)
 
-    decoded_dict[config.output_table] = decoded_df
+    decoded_dict[config.output_table] = decoded_df.to_arrow()
+    data.update(decoded_dict)
 
-    output_table = utils.pl_data_to_pyarrow(decoded_dict)
-
-    data.update(output_table)
     return data

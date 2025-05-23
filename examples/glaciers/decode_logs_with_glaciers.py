@@ -17,7 +17,7 @@ import os
 import requests
 import pyarrow as pa
 
-from typing import Optional
+from typing import Optional, Any
 from pathlib import Path
 
 import duckdb
@@ -25,6 +25,8 @@ from cherry_core import ingest
 
 from cherry_etl import config as cc
 from cherry_etl.pipeline import run_pipeline
+
+import polars as pl
 
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO").upper())
 logger = logging.getLogger("examples.eth.glaciers")
@@ -38,6 +40,18 @@ PROVIDER_URLS = {
     ingest.ProviderKind.HYPERSYNC: "https://eth.hypersync.xyz",
     ingest.ProviderKind.SQD: "https://portal.sqd.dev/datasets/ethereum-mainnet",
 }
+
+
+def join_block_data(
+    data: dict[str, pl.DataFrame], ctx: Optional[Any]
+) -> dict[str, pl.DataFrame]:
+    _ = ctx
+
+    table = data["decoded_logs"]
+
+    table = table.join(data["blocks"], left_on="block_number", right_on="number")
+
+    return {"decoded_logs": table}
 
 
 async def sync_data(
@@ -128,7 +142,10 @@ async def sync_data(
                     abi_db_path=abi_db_path,
                 ),
             ),
-            cc.Step(kind=cc.StepKind.JOIN_BLOCK_DATA, config=cc.JoinBlockDataConfig()),
+            cc.Step(
+                kind=cc.StepKind.POLARS,
+                config=cc.PolarsStepConfig(runner=join_block_data),
+            ),
             cc.Step(
                 kind=cc.StepKind.HEX_ENCODE,
                 config=cc.HexEncodeConfig(),

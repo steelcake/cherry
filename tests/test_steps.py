@@ -4,6 +4,9 @@ from cherry_etl import utils
 import pyarrow as pa
 import base58
 import binascii
+import datafusion
+import polars as pl
+from typing import Optional, Any
 
 
 def test_base58_encode():
@@ -158,3 +161,68 @@ def test_set_chain_id():
 def test_svm_anchor_discriminator():
     assert utils.svm_anchor_discriminator("swap_v2").hex() == "2b04ed0b1ac91e62"
     assert utils.svm_anchor_discriminator("swap").hex() == "f8c69e91e17587c8"
+
+
+def datafusion_step_runner(
+    session_ctx: datafusion.SessionContext,
+    data: dict[str, datafusion.DataFrame],
+    ctx: Optional[Any],
+) -> dict[str, datafusion.DataFrame]:
+    _ = session_ctx
+    _ = ctx
+
+    out = data["table"].select((datafusion.col("numbers") + 2).alias("numbers69"))
+
+    return {"out": out}
+
+
+def test_datafusion_step():
+    numbers = pa.array([1, 2], type=pa.decimal256(76, 0))
+    names = pa.array(["asd", "qwe"], type=pa.binary())
+
+    table = pa.Table.from_arrays(
+        [numbers, names, numbers], names=["numbers", "names", "chain_id"]
+    )
+    table2 = pa.Table.from_arrays(
+        [numbers, names, names], names=["numbers", "names", "other_names"]
+    )
+
+    data = {"table": table, "table2": table2}
+
+    data = cs.datafusion_step.execute(
+        data, cc.DataFusionStepConfig(runner=datafusion_step_runner)
+    )
+
+    assert data["out"].column("numbers69").combine_chunks() == pa.array(
+        [3, 4], type=pa.decimal256(76, 0)
+    )
+
+
+def polars_step_runner(
+    data: dict[str, pl.DataFrame], ctx: Optional[Any]
+) -> dict[str, pl.DataFrame]:
+    _ = ctx
+
+    out = data["table"].select(pl.col("numbers").add(2).alias("numbers69"))
+
+    return {"out": out}
+
+
+def test_polars_step():
+    numbers = pa.array([1, 2], type=pa.decimal128(38, 0))
+    names = pa.array(["asd", "qwe"], type=pa.binary())
+
+    table = pa.Table.from_arrays(
+        [numbers, names, numbers], names=["numbers", "names", "chain_id"]
+    )
+    table2 = pa.Table.from_arrays(
+        [numbers, names, names], names=["numbers", "names", "other_names"]
+    )
+
+    data = {"table": table, "table2": table2}
+
+    data = cs.polars_step.execute(data, cc.PolarsStepConfig(runner=polars_step_runner))
+
+    assert data["out"].column("numbers69").combine_chunks() == pa.array(
+        [3, 4], type=pa.decimal128(38, 0)
+    )

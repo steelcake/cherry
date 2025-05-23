@@ -25,6 +25,26 @@ if RPC_URL is None:
     raise ValueError("RPC_URL environment variable is not set")
 
 
+def join_data(data: Dict[str, pl.DataFrame], ctx: Any) -> dict[str, pl.DataFrame]:
+    _ = ctx
+
+    blocks = data["blocks"]
+    transactions = data["transactions"].join(
+        blocks, left_on="block_number", right_on="number"
+    )
+    logs = data["logs"].join(transactions, on=["block_number", "transaction_index"])
+    decoded_logs = data["decoded_logs"].join(
+        transactions, on=["block_number", "transaction_index"]
+    )
+
+    return {
+        "blocks": blocks,
+        "transactions": transactions,
+        "logs": logs,
+        "decoded_logs": decoded_logs,
+    }
+
+
 def enrich_with_metadata(
     data: Dict[str, pl.DataFrame], connection: Any
 ) -> Dict[str, pl.DataFrame]:
@@ -172,6 +192,8 @@ def create_pipeline(
     writer: cc.Writer,
     table_name: str,
 ):
+    _ = table_name
+
     # Ensure writer is configured with DuckDB
     if not isinstance(writer.config, cc.DuckdbWriterConfig):
         raise ValueError("Writer must be configured with DuckDB connection")
@@ -249,13 +271,7 @@ def create_pipeline(
             ),
             # Join transaction data to logs
             cc.Step(
-                kind=cc.StepKind.JOIN_EVM_TRANSACTION_DATA,
-                config=cc.JoinEvmTransactionDataConfig(),
-            ),
-            # Join block data to logs and transactions
-            cc.Step(
-                kind=cc.StepKind.JOIN_BLOCK_DATA,
-                config=cc.JoinBlockDataConfig(),
+                kind=cc.StepKind.POLARS, config=cc.PolarsStepConfig(runner=join_data)
             ),
             # Hex encode binary fields
             cc.Step(
@@ -264,29 +280,29 @@ def create_pipeline(
             ),
             # Enrich with token metadata
             cc.Step(
-                kind=cc.StepKind.CUSTOM,
-                config=cc.CustomStepConfig(
+                kind=cc.StepKind.POLARS,
+                config=cc.PolarsStepConfig(
                     runner=enrich_with_metadata,
                     context=writer.config.connection,
                 ),
             ),
             # Apply DEX-specific logic
             cc.Step(
-                kind=cc.StepKind.CUSTOM,
-                config=cc.CustomStepConfig(
+                kind=cc.StepKind.POLARS,
+                config=cc.PolarsStepConfig(
                     runner=apply_dex_specific_logic,
                     context=dex,
                 ),
             ),
             # Calculate USD values
             cc.Step(
-                kind=cc.StepKind.CUSTOM,
-                config=cc.CustomStepConfig(runner=estimate_usd_value),
+                kind=cc.StepKind.POLARS,
+                config=cc.PolarsStepConfig(runner=estimate_usd_value),
             ),
             # Format final output
             cc.Step(
-                kind=cc.StepKind.CUSTOM,
-                config=cc.CustomStepConfig(
+                kind=cc.StepKind.POLARS,
+                config=cc.PolarsStepConfig(
                     runner=format_dex_trades_table,
                     context=dex,
                 ),

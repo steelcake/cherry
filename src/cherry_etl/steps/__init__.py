@@ -8,12 +8,11 @@ from . import (
     base58_encode,
     u256_to_binary,
     svm_decode_instructions,
-    join_block_data,
-    join_svm_transaction_data,
-    join_evm_transaction_data,
     glaciers_events,
     svm_decode_logs,
     set_chain_id,
+    polars_step,
+    datafusion_step,
 )
 
 __all__ = [
@@ -26,10 +25,9 @@ __all__ = [
     "base58_encode",
     "u256_to_binary",
     "svm_decode_instructions",
-    "join_block_data",
-    "join_svm_transaction_data",
-    "join_evm_transaction_data",
     "glaciers_events",
     "svm_decode_logs",
     "set_chain_id",
+    "polars_step",
+    "datafusion_step",
 ]

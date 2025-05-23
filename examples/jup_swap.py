@@ -15,7 +15,7 @@
 import argparse
 import asyncio
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Any
 
 import duckdb
 
@@ -36,11 +36,25 @@ from cherry_core.ingest.svm import (
     TransactionFields,
     InstructionRequest,
 )
+import polars as pl
 
 
 # Create directories
 DATA_PATH = str(Path.cwd() / "data")
 Path(DATA_PATH).mkdir(parents=True, exist_ok=True)
+
+
+def process_data(
+    data: dict[str, pl.DataFrame], ctx: Optional[Any]
+) -> dict[str, pl.DataFrame]:
+    _ = ctx
+
+    table = data["jup_swaps_decoded_instructions"]
+
+    table = table.join(data["blocks"], left_on="block_slot", right_on="slot")
+    table = table.join(data["transactions"], on=["block_slot", "transaction_index"])
+
+    return {"jup_swaps_decoded_instructions": table}
 
 
 ################################################################################
@@ -148,15 +162,8 @@ async def main(
             ),
         ),
         cc.Step(
-            kind=cc.StepKind.JOIN_SVM_TRANSACTION_DATA,
-            config=cc.JoinSvmTransactionDataConfig(),
-        ),
-        cc.Step(
-            kind=cc.StepKind.JOIN_BLOCK_DATA,
-            config=cc.JoinBlockDataConfig(
-                join_blocks_on=["hash"],
-                join_left_on=["block_hash"],
-            ),
+            kind=cc.StepKind.POLARS,
+            config=cc.PolarsStepConfig(runner=process_data),
         ),
         cc.Step(
             kind=cc.StepKind.BASE58_ENCODE,

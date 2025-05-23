@@ -5,7 +5,8 @@ from .config import (
     Base58EncodeConfig,
     CastByTypeConfig,
     CastConfig,
-    CustomStepConfig,
+    PolarsStepConfig,
+    DataFusionStepConfig,
     EvmDecodeEventsConfig,
     EvmValidateBlockDataConfig,
     HexEncodeConfig,
@@ -16,9 +17,6 @@ from .config import (
     U256ToBinaryConfig,
     SvmDecodeInstructionsConfig,
     SvmDecodeLogsConfig,
-    JoinBlockDataConfig,
-    JoinSvmTransactionDataConfig,
-    JoinEvmTransactionDataConfig,
     GlaciersEventsConfig,
 )
 from typing import Dict, List, Optional
@@ -26,13 +24,12 @@ from cherry_core.ingest import start_stream
 import pyarrow as pa
 from .writers.writer import create_writer
 from . import steps as step_def
-from . import utils
 from copy import deepcopy
 
 logger = logging.getLogger(__name__)
 
 
-async def process_steps(
+def process_steps(
     data: Dict[str, pa.Table],
     steps: List[Step],
 ) -> Dict[str, pa.Table]:
@@ -69,28 +66,16 @@ async def process_steps(
             data = step_def.u256_to_binary.execute(data, step.config)
         elif step.kind == StepKind.BASE58_ENCODE:
             assert isinstance(step.config, Base58EncodeConfig)
-            data = await asyncio.to_thread(
-                step_def.base58_encode.execute, data, step.config
-            )
+            data = step_def.base58_encode.execute(data, step.config)
         elif step.kind == StepKind.CAST_BY_TYPE:
             assert isinstance(step.config, CastByTypeConfig)
             data = step_def.cast_by_type.execute(data, step.config)
-        elif step.kind == StepKind.CUSTOM:
-            assert isinstance(step.config, CustomStepConfig)
-            pl_data = utils.pyarrow_data_to_pl(data)
-            pl_data = await asyncio.to_thread(
-                step.config.runner, pl_data, step.config.context
-            )
-            data = utils.pl_data_to_pyarrow(pl_data)
-        elif step.kind == StepKind.JOIN_BLOCK_DATA:
-            assert isinstance(step.config, JoinBlockDataConfig)
-            data = step_def.join_block_data.execute(data, step.config)
-        elif step.kind == StepKind.JOIN_SVM_TRANSACTION_DATA:
-            assert isinstance(step.config, JoinSvmTransactionDataConfig)
-            data = step_def.join_svm_transaction_data.execute(data, step.config)
-        elif step.kind == StepKind.JOIN_EVM_TRANSACTION_DATA:
-            assert isinstance(step.config, JoinEvmTransactionDataConfig)
-            data = step_def.join_evm_transaction_data.execute(data, step.config)
+        elif step.kind == StepKind.DATAFUSION:
+            assert isinstance(step.config, DataFusionStepConfig)
+            data = step_def.datafusion_step.execute(data, step.config)
+        elif step.kind == StepKind.POLARS:
+            assert isinstance(step.config, PolarsStepConfig)
+            data = step_def.polars_step.execute(data, step.config)
         elif step.kind == StepKind.SET_CHAIN_ID:
             assert isinstance(step.config, SetChainIdConfig)
             data = step_def.set_chain_id.execute(data, step.config)
@@ -142,8 +127,11 @@ async def run_pipeline(pipeline: Pipeline, pipeline_name: Optional[str] = None):
         for table_name, table_batch in data.items():
             tables[table_name] = pa.Table.from_batches([table_batch])
 
-        processed = await process_steps(tables, pipeline.steps)
+        processed = await asyncio.to_thread(process_steps, tables, pipeline.steps)
 
         logger.debug("Pushing data to writer")
 
         await writer.push_data(processed)
+
+
+__all__ = ["run_pipeline"]

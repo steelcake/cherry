@@ -13,6 +13,7 @@ import pyarrow.dataset as pa_dataset
 import pyarrow.fs as pa_fs
 import duckdb
 import polars as pl
+import datafusion
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,6 @@ class WriterKind(str, Enum):
 
 
 class StepKind(str, Enum):
-    CUSTOM = "custom"
     EVM_VALIDATE_BLOCK_DATA = "evm_validate_block_data"
     EVM_DECODE_EVENTS = "evm_decode_events"
     CAST = "cast"
@@ -41,6 +41,8 @@ class StepKind(str, Enum):
     JOIN_EVM_TRANSACTION_DATA = "join_evm_transaction_data"
     GLACIERS_EVENTS = "glaciers_events"
     SET_CHAIN_ID = "set_chain_id"
+    DATAFUSION = "datafusion"
+    POLARS = "polars"
 
 
 @dataclass
@@ -112,35 +114,6 @@ class Writer:
         | DeltaLakeWriterConfig
         | PyArrowDatasetWriterConfig
         | DuckdbWriterConfig
-    )
-
-
-@dataclass
-class JoinBlockDataConfig:
-    tables: Optional[list[str]] = None
-    join_left_on: list[str] = field(default_factory=lambda: ["block_number"])
-    join_blocks_on: list[str] = field(default_factory=lambda: ["number"])
-
-
-@dataclass
-class JoinSvmTransactionDataConfig:
-    tables: Optional[list[str]] = None
-    join_left_on: list[str] = field(
-        default_factory=lambda: ["block_slot", "transaction_index"]
-    )
-    join_transactions_on: list[str] = field(
-        default_factory=lambda: ["block_slot", "transaction_index"]
-    )
-
-
-@dataclass
-class JoinEvmTransactionDataConfig:
-    tables: Optional[list[str]] = None
-    join_left_on: list[str] = field(
-        default_factory=lambda: ["block_number", "transaction_index"]
-    )
-    join_transactions_on: list[str] = field(
-        default_factory=lambda: ["block_number", "transaction_index"]
     )
 
 
@@ -218,8 +191,17 @@ class CastByTypeConfig:
 
 
 @dataclass
-class CustomStepConfig:
+class PolarsStepConfig:
     runner: Callable[[Dict[str, pl.DataFrame], Optional[Any]], Dict[str, pl.DataFrame]]
+    context: Optional[Any] = None
+
+
+@dataclass
+class DataFusionStepConfig:
+    runner: Callable[
+        [datafusion.SessionContext, Dict[str, datafusion.DataFrame], Optional[Any]],
+        Dict[str, datafusion.DataFrame],
+    ]
     context: Optional[Any] = None
 
 
@@ -241,10 +223,8 @@ class Step:
         | Base58EncodeConfig
         | SvmDecodeInstructionsConfig
         | SvmDecodeLogsConfig
-        | CustomStepConfig
-        | JoinBlockDataConfig
-        | JoinSvmTransactionDataConfig
-        | JoinEvmTransactionDataConfig
+        | PolarsStepConfig
+        | DataFusionStepConfig
         | GlaciersEventsConfig
         | SetChainIdConfig
     )
@@ -257,3 +237,30 @@ class Pipeline:
     query: Query
     writer: Writer
     steps: List[Step]
+
+
+__all__ = [
+    "Pipeline",
+    "Step",
+    "EvmValidateBlockDataConfig",
+    "EvmDecodeEventsConfig",
+    "CastConfig",
+    "HexEncodeConfig",
+    "U256ToBinaryConfig",
+    "CastByTypeConfig",
+    "Base58EncodeConfig",
+    "SvmDecodeInstructionsConfig",
+    "SvmDecodeLogsConfig",
+    "PolarsStepConfig",
+    "DataFusionStepConfig",
+    "GlaciersEventsConfig",
+    "SetChainIdConfig",
+    "Writer",
+    "StepKind",
+    "WriterKind",
+    "ClickHouseWriterConfig",
+    "IcebergWriterConfig",
+    "DeltaLakeWriterConfig",
+    "PyArrowDatasetWriterConfig",
+    "DuckdbWriterConfig",
+]
