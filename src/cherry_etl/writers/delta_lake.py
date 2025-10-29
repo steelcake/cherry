@@ -25,7 +25,6 @@ class Writer(DataWriter):
             write_deltalake,
             table_or_uri=f"{self.config.data_uri}/{table_name}",
             data=table_data,
-            schema=table_data.schema,
             partition_by=self.config.partition_by.get(table_name, None),
             mode="append",
             schema_mode="merge",
